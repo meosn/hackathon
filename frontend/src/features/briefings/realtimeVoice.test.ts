@@ -10,6 +10,7 @@ const speechMock = vi.hoisted(() => ({
   close: vi.fn(),
   prepare: vi.fn(),
   callbacks: null as any,
+  setStoryOrder: vi.fn(),
 }))
 vi.mock('./elevenSpeech', () => ({
   ElevenSpeech: class {
@@ -22,6 +23,7 @@ vi.mock('./elevenSpeech', () => ({
     cancel = speechMock.cancel
     close = speechMock.close
     prepare = speechMock.prepare
+    setStoryOrder = speechMock.setStoryOrder
   },
 }))
 afterEach(() => {

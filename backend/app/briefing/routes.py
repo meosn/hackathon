@@ -492,8 +492,24 @@ def realtime_evidence(
                 BriefingItem.story_id == data.story_id,
             )
         )
-        if not membership:
-            raise HTTPException(422, "Story is outside this briefing")
+        previous = (
+            db.scalars(
+                select(ConversationMessage.action).where(
+                    ConversationMessage.conversation_id == conv.id,
+                    ConversationMessage.role == "assistant",
+                )
+            )
+            if not membership and data.story_id != conv.story_id
+            else []
+        )
+        if (
+            not membership
+            and data.story_id != conv.story_id
+            and not any(
+                data.story_id in action.get("story_ids", []) for action in previous
+            )
+        ):
+            raise HTTPException(422, "Story is outside this conversation")
         conv.story_id = data.story_id
     with account_attempts(db):
         message = respond(

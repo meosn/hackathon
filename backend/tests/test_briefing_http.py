@@ -392,6 +392,18 @@ def test_realtime_session_is_private_and_evidence_uses_no_text_model(api, monkey
     assert not set(first.json()["action"]["story_ids"]) & set(
         second.json()["action"]["story_ids"]
     )
+    selected = first.json()["action"]["story_ids"][0]
+    followup = api.post(
+        path + "/realtime-evidence",
+        headers=headers,
+        json={
+            "question": "Explain this story",
+            "decision": {"intent": "EXPLAIN_STORY"},
+            "story_id": selected,
+        },
+    )
+    assert followup.status_code == 200
+    assert followup.json()["story_id"] == selected
     payload["story_id"] = "outside-this-briefing"
     assert (
         api.post(path + "/realtime-evidence", headers=headers, json=payload).status_code

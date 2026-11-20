@@ -15,6 +15,9 @@ type Turn = {
   ended: boolean
   final: boolean
   started: boolean
+  stories: string[]
+  paragraph: number
+  newlines: number
 }
 type Callbacks = {
   started: () => void
@@ -37,12 +40,23 @@ export class ElevenSpeech {
   private nextTime = 0
   private carry: number | undefined
   private rate = 24000
+  private nextStories: string[] = []
+  private spokenStory: string | undefined
+  private storyTimers = new Set<ReturnType<typeof setTimeout>>()
 
   constructor(
     private conversationId: string,
     private context: AudioContext,
     private callbacks: Callbacks,
   ) {}
+
+  get currentStory() {
+    return this.spokenStory
+  }
+
+  setStoryOrder(stories: string[]) {
+    this.nextStories = [...stories]
+  }
 
   private preferenceVoice() {
     return queryClient.getQueryData<Preferences>(['/users/me/preferences'])
@@ -157,6 +171,7 @@ export class ElevenSpeech {
   append(id: string, text: string) {
     if (this.disposed || !text) return
     if (this.turn?.id !== id) {
+      const stories = this.nextStories
       this.cancel()
       const turn: Turn = {
         id,
@@ -165,7 +180,11 @@ export class ElevenSpeech {
         ended: false,
         final: false,
         started: false,
+        stories,
+        paragraph: 0,
+        newlines: 0,
       }
+      this.nextStories = []
       this.turn = turn
       void this.connect()
         .then(() => {
@@ -231,6 +250,11 @@ export class ElevenSpeech {
     audio?: string
     is_final?: boolean
     isFinal?: boolean
+    alignment?: {
+      chars?: string[]
+      charStartTimesMs?: number[]
+      char_start_times_ms?: number[]
+    }
     error?: unknown
   }) {
     if (message.error) {
@@ -241,14 +265,22 @@ export class ElevenSpeech {
     }
     const turn = this.turn
     if (!turn || (message.context_id || message.contextId) !== turn.id) return
-    if (message.audio) this.schedule(message.audio, turn)
+    if (message.audio) this.schedule(message.audio, turn, message.alignment)
     if (message.is_final || message.isFinal) {
       turn.final = true
       this.complete(turn)
     }
   }
 
-  private schedule(base64: string, turn: Turn) {
+  private schedule(
+    base64: string,
+    turn: Turn,
+    alignment?: {
+      chars?: string[]
+      charStartTimesMs?: number[]
+      char_start_times_ms?: number[]
+    },
+  ) {
     const raw = atob(base64)
     const prefix = this.carry === undefined ? 0 : 1
     const bytes = new Uint8Array(raw.length + prefix)
@@ -274,10 +306,40 @@ export class ElevenSpeech {
     const at = Math.max(this.context.currentTime + 0.025, this.nextTime)
     this.nextTime = at + buffer.duration
     source.start(at)
+    if (!turn.started && turn.stories[0])
+      this.storyAt(turn, turn.stories[0], at)
+    const times =
+      alignment?.charStartTimesMs || alignment?.char_start_times_ms || []
+    alignment?.chars?.forEach((char, i) => {
+      if (char === '\n') turn.newlines++
+      else if (char.trim()) {
+        if (turn.newlines >= 2) {
+          turn.paragraph++
+          const story = turn.stories[turn.paragraph]
+          if (story)
+            this.storyAt(
+              turn,
+              story,
+              at +
+                Math.min(buffer.duration, Math.max(0, (times[i] || 0) / 1000)),
+            )
+        }
+        turn.newlines = 0
+      }
+    })
     if (!turn.started) {
       turn.started = true
       this.callbacks.started()
     }
+  }
+
+  private storyAt(turn: Turn, id: string, at: number) {
+    const delay = Math.max(0, (at - this.context.currentTime) * 1000)
+    const timer = setTimeout(() => {
+      this.storyTimers.delete(timer)
+      if (this.turn === turn) this.spokenStory = id
+    }, delay)
+    this.storyTimers.add(timer)
   }
 
   private complete(turn: Turn) {
@@ -289,6 +351,7 @@ export class ElevenSpeech {
   }
 
   cancel() {
+    this.nextStories = []
     const turn = this.turn
     this.turn = null
     if (turn?.initialized)
@@ -303,6 +366,8 @@ export class ElevenSpeech {
       source.disconnect()
     }
     this.sources.clear()
+    for (const timer of this.storyTimers) clearTimeout(timer)
+    this.storyTimers.clear()
     this.nextTime = this.context.currentTime
     this.carry = undefined
   }

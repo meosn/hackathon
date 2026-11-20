@@ -289,6 +289,7 @@ export class RealtimeVoice {
     )
     if (this.closed || sequence !== this.sequence) return
     this.callbacks.action(result)
+    this.speech?.setStoryOrder((result.action?.story_ids as string[]) || [])
     this.send({
       type: 'conversation.item.create',
       item: {
@@ -298,7 +299,7 @@ export class RealtimeVoice {
           {
             type: 'input_text',
             text:
-              'Read these next three news stories aloud, in the language we have been speaking. Use only this verified data, no lookup or preamble. ' +
+              'Read these next three news stories aloud, in the language we have been speaking. Exactly one short paragraph per story, in the supplied order, separated by a blank line. Use only this verified data, no heading, lookup or preamble. ' +
               JSON.stringify({
                 bulletin: result.text,
                 context: result.context,
@@ -313,7 +314,8 @@ export class RealtimeVoice {
   async sendText(text: string) {
     await this.connect()
     this.interrupt()
-    this.turnStory = this.callbacks.story()
+    this.turnStory = this.callbacks.story() || this.speech?.currentStory
+    if (this.turnStory) this.speech?.setStoryOrder([this.turnStory])
     this.callbacks.interrupt()
     this.callbacks.phase('thinking')
     this.send({
@@ -363,7 +365,8 @@ export class RealtimeVoice {
         this.speech?.prepare()
         this.sequence++
         this.speakingInput = true
-        this.turnStory = this.callbacks.story()
+        this.turnStory = this.callbacks.story() || this.speech?.currentStory
+        if (this.turnStory) this.speech?.setStoryOrder([this.turnStory])
         if (this.turnStory)
           this.send({
             type: 'conversation.item.create',
@@ -491,6 +494,10 @@ export class RealtimeVoice {
       })
       if (this.closed || sequence !== this.sequence) return
       this.callbacks.action(result)
+      this.speech?.setStoryOrder(
+        (result.action?.story_ids as string[]) ||
+          (result.story_id ? [result.story_id] : []),
+      )
       this.createResponse()
     } catch {
       if (this.closed) return

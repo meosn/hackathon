@@ -9,6 +9,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   vi.clearAllMocks()
+  vi.useRealTimers()
 })
 function setup() {
   const sockets: FakeSocket[] = [],
@@ -168,5 +169,44 @@ it('uses a new one-use authorization when the selected narrator changes', async 
     'single_use_token=another-one-use-token',
   )
   expect(api).toHaveBeenCalledTimes(2)
+  speech.close()
+})
+
+it('updates the discussed story when aligned audio reaches the next news paragraph', async () => {
+  const { speech, connect } = setup(),
+    socket = await connect()
+  vi.useFakeTimers()
+  speech.setStoryOrder(['first-story', 'second-story', 'third-story'])
+  speech.append('bulletin', 'One.\n\nTwo.\n\nThree. ')
+  await Promise.resolve()
+  await Promise.resolve()
+  const audio = btoa(String.fromCharCode(...new Uint8Array(24000)))
+  socket.receive({
+    contextId: 'bulletin',
+    audio,
+    alignment: {
+      chars: ['O', 'n', 'e', '.', '\n'],
+      charStartTimesMs: [0, 20, 40, 60, 80],
+    },
+  })
+  socket.receive({
+    contextId: 'bulletin',
+    audio,
+    alignment: {
+      chars: ['\n', 'T', 'w', 'o', '.', '\n', '\n', 'T'],
+      charStartTimesMs: [0, 20, 40, 60, 80, 90, 100, 120],
+    },
+  })
+  await vi.advanceTimersByTimeAsync(30)
+  expect(speech.currentStory).toBe('first-story')
+  await vi.advanceTimersByTimeAsync(500)
+  expect(speech.currentStory).toBe('first-story')
+  await vi.advanceTimersByTimeAsync(30)
+  expect(speech.currentStory).toBe('second-story')
+  await vi.advanceTimersByTimeAsync(100)
+  expect(speech.currentStory).toBe('third-story')
+  speech.cancel()
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(speech.currentStory).toBe('third-story')
   speech.close()
 })
