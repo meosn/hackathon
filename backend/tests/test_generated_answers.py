@@ -282,3 +282,35 @@ def test_generated_answer_receives_history_and_validates_ids(session, monkeypatc
             preferences(session, user.id),
             "FOLLOW_UP",
         )
+
+
+def test_realtime_evidence_does_not_wait_for_another_text_model(session, monkeypatch):
+    from app.briefing.contracts import Decision
+
+    user = listener(session, "realtime-grounding", "en", ["technology"])
+    from app.briefing.ranking import recommendations
+
+    sid = recommendations(session, user.id, period="week")[0]["id"]
+    conv = Conversation(user_id=user.id, story_id=sid, language="en")
+    session.add(conv)
+    session.commit()
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError(
+            "Realtime evidence must not call a second generative model"
+        )
+
+    monkeypatch.setattr(discussion, "model_output", unexpected)
+    monkeypatch.setenv("LLM_PROVIDER", "api")
+    message = discussion.respond(
+        session,
+        conv,
+        "Что произошло в этой новости?",
+        decision=Decision(
+            intent="EXPLAIN_STORY", retrieval_query="What happened in this story?"
+        ),
+        extractive=True,
+    )
+    assert message.citations
+    assert message.action["response_provider"] == "realtime_evidence"
+    assert message.story_id == sid

@@ -646,3 +646,47 @@ html {
     max-height: 150px;
   }
 }
+.voice-conversation {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.voice-conversation .section-heading h2 {
+  font-size: 17px;
+}
+.voice-orb {
+  width: 146px;
+  height: 146px;
+  margin: 48px auto 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid #bdcf8f45;
+  color: #d6e8af;
+  background: radial-gradient(circle at 40% 30%, #8aa55730, #20291a);
+}
+.voice-orb.speaking {
+  box-shadow:
+    0 0 0 14px #c5dc9c08,
+    0 0 60px #b4d27d10;
+}
+.voice-conversation-status {
+  text-align: center;
+  color: #aebf99;
+  font-size: 13px;
+}
+.voice-conversation-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin: 25px auto 38px;
+}
+.voice-text-input {
+  border-top: 1px solid #ffffff10;
+  padding-top: 18px;
+}
+.voice-text-input > summary {
+  margin: 0 auto;
+  color: #95a486;
+  font-size: 12px;
+}

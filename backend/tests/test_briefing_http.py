@@ -238,3 +238,67 @@ def test_elevenlabs_scribe_transcription_contract(api, monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["transcription"] == "What do other sources say?"
     assert response.json()["citations"]
+
+
+def test_realtime_session_is_private_and_evidence_uses_no_text_model(api, monkeypatch):
+    from app.briefing import realtime, discussion
+    import httpx
+    import json
+
+    headers = {
+        "Authorization": "Bearer "
+        + api.post(V1 + "/auth/demo", json={"profile": "tech"}).json()["access_token"]
+    }
+    other = {
+        "Authorization": "Bearer "
+        + api.post(V1 + "/auth/demo", json={"profile": "finance"}).json()[
+            "access_token"
+        ]
+    }
+    conv = api.post(V1 + "/conversations", headers=headers).json()
+    path = V1 + "/conversations/" + conv["id"]
+    sdp = "v=0\r\ns=test-only-sdp-offer\r\n"
+    assert (
+        api.post(path + "/realtime", headers=other, json={"sdp": sdp}).status_code
+        == 404
+    )
+    monkeypatch.setenv("REALTIME_ENABLED", "1")
+    monkeypatch.setenv("LLM_API_KEY", "private-test-key")
+    requests = []
+
+    def exchange(url, **kwargs):
+        requests.append((url, kwargs))
+        return httpx.Response(
+            201, text="v=0\r\ns=provider-answer\r\n", request=httpx.Request("POST", url)
+        )
+
+    monkeypatch.setattr(realtime.httpx, "post", exchange)
+    result = api.post(path + "/realtime", headers=headers, json={"sdp": sdp})
+    assert result.status_code == 200
+    assert result.headers["content-type"].startswith("application/sdp")
+    assert "private-test-key" not in result.text
+    config = json.loads(requests[0][1]["files"]["session"][1])
+    assert config["output_modalities"] == ["audio"]
+    assert config["audio"]["input"]["turn_detection"]["type"] == "semantic_vad"
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Evidence must not invoke a text model")
+
+    monkeypatch.setattr(discussion, "model_output", unexpected)
+    payload = {
+        "question": "Ещё новости",
+        "decision": {"intent": "GET_MORE_NEWS", "period": "week"},
+    }
+    first = api.post(path + "/realtime-evidence", headers=headers, json=payload)
+    assert first.status_code == 200
+    assert first.json()["citations"]
+    assert first.json()["action"]["story_ids"]
+    second = api.post(path + "/realtime-evidence", headers=headers, json=payload)
+    assert not set(first.json()["action"]["story_ids"]) & set(
+        second.json()["action"]["story_ids"]
+    )
+    payload["story_id"] = "outside-this-briefing"
+    assert (
+        api.post(path + "/realtime-evidence", headers=headers, json=payload).status_code
+        == 422
+    )

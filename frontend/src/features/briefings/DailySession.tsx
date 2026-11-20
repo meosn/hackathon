@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { Mic, MicOff, Pause, Play, Square } from 'lucide-react'
+import { Mic, MicOff, Pause, Play, LoaderCircle, RotateCcw } from 'lucide-react'
 import {
   api,
   request,
@@ -12,8 +11,9 @@ import {
 } from '../../api/client'
 import type { Health } from '../../api/client'
 import type { BriefingDetail, Conversation, Message } from '../../api/types'
-import { ErrorNote, SourceCitation } from '../../components/UI'
+import { ErrorNote } from '../../components/UI'
 import { LiveMicrophone } from './liveMicrophone'
+import { RealtimeVoice, type VoicePhase } from './realtimeVoice'
 
 export function DailySession({
   selectedId = '',
@@ -67,11 +67,13 @@ export function DailySession({
   const [responding, setResponding] = useState(false)
   const [phase, setPhase] = useState('')
   const [error, setError] = useState('')
-  const [reply, setReply] = useState<Message | null>(null)
-  const [transcript, setTranscript] = useState('')
+  const [voiceConnecting, setVoiceConnecting] = useState(false)
+  const [hasAnswer, setHasAnswer] = useState(false)
   const narration = useRef<HTMLAudioElement>(null)
   const answer = useRef<HTMLAudioElement>(null)
   const microphone = useRef<LiveMicrophone | null>(null)
+  const realtime = useRef<RealtimeVoice | null>(null)
+  const resumeAfterAnswer = useRef(false)
   const conversation = useRef<Promise<Conversation> | null>(null)
   const turn = useRef(0)
   const controller = useRef<AbortController | null>(null)
@@ -85,8 +87,7 @@ export function DailySession({
 
   useEffect(() => {
     stopSession()
-    setReply(null)
-    setTranscript('')
+    setHasAnswer(false)
     setPosition(0)
     conversation.current = null
     briefingContext.current = true
@@ -96,6 +97,7 @@ export function DailySession({
     return () => {
       mounted.current = false
       microphone.current?.stop()
+      realtime.current?.close()
       controller.current?.abort()
       if (answerUrl.current) URL.revokeObjectURL(answerUrl.current)
     }
@@ -118,39 +120,168 @@ export function DailySession({
     narration.current?.pause()
     setPlaying(false)
     setResponding(false)
-    setPhase('Listening…')
+    setAnswerPlaying(false)
+    setPhase('')
+  }
+  function stopMicrophone() {
+    microphone.current?.stop()
+    microphone.current = null
+    void realtime.current?.setMicrophone(false)
+    setListening(false)
+    // Muting input must never cancel a pending answer or stop either audio output.
   }
   function stopSession() {
     cancelTurn()
-    microphone.current?.stop()
-    microphone.current = null
-    setListening(false)
+    stopMicrophone()
+    realtime.current?.close()
+    realtime.current = null
+    resumeAfterAnswer.current = false
     setPhase('')
   }
-  async function startListening() {
-    if (microphone.current) return
-    const mic = new LiveMicrophone(
-      cancelTurn,
-      (blob) => void respond(blob),
-      (message) => {
-        setError(message)
-        setListening(false)
-      },
-    )
-    microphone.current = mic
+  async function ensureConversation() {
+    const b = editionRef.current
+    if (!b) throw Error('The briefing is not ready yet.')
+    if (!conversation.current)
+      conversation.current = api<Conversation>('/conversations', 'POST', {
+        briefing_id: b.id,
+      })
     try {
-      await mic.start()
-      setError('')
-      if (mounted.current) {
-        setListening(true)
-        setPhase('Listening while your briefing plays')
+      return await conversation.current
+    } catch (error) {
+      conversation.current = null
+      throw error
+    }
+  }
+  function currentStory() {
+    if (!briefingContext.current) return undefined
+    return (
+      editionRef.current?.segments.find(
+        (s) =>
+          s.story_id &&
+          s.start_seconds <= (narration.current?.currentTime || 0) &&
+          s.end_seconds > (narration.current?.currentTime || 0),
+      )?.story_id || undefined
+    )
+  }
+  function pauseLocalAudio() {
+    narration.current?.pause()
+    answer.current?.pause()
+    controller.current?.abort()
+    turn.current++
+    setPlaying(false)
+    setAnswerPlaying(false)
+  }
+  function applyAction(message: Message) {
+    briefingContext.current = false
+    setHasAnswer(true)
+    if (
+      ['SKIP_STORY', 'SELECT_STORY'].includes(String(message.action?.type)) &&
+      message.story_id
+    ) {
+      const target = editionRef.current?.segments.find(
+        (s) => s.story_id === message.story_id,
+      )
+      if (target && narration.current) {
+        narration.current.currentTime = target.start_seconds
+        setPosition(target.start_seconds)
       }
+    }
+    resumeAfterAnswer.current =
+      message.action?.type === 'RESUME_PLAYBACK' ||
+      message.action?.type === 'SKIP_STORY'
+  }
+  async function realtimeConnection() {
+    if (realtime.current?.ready) return realtime.current
+    const conv = await ensureConversation()
+    if (!mounted.current) throw new DOMException('Aborted', 'AbortError')
+    realtime.current?.close()
+    const voice = new RealtimeVoice(conv.id, {
+      phase: (value: VoicePhase) => {
+        if (!mounted.current) return
+        setVoiceConnecting(value === 'connecting')
+        setResponding(value === 'thinking')
+        setAnswerPlaying(value === 'speaking')
+        setPhase(
+          value === 'connecting'
+            ? 'Connecting voice…'
+            : value === 'thinking'
+              ? 'Thinking…'
+              : value === 'speaking'
+                ? 'Speaking'
+                : '',
+        )
+      },
+      interrupt: pauseLocalAudio,
+      microphone: (value) => {
+        if (mounted.current) setListening(value)
+      },
+      story: currentStory,
+      action: applyAction,
+      finished: () => {
+        if (resumeAfterAnswer.current) {
+          resumeAfterAnswer.current = false
+          void narration.current?.play().catch((e) => setError(e.message))
+        }
+      },
+      failed: (message) => {
+        if (mounted.current) {
+          setError(message)
+          setResponding(false)
+          setVoiceConnecting(false)
+        }
+      },
+    })
+    realtime.current = voice
+    return voice
+  }
+  async function startListening() {
+    setError('')
+    setVoiceConnecting(true)
+    try {
+      if (health.data?.realtime_voice) {
+        const voice = await realtimeConnection()
+        await voice.setMicrophone(true)
+        return
+      }
+      if (microphone.current) return
+      const mic = new LiveMicrophone(
+        cancelTurn,
+        (blob) => void respond(blob),
+        (message) => {
+          setError(message)
+          setListening(false)
+          microphone.current = null
+        },
+      )
+      microphone.current = mic
+      await mic.start()
+      if (mounted.current && microphone.current === mic) setListening(true)
     } catch (e) {
-      mic.stop()
+      microphone.current?.stop()
       microphone.current = null
+      realtime.current?.close()
+      realtime.current = null
       setListening(false)
       setError(e instanceof Error ? e.message : 'Microphone access failed.')
+    } finally {
+      if (mounted.current) setVoiceConnecting(false)
     }
+  }
+  async function moreNews() {
+    setError('')
+    if (health.data?.realtime_voice) {
+      try {
+        const voice = await realtimeConnection()
+        await voice.moreNews()
+        return
+      } catch {
+        realtime.current?.close()
+        realtime.current = null
+        setListening(false)
+        setVoiceConnecting(false)
+      }
+    }
+    await respond('More news')
   }
   async function respond(input: Blob | string) {
     const current = ++turn.current
@@ -166,17 +297,7 @@ export function DailySession({
     try {
       const b = editionRef.current
       if (!b) return
-      if (!conversation.current)
-        conversation.current = api<Conversation>('/conversations', 'POST', {
-          briefing_id: b.id,
-        })
-      let conv: Conversation
-      try {
-        conv = await conversation.current
-      } catch (e) {
-        conversation.current = null
-        throw e
-      }
+      const conv = await ensureConversation()
       if (!valid()) return
       const data = typeof input === 'string' ? { text: input } : new FormData()
       const active = b.segments.find(
@@ -186,31 +307,24 @@ export function DailySession({
           s.end_seconds > (narration.current?.currentTime || 0),
       )
       if (typeof input !== 'string' && data instanceof FormData) {
-        data.set('file', input, 'utterance.' + (input.type.includes('mp4') ? 'm4a' : 'webm'))
-        if (active?.story_id && briefingContext.current) data.set('story_id', active.story_id)
+        data.set(
+          'file',
+          input,
+          'utterance.' + (input.type.includes('mp4') ? 'm4a' : 'webm'),
+        )
+        if (active?.story_id && briefingContext.current)
+          data.set('story_id', active.story_id)
       }
       const message = await api<Message & { transcription?: string }>(
-        '/conversations/' + conv.id + (typeof input === 'string' ? '/messages' : '/audio'),
+        '/conversations/' +
+          conv.id +
+          (typeof input === 'string' ? '/messages' : '/audio'),
         'POST',
         data,
         abort.signal,
       )
       if (!valid()) return
-      setReply(message)
-      briefingContext.current = false
-      setTranscript(message.transcription || (typeof input === 'string' ? input : ''))
-      if (
-        ['SKIP_STORY', 'SELECT_STORY'].includes(
-          String(message.action?.type || ''),
-        ) &&
-        message.story_id
-      ) {
-        const target = b.segments.find((s) => s.story_id === message.story_id)
-        if (target && narration.current) {
-          narration.current.currentTime = target.start_seconds
-          setPosition(target.start_seconds)
-        }
-      }
+      applyAction(message)
       if (message.action?.type === 'STOP_PLAYBACK') {
         setPhase('Paused. Say “continue” to resume.')
         return
@@ -247,9 +361,11 @@ export function DailySession({
   }
   function play() {
     setError('')
+    resumeAfterAnswer.current = false
     if (playing || answerPlaying) {
       answer.current?.pause()
       narration.current?.pause()
+      realtime.current?.interrupt()
       setPlaying(false)
       return
     }
@@ -257,14 +373,20 @@ export function DailySession({
     answer.current?.pause()
     controller.current?.abort()
     turn.current++
+    realtime.current?.interrupt()
+    setHasAnswer(false)
+    setResponding(false)
+    setPhase('')
     void narration.current?.play().catch((e) => setError(e.message))
-    void startListening()
   }
   const audible = playing || answerPlaying
   return (
     <section className="listening-hero" aria-label="News player">
       <div className="listening-date">
-        {(health.data?.news_reference_time ? new Date(health.data.news_reference_time) : new Date()).toLocaleDateString('en', {
+        {(health.data?.news_reference_time
+          ? new Date(health.data.news_reference_time)
+          : new Date()
+        ).toLocaleDateString('en', {
           weekday: 'long',
           month: 'long',
           day: 'numeric',
@@ -275,18 +397,23 @@ export function DailySession({
           ? edition?.period === 'week'
             ? 'This week.'
             : edition?.title || 'Your briefing.'
-          : health.data?.news_reference_time ? 'Archive briefing.' : "Today's news."}
+          : health.data?.news_reference_time
+            ? 'Archive briefing.'
+            : "Today's news."}
       </h1>
       <p className="listening-subtitle">
         {edition?.status === 'completed'
-          ? (edition.period === 'week' ? 'Weekly briefing' : edition.items.length + ' top stories') +
+          ? (edition.period === 'week'
+              ? 'Weekly briefing'
+              : edition.items.length + ' top stories') +
             ' · ' +
             clockTime(edition.duration_seconds)
           : edition?.status === 'failed'
             ? 'Your edition needs attention.'
             : edition?.status === 'processing'
               ? 'Writing and checking your briefing…'
-              : edition?.status === 'script_ready' || edition?.status === 'audio_generating'
+              : edition?.status === 'script_ready' ||
+                  edition?.status === 'audio_generating'
                 ? 'Creating your audio…'
                 : 'Your edition is queued for preparation…'}
       </p>
@@ -311,23 +438,37 @@ export function DailySession({
         onPause={() => setAnswerPlaying(false)}
         onEnded={() => {
           setAnswerPlaying(false)
-          setPhase('Ask more, or say “continue”.')
+          setPhase('')
+          if (resumeAfterAnswer.current) {
+            resumeAfterAnswer.current = false
+            void narration.current?.play()
+          }
         }}
       />
       <button
+        aria-busy={responding}
         className={'main-play' + (audible ? ' playing' : '')}
         disabled={!url || bufferedId !== edition?.id}
         onClick={play}
         aria-label={audible ? 'Pause daily briefing' : 'Play daily briefing'}
       >
-        {audible ? (
+        {responding ? (
+          <LoaderCircle className="spin" size={30} />
+        ) : audible ? (
           <Pause size={34} fill="currentColor" />
         ) : (
           <Play size={34} fill="currentColor" />
         )}
       </button>
       <p role="status" className="session-status">
-        {phase || 'Ask questions while you listen.'}
+        {phase ||
+          (listening
+            ? 'Listening · ask a question'
+            : playing
+              ? 'Playing · microphone off'
+              : hasAnswer
+                ? 'Ask more, or resume your briefing.'
+                : 'Press play. Make time for the world.')}
       </p>
       <div className="compact-timeline">
         <span>{clockTime(position)}</span>
@@ -349,29 +490,34 @@ export function DailySession({
         <span>{clockTime(edition?.duration_seconds || 0)}</span>
       </div>
       <div className="session-tools">
-        <button disabled={!url || responding} onClick={() => void respond('More news')}>
-          {responding ? 'Preparing answer…' : 'More news'}
+        <button
+          disabled={!url || responding || voiceConnecting}
+          onClick={() => void moreNews()}
+        >
+          More news
         </button>
         <button
-          disabled={!url}
+          disabled={!url || voiceConnecting}
           className={'microphone-control' + (listening ? ' active' : '')}
-          onClick={() => (listening ? stopSession() : void startListening())}
+          onClick={() => (listening ? stopMicrophone() : void startListening())}
           aria-label={listening ? 'Turn microphone off' : 'Turn microphone on'}
           aria-pressed={listening}
         >
           {listening ? <Mic size={15} /> : <MicOff size={15} />}{' '}
-          {listening ? 'Listening' : 'Voice chat'}
+          {voiceConnecting ? 'Connecting…' : listening ? 'Mic on' : 'Mic off'}
         </button>
-        {edition?.status === 'completed' && (
-          <Link to={'/briefings/' + edition.id}>Transcript & sources</Link>
-        )}
-        {listening && (
+        {hasAnswer && (
           <button
-            className="session-end"
-            onClick={stopSession}
-            aria-label="End voice session"
+            onClick={() => {
+              realtime.current?.interrupt()
+              cancelTurn()
+              setHasAnswer(false)
+              setPhase('')
+              void narration.current?.play()
+            }}
+            aria-label="Resume briefing"
           >
-            <Square size={12} /> End
+            <RotateCcw size={13} /> Resume briefing
           </button>
         )}
       </div>
@@ -379,41 +525,25 @@ export function DailySession({
         AI narration ·{' '}
         {listening
           ? 'Microphone active'
-          : 'Allow microphone access to ask questions.'}
+          : 'Listen freely. Turn the mic on to join in.'}
       </span>
       {edition?.status === 'failed' && (
         <>
           <ErrorNote error={edition.error} />
-          <button className="btn outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
+          <button
+            className="btn outline"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate()}
+          >
             {retry.isPending ? 'Retrying…' : 'Retry preparation'}
           </button>
         </>
       )}
-      <ErrorNote error={error || daily.error || custom.error || audio.error || retry.error} />
-      {reply && (
-        <div className="live-response">
-          <p className="muted">You · {transcript}</p>
-          <p>{reply.text}</p>
-          {reply.citations.length > 0 && (
-            <details>
-              <summary>Sources ({reply.citations.length})</summary>
-              {reply.citations.map((c, i) => (
-                <SourceCitation key={i} citation={c} />
-              ))}
-            </details>
-          )}
-          <button
-            className="text-link"
-            onClick={() => {
-              cancelTurn()
-              void narration.current?.play()
-              setPhase('Listening')
-            }}
-          >
-            Resume briefing
-          </button>
-        </div>
-      )}
+      <ErrorNote
+        error={
+          error || daily.error || custom.error || audio.error || retry.error
+        }
+      />
     </section>
   )
 }

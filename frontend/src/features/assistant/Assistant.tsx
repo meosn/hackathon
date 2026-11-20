@@ -1,91 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link, useSearchParams } from 'react-router-dom'
-import { AudioLines, Mic, MicOff, Plus, Send, Volume2 } from 'lucide-react'
-import { api, request, queryClient } from '../../api/client'
+import { useSearchParams } from 'react-router-dom'
+import { AudioLines, LoaderCircle, Mic, MicOff, Plus, Send } from 'lucide-react'
+import { api, request, useApi, type Health } from '../../api/client'
 import type { Conversation, Message, User } from '../../api/types'
-import {
-  Button,
-  Card,
-  ErrorNote,
-  Loading,
-  SourceCitation,
-} from '../../components/UI'
-export function ChatMessage({
-  message: m,
-  onSpeak,
-  busy,
-}: {
-  message: Message
-  onSpeak: () => void
-  busy: boolean
-}) {
-  return (
-    <article className={'chat-message ' + m.role}>
-      <div className="chat-speaker">
-        {m.role === 'user' ? (
-          'You'
-        ) : (
-          <>
-            <AudioLines size={15} /> Sourcera
-          </>
-        )}
-      </div>
-      <p>{m.text}</p>
-      {m.action?.response_provider === 'source_search' && typeof m.action?.fallback_reason === 'string' && (
-        <small>The AI answer was unavailable. Showing source search results.</small>
-      )}
-      {m.citations?.length > 0 && (
-        <details>
-          <summary>View evidence ({m.citations.length})</summary>
-          {m.citations.map((c, i) => (
-            <SourceCitation key={i} citation={c} />
-          ))}
-        </details>
-      )}
-      {m.role !== 'user' && (
-        <div className="chat-actions">
-          {m.action?.type === 'CHANGE_PREFERENCES' && (
-            <Link className="text-link" to="/settings">
-              Open settings
-            </Link>
-          )}
-          <button className="text-link" disabled={busy} onClick={onSpeak}>
-            <Volume2 size={15} />
-            Listen to answer
-          </button>
-          {m.briefing_id && (
-            <Link className="text-link" to={'/briefings/' + m.briefing_id}>
-              Open briefing
-            </Link>
-          )}
-          {m.story_id && (
-            <Link className="text-link" to={'/stories/' + m.story_id}>
-              Open story
-            </Link>
-          )}
-        </div>
-      )}
-    </article>
-  )
-}
+import { Button, Card, ErrorNote } from '../../components/UI'
+import { RealtimeVoice, type VoicePhase } from '../briefings/realtimeVoice'
+import { LiveMicrophone } from '../briefings/liveMicrophone'
+
 export function Assistant({ user }: { user: User }) {
   const [params] = useSearchParams()
-  const key =
-    'sourcera.conversation.' +
-    user.id +
-    '.' +
-    (params.get('story') || params.get('briefing') || 'general')
+  const storageKey = `sourcera.conversation.${user.id}.${params.get('story') || params.get('briefing') || 'general'}`
   return (
-    <ChatSession
-      key={key}
-      storageKey={key}
+    <VoiceConversation
+      key={storageKey}
+      storageKey={storageKey}
       story={params.get('story')}
       briefing={params.get('briefing')}
     />
   )
 }
-function ChatSession({
+
+function VoiceConversation({
   storageKey,
   story,
   briefing,
@@ -94,254 +29,284 @@ function ChatSession({
   story: string | null
   briefing: string | null
 }) {
-  const [id, setId] = useState(() => sessionStorage.getItem(storageKey) || ''),
-    [draft, setDraft] = useState(''),
-    [error, setError] = useState(''),
-    [recording, setRecording] = useState(false),
-    [audioUrl, setAudioUrl] = useState(''),
-    [speaking, setSpeaking] = useState(false)
-  const recorder = useRef<MediaRecorder | null>(null),
-    stream = useRef<MediaStream | null>(null),
-    alive = useRef(true),
-    spoken = useRef<HTMLAudioElement>(null)
-  const q = useQuery({
-    queryKey: ['conversation', id],
-    enabled: !!id,
-    queryFn: ({ signal }) =>
-      api<Conversation>('/conversations/' + id, 'GET', undefined, signal),
-  })
-  const ensure = async () => {
-    if (id) return id
-    const v = await api<Conversation>('/conversations', 'POST', {
-      briefing_id: briefing,
-      story_id: story,
-    })
-    sessionStorage.setItem(storageKey, v.id)
-    setId(v.id)
-    return v.id
-  }
-  const send = useMutation({
-    mutationFn: async (content: string | Blob) => {
-      const cid = await ensure()
-      if (typeof content === 'string')
-        await api<Message>('/conversations/' + cid + '/messages', 'POST', {
-          text: content,
-        })
-      else {
-        const data = new FormData()
-        data.set(
-          'file',
-          content,
-          'question.' + (content.type.includes('mp4') ? 'mp4' : 'webm')
-        )
-        await api<Message>('/conversations/' + cid + '/audio', 'POST', data)
-      }
-      return api<Conversation>('/conversations/' + cid)
-    },
-    onSuccess: (conv) => {
-      setDraft('')
-      queryClient.setQueryData(['conversation', conv.id], conv)
-      const action = conv.messages.at(-1)?.action?.type
-      if (action === 'STOP_PLAYBACK') spoken.current?.pause()
-      if (action === 'CHANGE_VOICE')
-        queryClient.invalidateQueries({ queryKey: ['/users/me/preferences'] })
-    },
-  })
+  const health = useApi<Health>('/health')
+  const [draft, setDraft] = useState('')
+  const [phase, setPhase] = useState<VoicePhase>('idle')
+  const [listening, setListening] = useState(false)
+  const [error, setError] = useState('')
+  const alive = useRef(true)
+  const voice = useRef<RealtimeVoice | null>(null)
+  const microphone = useRef<LiveMicrophone | null>(null)
+  const conversation = useRef<Promise<string> | null>(null)
+  const audio = useRef<HTMLAudioElement>(null)
+  const audioUrl = useRef('')
+  const abort = useRef<AbortController | null>(null)
+
   useEffect(() => {
     alive.current = true
     return () => {
       alive.current = false
-      if (recorder.current?.state === 'recording') {
-        recorder.current.onstop = null
-        recorder.current.stop()
-      }
-      stream.current?.getTracks().forEach((t) => t.stop())
+      voice.current?.close()
+      microphone.current?.stop()
+      abort.current?.abort()
+      if (audioUrl.current) URL.revokeObjectURL(audioUrl.current)
     }
   }, [])
-  useEffect(
-    () => () => {
-      if (audioUrl) URL.revokeObjectURL(audioUrl)
-    },
-    [audioUrl]
-  )
-  async function mic() {
-    setError('')
-    if (recorder.current?.state === 'recording') {
-      recorder.current.stop()
-      return
+
+  async function ensure() {
+    if (!conversation.current) {
+      const existing = sessionStorage.getItem(storageKey)
+      conversation.current = existing
+        ? Promise.resolve(existing)
+        : api<Conversation>('/conversations', 'POST', {
+            story_id: story,
+            briefing_id: briefing,
+          }).then((c) => {
+            sessionStorage.setItem(storageKey, c.id)
+            return c.id
+          })
     }
     try {
-      if (
-        !navigator.mediaDevices?.getUserMedia ||
-        typeof MediaRecorder === 'undefined'
-      )
-        throw Error(
-          'Microphone recording requires a supported browser on localhost or HTTPS.'
-        )
-      const media = await navigator.mediaDevices.getUserMedia({ audio: true })
-      if (!alive.current) {
-        media.getTracks().forEach((t) => t.stop())
-        return
-      }
-      stream.current = media
-      const r = new MediaRecorder(media)
-      recorder.current = r
-      const chunks: BlobPart[] = []
-      r.ondataavailable = (e) => {
-        if (e.data.size) chunks.push(e.data)
-      }
-      r.onstop = () => {
-        media.getTracks().forEach((t) => t.stop())
-        if (!alive.current) return
-        setRecording(false)
-        if (chunks.length) send.mutate(new Blob(chunks, { type: r.mimeType }))
-      }
-      r.start()
-      setRecording(true)
+      return await conversation.current
     } catch (e) {
-      stream.current?.getTracks().forEach((t) => t.stop())
-      setError(e instanceof Error ? e.message : 'Microphone unavailable.')
+      conversation.current = null
+      throw e
     }
   }
-  async function speak(m: Message) {
-    setError('')
-    setSpeaking(true)
+  async function connection() {
+    if (voice.current?.ready) return voice.current
+    const id = await ensure()
+    if (!alive.current) throw new DOMException('Aborted', 'AbortError')
+    voice.current?.close()
+    return (voice.current = new RealtimeVoice(id, {
+      phase: (p) => {
+        if (alive.current) setPhase(p)
+      },
+      microphone: (value) => {
+        if (alive.current) setListening(value)
+      },
+      interrupt: () => {
+        audio.current?.pause()
+        abort.current?.abort()
+      },
+      story: () => undefined,
+      action: () => {},
+      finished: () => {},
+      failed: (message) => {
+        if (alive.current) {
+          setError(message)
+          setPhase('idle')
+        }
+      },
+    }))
+  }
+  async function recordedAnswer(input: string | Blob) {
+    abort.current?.abort()
+    const controller = (abort.current = new AbortController())
+    audio.current?.pause()
+    setPhase('thinking')
     try {
-      const r = await request(
-        '/conversations/' + id + '/messages/' + m.id + '/audio'
+      const cid = await ensure()
+      const data = typeof input === 'string' ? { text: input } : new FormData()
+      if (data instanceof FormData && input instanceof Blob)
+        data.set(
+          'file',
+          input,
+          input.type.includes('mp4') ? 'question.m4a' : 'question.webm',
+        )
+      const message = await api<Message>(
+        `/conversations/${cid}/${typeof input === 'string' ? 'messages' : 'audio'}`,
+        'POST',
+        data,
+        controller.signal,
       )
-      const blob = await r.blob()
+      const response = await request(
+        `/conversations/${cid}/messages/${message.id}/audio`,
+        'GET',
+        undefined,
+        controller.signal,
+      )
+      const blob = await response.blob()
+      if (!alive.current || controller.signal.aborted) return
+      if (audioUrl.current) URL.revokeObjectURL(audioUrl.current)
+      audioUrl.current = URL.createObjectURL(blob)
+      audio.current!.src = audioUrl.current
+      await audio.current!.play()
+    } catch (e) {
+      if (alive.current && !controller.signal.aborted) {
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Spoken answer unavailable. Please try again.',
+        )
+        setPhase('idle')
+      }
+    }
+  }
+  async function send(text: string) {
+    setError('')
+    setDraft('')
+    try {
+      if (health.data?.realtime_voice) await (await connection()).sendText(text)
+      else await recordedAnswer(text)
+    } catch (e) {
       if (alive.current) {
-        setAudioUrl(URL.createObjectURL(blob))
+        setError(e instanceof Error ? e.message : 'Voice connection failed.')
+        setPhase('idle')
+      }
+    }
+  }
+  async function toggleMicrophone() {
+    setError('')
+    if (listening) {
+      microphone.current?.stop()
+      microphone.current = null
+      await voice.current?.setMicrophone(false)
+      setListening(false)
+      return
+    }
+    setPhase('connecting')
+    try {
+      if (health.data?.realtime_voice)
+        await (await connection()).setMicrophone(true)
+      else {
+        const mic = new LiveMicrophone(
+          () => {
+            audio.current?.pause()
+            abort.current?.abort()
+            setPhase('listening')
+          },
+          (blob) => void recordedAnswer(blob),
+          (message) => {
+            setError(message)
+            setListening(false)
+            microphone.current = null
+          },
+        )
+        microphone.current = mic
+        await mic.start()
+        if (alive.current) {
+          setListening(true)
+          setPhase('listening')
+        }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Audio unavailable.')
-    } finally {
-      if (alive.current) setSpeaking(false)
+      voice.current?.close()
+      voice.current = null
+      microphone.current?.stop()
+      microphone.current = null
+      setListening(false)
+      setPhase('idle')
+      setError(e instanceof Error ? e.message : 'Microphone access failed.')
     }
   }
   function restart() {
+    voice.current?.close()
+    voice.current = null
+    microphone.current?.stop()
+    microphone.current = null
+    abort.current?.abort()
+    audio.current?.pause()
+    conversation.current = null
     sessionStorage.removeItem(storageKey)
-    setId('')
-    setAudioUrl('')
+    setPhase('idle')
+    setListening(false)
     setDraft('')
     setError('')
-    send.reset()
   }
-  const busy = send.isPending || recording
+  const busy = phase === 'thinking' || phase === 'connecting'
   return (
     <>
       <header className="page-heading">
         <div className="eyebrow">VOICE ASSISTANT</div>
         <h1>Ask Sourcera</h1>
-        <p>Explore the reporting behind your news, by text or voice.</p>
+        <p>A conversation, out loud.</p>
       </header>
-      <Card className="chat">
+      <Card className="voice-conversation">
         <div className="section-heading">
           <h2>
             {story
-              ? 'Story discussion'
+              ? 'About this story'
               : briefing
-                ? 'Briefing discussion'
-                : 'Conversation'}
+                ? 'About this briefing'
+                : 'Your news companion'}
           </h2>
-          <Button variant="quiet" disabled={busy} onClick={restart}>
-            <Plus size={16} />
-            New chat
+          <Button variant="quiet" onClick={restart}>
+            <Plus size={16} /> New chat
           </Button>
         </div>
-        {story && (
-          <Link className="text-link" to={'/stories/' + story}>
-            View current story
-          </Link>
-        )}
-        {briefing && (
-          <Link className="text-link" to={'/briefings/' + briefing}>
-            View current briefing
-          </Link>
-        )}
-        {q.isFetching && !q.data && <Loading />}
-        {!q.data?.messages.length && (
-          <div className="assistant-intro">
-            <span className="round-icon">
-              <AudioLines size={25} />
-            </span>
-            <h3>What would you like to hear?</h3>
-            <div className="chips">
-              {(story || briefing
-                ? ['What do other sources say?', 'Give me more details.', 'More news']
-                : [
-                    "Tell me today's news.",
-                    'What happened this week?',
-                    'Tell me about AI.',
-                  ]
-              ).map((t) => (
-                <button disabled={busy} key={t} onClick={() => send.mutate(t)}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {q.data?.messages.map((m) => (
-          <ChatMessage
-            key={m.id}
-            message={m}
-            busy={speaking}
-            onSpeak={() => speak(m)}
-          />
-        ))}
-        {audioUrl && (
-          <div>
-            <audio
-              key={audioUrl}
-              ref={spoken}
-              src={audioUrl}
-              controls
-              autoPlay
-            />
-            <small className="muted">AI-generated narration</small>
-          </div>
-        )}
-        {send.isPending && <Loading>Finding evidence…</Loading>}
-        <ErrorNote error={send.error || q.error || error} />
-        <form
-          className="composer"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (draft.trim() && !busy) send.mutate(draft.trim())
-          }}
-        >
-          <input
-            aria-label="Your question"
-            placeholder="Ask about your news…"
-            value={draft}
-            maxLength={2000}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <button
+        <div className={'voice-orb ' + phase} aria-hidden="true">
+          {busy ? (
+            <LoaderCircle size={38} className="spin" strokeWidth={1} />
+          ) : (
+            <AudioLines size={46} strokeWidth={1} />
+          )}
+        </div>
+        <p className="voice-conversation-status" role="status">
+          {phase === 'connecting'
+            ? 'Connecting voice…'
+            : phase === 'thinking'
+              ? 'Thinking…'
+              : phase === 'speaking'
+                ? 'Speaking'
+                : listening
+                  ? 'Listening · ask a question'
+                  : 'Turn on the mic, or choose what to hear.'}
+        </p>
+        <div className="voice-conversation-controls">
+          <Button
             type="button"
-            className={'icon ' + (recording ? 'recording' : '')}
-            disabled={send.isPending}
-            aria-label={recording ? 'Finish recording' : 'Record question'}
-            onClick={mic}
+            variant={listening ? 'outline' : 'primary'}
+            aria-label={
+              listening ? 'Turn microphone off' : 'Turn microphone on'
+            }
+            aria-pressed={listening}
+            disabled={phase === 'connecting'}
+            onClick={() => void toggleMicrophone()}
           >
-            {recording ? <MicOff size={20} /> : <Mic size={20} />}
-          </button>
-          <button
-            type="submit"
-            className="send"
-            disabled={busy || !draft.trim()}
-            aria-label="Send question"
+            {listening ? <Mic size={17} /> : <MicOff size={17} />}{' '}
+            {listening ? 'Mic on' : 'Start talking'}
+          </Button>
+          <Button
+            type="button"
+            variant="quiet"
+            disabled={busy}
+            onClick={() => void send('More news')}
           >
-            <Send size={17} />
-          </button>
-        </form>
-        {recording && (
-          <p role="status" className="muted">
-            Recording… Press the microphone again to send.
-          </p>
-        )}
+            More news
+          </Button>
+        </div>
+        <details className="voice-text-input">
+          <summary>Type a question</summary>
+          <form
+            className="composer"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (draft.trim() && !busy) void send(draft.trim())
+            }}
+          >
+            <input
+              aria-label="Your question"
+              placeholder="Ask about your news…"
+              maxLength={2000}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <button
+              className="send"
+              aria-label="Send question"
+              disabled={busy || !draft.trim()}
+            >
+              <Send size={17} />
+            </button>
+          </form>
+        </details>
+        <audio
+          ref={audio}
+          onPlay={() => setPhase('speaking')}
+          onEnded={() => setPhase(listening ? 'listening' : 'idle')}
+        />
+        <ErrorNote error={error} />
       </Card>
     </>
   )

@@ -25,7 +25,7 @@ from app.config import settings
 from app.db import SessionLocal, get_db
 from app.messaging import emit
 from app.news.service import story_detail
-from . import service, voice
+from . import service, voice, realtime
 from .accounting import account_attempts
 from . import contracts
 from .contracts import BriefingRequest, MessageInput, StartConversation
@@ -404,3 +404,55 @@ def spoken_answer(
         )
         db.commit()
     return audio_response(audio)
+
+
+@router.post("/conversations/{conversation_id}/realtime", response_class=Response)
+def realtime_session(
+    conversation_id: str,
+    data: "realtime.Offer",
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    conv = owned(db, Conversation, conversation_id, user.id)
+    titles = (
+        list(
+            db.scalars(
+                select(BriefingItem.title)
+                .where(BriefingItem.briefing_id == conv.briefing_id)
+                .order_by(BriefingItem.position)
+            )
+        )
+        if conv.briefing_id
+        else []
+    )
+    sdp = realtime.negotiate(data.sdp, conv.language, titles, user.id)
+    return Response(
+        sdp, media_type="application/sdp", headers={"Cache-Control": "no-store"}
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/realtime-evidence",
+    response_model=contracts.MessageView,
+)
+def realtime_evidence(
+    conversation_id: str,
+    data: "realtime.Turn",
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    conv = owned(db, Conversation, conversation_id, user.id, lock=True)
+    if data.story_id:
+        membership = db.scalar(
+            select(BriefingItem.id).where(
+                BriefingItem.briefing_id == conv.briefing_id,
+                BriefingItem.story_id == data.story_id,
+            )
+        )
+        if not membership:
+            raise HTTPException(422, "Story is outside this briefing")
+        conv.story_id = data.story_id
+    with account_attempts(db):
+        return message_view(
+            respond(db, conv, data.question, decision=data.decision, extractive=True)
+        )

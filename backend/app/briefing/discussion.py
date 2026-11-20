@@ -434,11 +434,11 @@ def digest(db, choices, language, excluded):
     return " ".join(quotes), citations, lineup
 
 
-def respond(db, conv, text):
+def respond(db, conv, text, *, decision=None, extractive=False):
     text = text.strip()
     if not text or len(text) > 2000:
         raise ValueError("Enter a question of 1 to 2000 characters.")
-    decision = classify(db, conv.id, text)
+    decision = decision or classify(db, conv.id, text)
     intent = decision.intent
     prefs = preferences(db, conv.user_id)
     language = conv.language = prefs["language"]
@@ -623,7 +623,8 @@ def respond(db, conv, text):
             )
             used = {c["claim_id"] for msg in recent for c in msg.citations}
             if (
-                prefs["discussion_model"] == "configured"
+                not extractive
+                and prefs["discussion_model"] == "configured"
                 and os.getenv("LLM_PROVIDER", "mock") != "mock"
             ):
                 try:
@@ -645,8 +646,16 @@ def respond(db, conv, text):
                     )
             else:
                 reply, citations = _grounded(
-                    db, story, language, prefs["excluded_sources"], intent, text, used
+                    db,
+                    story,
+                    language,
+                    prefs["excluded_sources"],
+                    intent,
+                    decision.retrieval_query or text,
+                    used,
                 )
+                if extractive:
+                    action["response_provider"] = "realtime_evidence"
     user_message = ConversationMessage(
         conversation_id=conv.id,
         role="user",

@@ -23,3 +23,10 @@ For live progress, open `/api/v1/ws/briefings/{id}` on the same host. The first 
 Login uses JSON email/password. Registration also takes a display name. Schedule creation takes `time` in HH:MM, `timezone` as an IANA zone, and `enabled`. Conversation creation accepts an optional story or briefing context. Text turns take `{"text":"What do other sources say?"}`; voice turns use multipart field `file`.
 
 HTTP errors include `error.code`, `error.message` and `detail`. Invalid inputs return 422. The gateway bounds uploaded bytes, rate-limits expensive requests and omits request bodies and access tokens from application logging.
+
+
+## Streamed audio
+
+`POST /conversations/{id}/realtime` accepts `{ "sdp": "<WebRTC offer>" }` and returns `application/sdp`. It requires the conversation owner, `REALTIME_ENABLED=1` and a configured OpenAI key. Provider credentials stay on the server. `GET /health` advertises `realtime_voice`.
+
+`POST /conversations/{id}/realtime-evidence` accepts `{ "question": "…", "decision": { "intent": "EXPLAIN_STORY", "retrieval_query": "standalone English search question" }, "story_id": "optional current briefing story" }`. The supplied playback story must belong to this conversation’s briefing. The response contains verified evidence and a playback action, used internally by the audio model, never rendered as a chat bubble.
