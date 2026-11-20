@@ -1,5 +1,6 @@
 import { api, request } from '../../api/client'
 import type { Message } from '../../api/types'
+import { ElevenSpeech } from './elevenSpeech'
 
 export type VoicePhase =
   | 'connecting'
@@ -47,6 +48,11 @@ export class RealtimeVoice {
   private idleTimer: ReturnType<typeof setTimeout> | undefined
   private toolCalls = new Set<string>()
   private warmed = false
+  private activeResponseId: string | undefined
+  private cancelledResponses = new Set<string>()
+  private speech: ElevenSpeech | null = null
+  private ownOutputContext = false
+  private warmupResponses = new Set<string>()
 
   constructor(
     private conversationId: string,
@@ -81,6 +87,7 @@ export class RealtimeVoice {
     const peer = (this.peer = new RTCPeerConnection())
     this.sender = peer.addTransceiver('audio', { direction: 'sendrecv' }).sender
     peer.ontrack = (event) => {
+      if (this.speech) return
       const stream = event.streams[0] || new MediaStream([event.track])
       this.output.srcObject = stream
       if (this.outputContext?.state === 'running') {
@@ -146,14 +153,41 @@ export class RealtimeVoice {
     const response = await request(
       `/conversations/${this.conversationId}/realtime`,
       'POST',
-      { sdp: offer.sdp },
+      { sdp: offer.sdp, speech_stream: true },
       this.abort.signal,
     )
     if (this.closed) return
-    await peer.setRemoteDescription({
-      type: 'answer',
-      sdp: await response.text(),
-    })
+    const sdp = await response.text()
+    if (response.headers.get('X-Speech-Output') === 'elevenlabs') {
+      if (!this.outputContext) {
+        this.outputContext = new AudioContext()
+        this.ownOutputContext = true
+        await this.outputContext.resume()
+      }
+      this.speech = new ElevenSpeech(this.conversationId, this.outputContext, {
+        started: () => {
+          if (this.closed) return
+          clearTimeout(this.idleTimer)
+          this.callbacks.interrupt()
+          this.callbacks.phase('speaking')
+        },
+        finished: () => {
+          if (this.closed) return
+          this.callbacks.finished()
+          this.callbacks.phase(this.micWanted ? 'listening' : 'idle')
+          this.armIdleTimer()
+        },
+        failed: (message) => {
+          if (this.closed) return
+          this.callbacks.phase('idle')
+          this.callbacks.failed(message)
+        },
+      })
+    }
+    await Promise.all([
+      peer.setRemoteDescription({ type: 'answer', sdp }),
+      this.speech?.connect(),
+    ])
     await opened
     if (!this.closed) {
       this.callbacks.phase(this.micWanted ? 'listening' : 'idle')
@@ -255,6 +289,7 @@ export class RealtimeVoice {
     )
     if (this.closed || sequence !== this.sequence) return
     this.callbacks.action(result)
+    this.speech?.setStoryOrder((result.action?.story_ids as string[]) || [])
     this.send({
       type: 'conversation.item.create',
       item: {
@@ -264,7 +299,7 @@ export class RealtimeVoice {
           {
             type: 'input_text',
             text:
-              'Read these next three news stories aloud, in the language we have been speaking. Use only this verified data, no lookup or preamble. ' +
+              'Read these next three news stories aloud, in the language we have been speaking. Exactly one short paragraph per story, in the supplied order, separated by a blank line. Use only this verified data, no heading, lookup or preamble. ' +
               JSON.stringify({
                 bulletin: result.text,
                 context: result.context,
@@ -279,7 +314,8 @@ export class RealtimeVoice {
   async sendText(text: string) {
     await this.connect()
     this.interrupt()
-    this.turnStory = this.callbacks.story()
+    this.turnStory = this.callbacks.story() || this.speech?.currentStory
+    if (this.turnStory) this.speech?.setStoryOrder([this.turnStory])
     this.callbacks.interrupt()
     this.callbacks.phase('thinking')
     this.send({
@@ -304,18 +340,33 @@ export class RealtimeVoice {
     } else
       this.send({
         type: 'response.create',
-        response: { output_modalities: ['audio'], tool_choice: toolChoice },
+        response: {
+          output_modalities: [this.speech ? 'text' : 'audio'],
+          tool_choice: toolChoice,
+        },
       })
   }
 
   private handle(event: Record<string, any>) {
-    if (this.closed || event.response?.metadata?.purpose === 'cache_warmup')
+    if (this.closed) return
+    if (event.response?.metadata?.purpose === 'cache_warmup') {
+      if (event.type === 'response.created')
+        this.warmupResponses.add(event.response.id)
+      if (event.type === 'response.done')
+        this.warmupResponses.delete(event.response.id)
       return
+    }
+    if (this.warmupResponses.has(event.response_id)) return
     switch (event.type) {
       case 'input_audio_buffer.speech_started':
+        if (this.activeResponseId)
+          this.cancelledResponses.add(this.activeResponseId)
+        this.speech?.cancel()
+        this.speech?.prepare()
         this.sequence++
         this.speakingInput = true
-        this.turnStory = this.callbacks.story()
+        this.turnStory = this.callbacks.story() || this.speech?.currentStory
+        if (this.turnStory) this.speech?.setStoryOrder([this.turnStory])
         if (this.turnStory)
           this.send({
             type: 'conversation.item.create',
@@ -342,9 +393,18 @@ export class RealtimeVoice {
         this.callbacks.phase('thinking')
         break
       case 'response.created':
+        this.activeResponseId = event.response?.id
         this.responseActive = true
         this.callbacks.phase('thinking')
         clearTimeout(this.idleTimer)
+        break
+      case 'response.output_text.delta':
+        if (this.cancelledResponses.has(event.response_id)) break
+        this.speech?.append(event.response_id, event.delta)
+        break
+      case 'response.output_text.done':
+        if (this.cancelledResponses.has(event.response_id)) break
+        this.speech?.finish(event.response_id)
         break
       case 'response.function_call_arguments.done':
         if (
@@ -356,6 +416,7 @@ export class RealtimeVoice {
         }
         break
       case 'output_audio_buffer.started':
+        if (this.speech) break
         this.callbacks.interrupt()
         this.callbacks.phase('speaking')
         void this.output
@@ -365,16 +426,22 @@ export class RealtimeVoice {
           )
         break
       case 'output_audio_buffer.stopped':
+        if (this.speech) break
         this.callbacks.finished()
         this.callbacks.phase(this.micWanted ? 'listening' : 'idle')
         this.armIdleTimer()
         break
       case 'output_audio_buffer.cleared':
+        if (this.speech) break
         if (this.responseActive) break
         this.callbacks.phase(this.micWanted ? 'listening' : 'idle')
         this.armIdleTimer()
         break
       case 'response.done':
+        if (event.response?.id !== this.activeResponseId) break
+        if (event.response?.status === 'completed')
+          this.speech?.finish(event.response.id)
+        else if (event.response?.status !== 'in_progress') this.speech?.cancel()
         this.responseActive = false
         if (event.response?.status === 'failed')
           this.callbacks.failed(
@@ -427,6 +494,10 @@ export class RealtimeVoice {
       })
       if (this.closed || sequence !== this.sequence) return
       this.callbacks.action(result)
+      this.speech?.setStoryOrder(
+        (result.action?.story_ids as string[]) ||
+          (result.story_id ? [result.story_id] : []),
+      )
       this.createResponse()
     } catch {
       if (this.closed) return
@@ -446,10 +517,13 @@ export class RealtimeVoice {
   }
 
   interrupt() {
+    if (this.activeResponseId)
+      this.cancelledResponses.add(this.activeResponseId)
+    this.speech?.cancel()
     this.sequence++
     this.pendingResponse = false
     if (this.responseActive) this.send({ type: 'response.cancel' })
-    this.send({ type: 'output_audio_buffer.clear' })
+    if (!this.speech) this.send({ type: 'output_audio_buffer.clear' })
     this.callbacks.phase(this.micWanted ? 'listening' : 'idle')
   }
 
@@ -473,6 +547,8 @@ export class RealtimeVoice {
     this.stream = null
     this.channel?.close()
     this.peer?.close()
+    this.speech?.close()
+    if (this.ownOutputContext) void this.outputContext?.close()
     this.outputSource?.disconnect()
     this.outputSource = null
     this.output.pause()

@@ -1665,6 +1665,50 @@
         }
       }
     },
+    "/api/v1/conversations/{conversation_id}/speech-session": {
+      "post": {
+        "summary": "Speech Session",
+        "operationId": "speech_session_api_v1_conversations__conversation_id__speech_session_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeechSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sources": {
       "get": {
         "tags": [
@@ -3804,6 +3848,11 @@
       },
       "Offer": {
         "properties": {
+          "speech_stream": {
+            "type": "boolean",
+            "title": "Speech Stream",
+            "default": false
+          },
           "sdp": {
             "type": "string",
             "maxLength": 65536,
@@ -4452,6 +4501,39 @@
           "excluded_sources"
         ],
         "title": "Sources"
+      },
+      "SpeechSession": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id"
+          },
+          "voice_profile_id": {
+            "type": "string",
+            "title": "Voice Profile Id"
+          },
+          "model_id": {
+            "type": "string",
+            "title": "Model Id"
+          },
+          "sample_rate": {
+            "type": "integer",
+            "title": "Sample Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "voice_id",
+          "voice_profile_id",
+          "model_id",
+          "sample_rate"
+        ],
+        "title": "SpeechSession"
       },
       "Split": {
         "properties": {

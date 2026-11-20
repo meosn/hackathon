@@ -142,7 +142,7 @@ export function StudioHome({ user }: { user: User }) {
           <div className="voice-apply" role="status">
             {custom.data?.active ? 'Custom voice selected for live chat.' : voiceChanged ? (
               <>
-                <span>Voice selected.</span>
+                <span>New replies use this voice.</span>
                 <button
                   onClick={() => generate.mutate('day')}
                   disabled={generate.isPending}

@@ -25,7 +25,7 @@ from app.config import settings
 from app.db import SessionLocal, get_db
 from app.messaging import emit
 from app.news.service import story_detail
-from . import agent, custom_voice, realtime, service, voice
+from . import agent, conversation_speech, custom_voice, realtime, service, voice
 from .accounting import account_attempts
 from . import contracts
 from .contracts import BriefingRequest, MessageInput, StartConversation
@@ -557,9 +557,17 @@ def realtime_session(
         else []
     )
     context = realtime.evidence_context(db, conv)
-    sdp = realtime.negotiate(data.sdp, conv.language, titles, user.id, context)
+    speech_stream = data.speech_stream and conversation_speech.enabled()
+    sdp = realtime.negotiate(
+        data.sdp, conv.language, titles, user.id, context, speech_stream
+    )
     return Response(
-        sdp, media_type="application/sdp", headers={"Cache-Control": "no-store"}
+        sdp,
+        media_type="application/sdp",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Speech-Output": ("elevenlabs" if speech_stream else "openai"),
+        },
     )
 
 
@@ -583,8 +591,24 @@ def realtime_evidence(
                 BriefingItem.story_id == data.story_id,
             )
         )
-        if not membership:
-            raise HTTPException(422, "Story is outside this briefing")
+        previous = (
+            db.scalars(
+                select(ConversationMessage.action).where(
+                    ConversationMessage.conversation_id == conv.id,
+                    ConversationMessage.role == "assistant",
+                )
+            )
+            if not membership and data.story_id != conv.story_id
+            else []
+        )
+        if (
+            not membership
+            and data.story_id != conv.story_id
+            and not any(
+                data.story_id in action.get("story_ids", []) for action in previous
+            )
+        ):
+            raise HTTPException(422, "Story is outside this conversation")
         conv.story_id = data.story_id
     with account_attempts(db):
         message = respond(
@@ -596,3 +620,21 @@ def realtime_evidence(
         return message_view(message) | {
             "context": realtime.evidence_context(db, conv, story_ids)
         }
+
+
+@router.post(
+    "/conversations/{conversation_id}/speech-session",
+    response_model=contracts.SpeechSession,
+)
+def speech_session(
+    conversation_id: str,
+    response: Response,
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    owned(db, Conversation, conversation_id, user.id)
+    if agent.conversation_provider() != "local":
+        raise HTTPException(409, "Use the configured conversation provider")
+    result = conversation_speech.session(preferences(db, user.id)["voice_profile_id"])
+    response.headers["Cache-Control"] = "private, no-store"
+    return result

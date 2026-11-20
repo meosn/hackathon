@@ -135,7 +135,8 @@ function SettingsForm({
   voices: Voice[]
   engines: Engine[]
 }) {
-  const elevenAgents = useApi<Health>('/health').data?.conversation_provider === 'elevenagents'
+  const elevenAgents =
+    useApi<Health>('/health').data?.conversation_provider === 'elevenagents'
   const [prefs, setPrefs] = useState(base)
   const [time, setTime] = useState(schedule?.time.slice(0, 5) || '08:00')
   const [enabled, setEnabled] = useState(schedule?.enabled || false)
@@ -589,7 +590,8 @@ function SettingsForm({
                       ))}
                     </div>
                     <p className="preference-hint">
-                      Your new voice applies to future editions.
+                      Used for new editions and your next ElevenLabs voice
+                      reply.
                     </p>
                   </section>
                   <CustomVoiceSettings />
@@ -619,7 +621,11 @@ function SettingsForm({
                     </summary>
                     <div>
                       <Dropdown
-                        label={elevenAgents ? 'Text assistant model' : 'Assistant model'}
+                        label={
+                          elevenAgents
+                            ? 'Text assistant model'
+                            : 'Assistant model'
+                        }
                         value={prefs.discussion_model}
                         onChange={(v) => patch('discussion_model', v)}
                       >

@@ -189,3 +189,11 @@ class ConversationView(BaseModel):
 
 class RealtimeEvidence(MessageView):
     context: dict
+
+
+class SpeechSession(BaseModel):
+    token: str
+    voice_id: str
+    voice_profile_id: str
+    model_id: str
+    sample_rate: int

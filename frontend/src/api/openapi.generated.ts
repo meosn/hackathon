@@ -624,6 +624,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/conversations/{conversation_id}/speech-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Speech Session */
+        post: operations["speech_session_api_v1_conversations__conversation_id__speech_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources": {
         parameters: {
             query?: never;
@@ -1331,6 +1348,11 @@ export interface components {
         };
         /** Offer */
         Offer: {
+            /**
+             * Speech Stream
+             * @default false
+             */
+            speech_stream: boolean;
             /** Sdp */
             sdp: string;
         };
@@ -1523,6 +1545,19 @@ export interface components {
             /** Excluded Sources */
             excluded_sources: string[];
         };
+        /** SpeechSession */
+        SpeechSession: {
+            /** Token */
+            token: string;
+            /** Voice Id */
+            voice_id: string;
+            /** Voice Profile Id */
+            voice_profile_id: string;
+            /** Model Id */
+            model_id: string;
+            /** Sample Rate */
+            sample_rate: number;
+        };
         /** Split */
         Split: {
             /** Article Ids */
@@ -1698,6 +1733,7 @@ export type SchemaSelectCustomVoice = components['schemas']['SelectCustomVoice']
 export type SchemaSessionToken = components['schemas']['SessionToken'];
 export type SchemaSourceInfo = components['schemas']['SourceInfo'];
 export type SchemaSources = components['schemas']['Sources'];
+export type SchemaSpeechSession = components['schemas']['SpeechSession'];
 export type SchemaSplit = components['schemas']['Split'];
 export type SchemaStartConversation = components['schemas']['StartConversation'];
 export type SchemaStoryInfo = components['schemas']['StoryInfo'];
@@ -2948,6 +2984,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RealtimeEvidence"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    speech_session_api_v1_conversations__conversation_id__speech_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpeechSession"];
                 };
             };
             /** @description Validation Error */
