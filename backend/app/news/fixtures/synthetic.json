@@ -1,0 +1,158 @@
+{
+  "notice": "Entirely synthetic demonstration articles. Publishers, events and example-domain URLs are fictional. Times are offsets from first import. No Newstex material.",
+  "articles": [
+    {
+      "id": "vela-speech",
+      "source": "Signal Ledger",
+      "url": "https://signal.example/vela-speech",
+      "hours_ago": 3,
+      "title": "Vela Labs opens Aurora speech benchmark",
+      "content": "Vela Labs opened the Aurora speech benchmark. The benchmark includes 24 languages. Researchers published the evaluation protocol.",
+      "language": "en"
+    },
+    {
+      "id": "aurora-open",
+      "source": "Civic Current",
+      "url": "https://civic.example/aurora-open",
+      "hours_ago": 2,
+      "title": "Vela Labs opens Aurora speech benchmark to researchers",
+      "content": "Vela Labs opened the Aurora speech benchmark. The benchmark includes 24 languages. The evaluation covers regional accents.",
+      "language": "en"
+    },
+    {
+      "id": "aurora-test",
+      "source": "Delta Draad",
+      "url": "https://delta.example/aurora-test",
+      "hours_ago": 2,
+      "title": "Vela Labs opent Aurora speech benchmark",
+      "content": "Vela Labs opende de Aurora benchmark. De test bevat 24 talen.",
+      "language": "nl"
+    },
+    {
+      "id": "vela-copy",
+      "source": "Signal Ledger",
+      "url": "https://signal.example/vela-copy",
+      "hours_ago": 3,
+      "title": "Vela Labs opens Aurora speech benchmark",
+      "content": "<p>Vela Labs opened the Aurora speech benchmark.</p> The benchmark includes 24 languages. Researchers published the evaluation protocol.",
+      "language": "en"
+    },
+    {
+      "id": "maren-rate",
+      "source": "Market Folio",
+      "url": "https://market.example/maren-rate",
+      "hours_ago": 5,
+      "title": "Maren Bank cuts policy rate",
+      "content": "Maren Bank cut its policy rate to 2.5%. The decision takes effect on 12 November. The bank published its decision on Thursday.",
+      "language": "en"
+    },
+    {
+      "id": "maren-zins",
+      "source": "Rhein Bericht",
+      "url": "https://rhein.example/maren-zins",
+      "hours_ago": 4,
+      "title": "Maren Bank senkt Leitzins",
+      "content": "Maren Bank senkte den Leitzins auf 2,5 Prozent. Die Bank veröffentlichte den Beschluss am Donnerstag.",
+      "language": "de"
+    },
+    {
+      "id": "maren-policy",
+      "source": "Civic Current",
+      "url": "https://civic.example/maren-policy",
+      "hours_ago": 4,
+      "title": "Maren Bank cuts policy rate after review",
+      "content": "Maren Bank cut its policy rate to 2.5%. The new rate covers overnight deposits.",
+      "language": "en"
+    },
+    {
+      "id": "vela-chip",
+      "source": "Signal Ledger",
+      "url": "https://signal.example/vela-chip",
+      "hours_ago": 13,
+      "title": "Vela Labs publishes Meridian chip research",
+      "content": "Vela Labs published research on its Meridian chip. The chip uses an optical interface.",
+      "language": "en"
+    },
+    {
+      "id": "vela-chip-results",
+      "source": "Civic Current",
+      "url": "https://civic.example/vela-chip-results",
+      "hours_ago": 12,
+      "title": "Vela Labs publishes Meridian chip results",
+      "content": "Vela Labs published research on its Meridian chip. The team tested 3 processors.",
+      "language": "en"
+    },
+    {
+      "id": "arden-grid",
+      "source": "Climate Register",
+      "url": "https://climate.example/arden-grid",
+      "hours_ago": 7,
+      "title": "Arden opens Sunvale solar pilot",
+      "content": "Arden opened the Sunvale solar pilot. The pilot has 40 megawatts of capacity. The grid operator released the first output readings.",
+      "language": "en"
+    },
+    {
+      "id": "sunvale-output",
+      "source": "Market Folio",
+      "url": "https://market.example/sunvale-output",
+      "hours_ago": 6,
+      "title": "Arden opens Sunvale solar pilot for grid tests",
+      "content": "Arden opened the Sunvale solar pilot. The pilot has 42 megawatts of capacity. The installation is connected to the western grid.",
+      "language": "en"
+    },
+    {
+      "id": "brin-flood",
+      "source": "Civic Current",
+      "url": "https://civic.example/brin-flood",
+      "hours_ago": 9,
+      "title": "Brin issues Lark flood warning",
+      "content": "Brin issued a flood warning for the Lark valley. The alert covers 3 stations. The river reached 4 metres overnight.",
+      "language": "en"
+    },
+    {
+      "id": "lark-alert",
+      "source": "Delta Draad",
+      "url": "https://delta.example/lark-alert",
+      "hours_ago": 8,
+      "title": "Brin warns of Lark flooding",
+      "content": "Brin issued a flood warning for the Lark valley. The local office published hourly river readings.",
+      "language": "en"
+    },
+    {
+      "id": "noren-profit",
+      "source": "Market Folio",
+      "url": "https://market.example/noren-profit",
+      "hours_ago": 28,
+      "title": "Noren Group reports quarterly profit",
+      "content": "Noren Group reported a quarterly profit of €18 million. Revenue rose by 4%.",
+      "language": "en"
+    },
+    {
+      "id": "noren-gewinn",
+      "source": "Rhein Bericht",
+      "url": "https://rhein.example/noren-gewinn",
+      "hours_ago": 27,
+      "title": "Noren Group meldet Quartalsgewinn",
+      "content": "Noren Group meldete einen Quartalsgewinn von 18 Millionen Euro. Der Umsatz stieg um 4 Prozent.",
+      "language": "de"
+    },
+    {
+      "id": "harbor-transit",
+      "source": "Delta Draad",
+      "url": "https://delta.example/harbor-transit",
+      "hours_ago": 33,
+      "title": "Oris opens Harbor transit pilot",
+      "content": "Oris opened the Harbor transit pilot. The service starts at the eastern terminal.",
+      "language": "en"
+    },
+    {
+      "id": "oris-vervoer",
+      "source": "Delta Draad",
+      "url": "https://delta.example/oris-vervoer",
+      "hours_ago": 32,
+      "title": "Oris opent Harbor vervoer pilot",
+      "content": "Oris opende de Harbor proef. De dienst begint bij de oostelijke terminal.",
+      "language": "nl"
+    }
+  ]
+}

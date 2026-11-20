@@ -1,0 +1,139 @@
+name: sourcera
+x-backend: &backend
+  image: sourcera-backend:local
+  pull_policy: never
+  env_file: .env
+  environment: &backend-env
+    REDIS_URL: redis://redis:6379/0
+    STATE_DIR: /state
+    JOB_MODE: celery
+    AUDIO_STORAGE: minio
+    MINIO_ENDPOINT: http://minio:9000
+  volumes:
+    - state:/state
+    - ./datasets:/datasets:ro
+  depends_on: &dependencies
+    bootstrap: {condition: service_completed_successfully}
+  restart: unless-stopped
+x-worker-health: &worker-health
+  test: ["CMD-SHELL", "celery -A app.jobs:tasks inspect ping -d worker@$$HOSTNAME --timeout 4 | grep -q pong"]
+  interval: 45s
+  timeout: 15s
+  retries: 4
+  start_period: 50s
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: sourcera
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: sourcera
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U sourcera -d sourcera"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+    restart: unless-stopped
+  rabbitmq:
+    image: rabbitmq:4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: sourcera
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports: ["127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"]
+    volumes: [rabbit:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD","rabbitmq-diagnostics","-q","ping"]
+      interval: 10s
+      timeout: 8s
+      retries: 15
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server","--appendonly","yes"]
+    volumes: [redis:/data]
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  minio:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5@sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    ports: ["127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"]
+    volumes: [audio:/bitnami/minio/data]
+    healthcheck:
+      test: ["CMD","curl","--fail","--silent","http://localhost:9000/minio/health/ready"]
+      start_period: 12s
+      interval: 8s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  bootstrap:
+    <<: *backend
+    build:
+      context: ./backend
+      args:
+        BACKEND_EXTRAS: ${BACKEND_EXTRAS:-}
+    command: ["python","-m","app.cli","bootstrap"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    restart: "no"
+  api:
+    <<: *backend
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/ready', timeout=8)"]
+      interval: 15s
+      timeout: 12s
+      retries: 12
+      start_period: 10s
+  ingestion-worker:
+    <<: *backend
+    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.ingestion","-n","worker@%h","-c","1"]
+    healthcheck: *worker-health
+  analysis-worker:
+    <<: *backend
+    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.analysis","-n","worker@%h","-c","1"]
+    healthcheck: *worker-health
+  briefing-worker:
+    <<: *backend
+    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.briefing","-n","worker@%h","-c","1"]
+    healthcheck: *worker-health
+  voice-worker:
+    <<: *backend
+    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.voice","-n","worker@%h","-c","1"]
+    healthcheck: *worker-health
+  scheduler:
+    <<: *backend
+    command: ["celery","-A","app.jobs:tasks","beat","-l","WARNING","-s","/state/beat-schedule","--pidfile=/tmp/beat.pid"]
+    healthcheck:
+      test: ["CMD-SHELL","test -s /tmp/beat.pid && kill -0 $$(cat /tmp/beat.pid)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  frontend:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports: ["127.0.0.1:${FRONTEND_PORT:-5173}:5173"]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD","node","-e","fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 4s
+      retries: 6
+    restart: unless-stopped
+volumes:
+  postgres:
+  rabbit:
+  redis:
+  audio:
+  state:

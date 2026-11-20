@@ -1,0 +1,11 @@
+.env*
+.local
+.venv
+*.db
+*.sqlite*
+*.egg-info
+**/__pycache__
+.pytest_cache
+tests
+datasets
+private-data
