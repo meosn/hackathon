@@ -632,3 +632,22 @@ def test_agent_can_resume_additional_news_after_switching_provider(api, monkeypa
     assert {entry['story_id'] for entry in context['entries']} == {current}
     assert api.post(V1 + '/agent-context', headers=headers,
                     json={'conversation_id': conv, 'story_id': 'unrelated'}).status_code == 422
+
+
+def test_donald_trump_preset_uses_the_voice_created_from_the_reference(api, monkeypatch):
+    token = api.post(V1 + '/auth/demo', json={'profile': 'tech'}).json()['access_token']
+    headers = {'Authorization': 'Bearer ' + token}
+    catalog = api.get(V1 + '/voices', headers=headers).json()
+    character = next(row for row in catalog if row['id'] == 'energetic')
+    assert character['name'] == 'Donald Trump'
+    assert 'recording' in character['description']
+    changed = api.patch(V1 + '/users/me/preferences', headers=headers,
+                        json={'voice_profile_id': 'energetic', 'voice_engine': 'elevenlabs'})
+    assert changed.status_code == 200
+    monkeypatch.setenv('ELEVENLABS_AGENT_ID', 'agent_test')
+    monkeypatch.setenv('ELEVENLABS_API_KEY', 'test-key')
+    monkeypatch.setattr(agent, 'signed_session_url', lambda *_: 'wss://api.elevenlabs.io/signed')
+    session = api.post(V1 + '/agent-session', headers=headers, json={})
+    assert session.status_code == 200
+    assert session.json()['voice_id'] == 'CBtIsr4irOknVyIz3EzI'
+    assert 'AI news narrator' in session.json()['persona']

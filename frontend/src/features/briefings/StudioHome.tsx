@@ -16,7 +16,7 @@ const hosts = [
   { id: 'professional', name: 'The Anchor' },
   { id: 'casual', name: 'Street Signal' },
   { id: 'jarvis', name: 'Studio Assistant' },
-  { id: 'energetic', name: 'Energetic Speaker' },
+  { id: 'energetic', name: 'Donald Trump' },
   { id: 'gangsta', name: 'CJ · GTA Gangsta' },
 ]
 export function StudioHome({ user }: { user: User }) {
@@ -45,8 +45,12 @@ export function StudioHome({ user }: { user: User }) {
     },
   })
   const save = useMutation({
+    mutationKey: ['voice-preferences'],
     mutationFn: (voice_profile_id: string) =>
-      api<Preferences>('/users/me/preferences', 'PATCH', { voice_profile_id }),
+      api<Preferences>('/users/me/preferences', 'PATCH', {
+        voice_profile_id,
+        ...(voice_profile_id === 'energetic' ? { voice_engine: 'elevenlabs' } : {}),
+      }),
     onMutate: async (voice_profile_id) => {
       await queryClient.cancelQueries({ queryKey: ['/users/me/preferences'] })
       const previous = queryClient.getQueryData<Preferences>([
@@ -56,6 +60,7 @@ export function StudioHome({ user }: { user: User }) {
         queryClient.setQueryData(['/users/me/preferences'], {
           ...previous,
           voice_profile_id,
+          ...(voice_profile_id === 'energetic' ? { voice_engine: 'elevenlabs' } : {}),
         })
       return { previous }
     },

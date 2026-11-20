@@ -1,4 +1,5 @@
 import { useApi } from '../../api/client'
+import { useIsMutating } from '@tanstack/react-query'
 import type { Preferences } from '../../api/types'
 import { ElevenRealtime } from '../briefings/elevenRealtime'
 import { RealtimeVoice, unlockVoiceAudio, type VoiceCallbacks } from '../briefings/realtimeVoice'
@@ -11,8 +12,9 @@ export function useVoiceChoice() {
   const preferences = useApi<Preferences>('/users/me/preferences')
   const custom = useApi<CustomVoiceState>(customVoicePath)
   const prefs = preferences.data
+  const saving = useIsMutating({ mutationKey: ['voice-preferences'] }) > 0
   const engine: VoiceEngine = prefs?.voice_engine === 'elevenlabs' ? 'elevenlabs' : 'openai'
-  return { engine, ready: !!prefs, signature: prefs ? `${engine}:${prefs.voice_profile_id}:${!!custom.data?.active}` : '' }
+  return { engine, ready: !!prefs && !saving, signature: prefs ? `${engine}:${prefs.voice_profile_id}:${!!custom.data?.active}` : '' }
 }
 
 export function createVoiceConnection(engine: VoiceEngine, id: string, callbacks: VoiceCallbacks, context?: AudioContext): VoiceConnection {

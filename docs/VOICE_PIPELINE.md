@@ -11,7 +11,7 @@ The output queue detects a stopped audio clock and offers **Enable sound** when 
 
 ## Character defaults and personal voices
 
-`voice_profiles` stores `elevenlabs_voice_id`, `openai_voice` and `persona`. Bootstrap seeds distinct voices for the anchor, assistant, energetic speaker, street casual, cyberpunk and CJ / GTA Gangsta character style. The CJ preset is a fictional delivery style using the configured voice, not an official game recording. Prepared ElevenLabs narration also resolves its voice from this table.
+`voice_profiles` stores `elevenlabs_voice_id`, `openai_voice` and `persona`. Bootstrap seeds distinct voices for the anchor, assistant, Donald Trump AI character, street casual, cyberpunk and CJ / GTA Gangsta character style. The Donald Trump preset uses the cloned voice created from the owner’s audio reference; choosing it selects ElevenLabs so the recording-based voice is used. Its stable internal slug remains `energetic` to retain existing preferences. The CJ preset is a fictional delivery style using the configured voice, not an official game recording. Prepared ElevenLabs narration also resolves its voice from this table.
 
 **Add voice** opens the personal character editor. Name, delivery style, pending sample, cloned voice ID and activation are stored on the authenticated user's row. A 30–60 second recording up to 10 MiB is validated before cloning. A personal account and ElevenLabs key with voice-creation access are needed to clone; demo listeners can save a pending sample. After cloning, the raw pending sample is cleared. The saved character is available only to its owner. Selecting it chooses ElevenLabs; selecting OpenAI deactivates the custom voice while retaining it for later.
 

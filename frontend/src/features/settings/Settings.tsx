@@ -535,7 +535,10 @@ function SettingsForm({
                           key={v.id}
                           type="button"
                           aria-pressed={prefs.voice_profile_id === v.id}
-                          onClick={() => patch('voice_profile_id', v.id)}
+                          onClick={() => {
+                            patch('voice_profile_id', v.id)
+                            if (v.id === 'energetic') patch('voice_engine', 'elevenlabs')
+                          }}
                         >
                           <span className="narrator-symbol"><SpeakerAvatar id={v.id} /></span>
                           <span>

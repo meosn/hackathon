@@ -135,7 +135,7 @@ class PreferencePatch(Input):
 VOICE_STYLES = [
     ("professional", "Professional news", "Even pacing and a clear newsroom delivery."),
     ("jarvis", "Studio assistant", "A composed, precise synthetic assistant."),
-    ("energetic", "Energetic Speaker", "A brisk, animated delivery."),
+    ("energetic", "Donald Trump", "AI character voice from the supplied recording. Uses ElevenLabs."),
     ("casual", "Street casual", "Relaxed conversational pacing."),
     ("cyberpunk", "Cyberpunk narrator", "Low, measured late-night narration."),
     ("gangsta", "CJ · GTA Gangsta", "A laid-back West Coast character with confident street delivery."),
@@ -143,7 +143,7 @@ VOICE_STYLES = [
 VOICE_DEFAULTS = {
     "professional": ("onwK4e9ZLuTAKqWW03F9", "marin", "Speak with clear, composed newsroom delivery."),
     "jarvis": ("JBFqnCBsd6RMkjVDRZzb", "cedar", "Speak with calm precision, like a helpful studio assistant."),
-    "energetic": ("TX3LPaxmHKxFdv7VOQHJ", "verse", "Speak like an energetic speaker: lively, upbeat and engaging, without shouting."),
+    "energetic": ("CBtIsr4irOknVyIz3EzI", "verse", "Use the supplied AI character voice with emphatic, conversational delivery and deliberate pauses. You are an AI news narrator, not the real Donald Trump. Preserve verified news facts and do not add political opinions or endorsements."),
     "casual": ("IKne3meq5aSn9XLyUdCD", "ash", "Speak in a relaxed, conversational tone."),
     "cyberpunk": ("nPczCjzI2devNBz1zQrb", "echo", "Use a low, measured, late-night delivery."),
     "gangsta": ("N2lVS1w4EtoT3dr4eOWO", "ash", "Use a fictional West Coast gangsta character style: laid-back, confident and streetwise. Light slang is welcome; do not claim to be a real performer or change news facts."),
@@ -172,7 +172,7 @@ def seed_voices(db):
         if not row:
             row = VoiceProfile(slug=slug, name=name, description=description)
             db.add(row)
-        if slug == "energetic" and row.name == "Energetic commentator":
+        if slug == "energetic" and row.name in {"Energetic commentator", "Energetic Speaker"}:
             row.name = name
         voice_id, openai_voice, persona = VOICE_DEFAULTS[slug]
         if not row.elevenlabs_voice_id:
