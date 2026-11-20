@@ -88,6 +88,7 @@ function VoiceConversation({
     if (voice.current && !voice.current.disposed) return voice.current
     const id = await ensure()
     if (!alive.current) throw new DOMException('Aborted', 'AbortError')
+    if (voice.current && !voice.current.disposed) return voice.current
     voice.current?.close()
     return (voice.current = new RealtimeVoice(
       id,
@@ -303,11 +304,18 @@ function VoiceConversation({
               ? 'Thinking…'
               : phase === 'speaking'
                 ? 'Speaking'
+                : phase === 'blocked'
+                  ? 'Tap Enable sound to hear your answer.'
                 : listening
                   ? 'Listening · ask a question'
                   : 'Turn on the mic, or choose what to hear.'}
         </p>
         <div className="voice-conversation-controls">
+          {phase === 'blocked' && (
+            <Button onClick={() => void voice.current?.resumeOutput()}>
+              Enable sound
+            </Button>
+          )}
           <Button
             type="button"
             variant={listening ? 'outline' : 'primary'}

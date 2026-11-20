@@ -42,8 +42,11 @@ function setup() {
     }
   }
   vi.stubGlobal('WebSocket', FakeSocket)
-  const context = {
+  const context = Object.assign(new EventTarget(), {
     currentTime: 1,
+    state: 'running',
+    suspend: vi.fn(async () => { context.state = 'suspended' }),
+    resume: vi.fn(async () => { context.state = 'running' }),
     destination: {},
     createBuffer: vi.fn((_channels: number, size: number, rate: number) => {
       const data = new Float32Array(size)
@@ -62,8 +65,8 @@ function setup() {
       sources.push(source)
       return source
     },
-  }
-  const callbacks = { started: vi.fn(), finished: vi.fn(), failed: vi.fn() }
+  })
+  const callbacks = { started: vi.fn(), blocked: vi.fn(), finished: vi.fn(), failed: vi.fn() }
   vi.mocked(api).mockResolvedValue({
     token: 'ephemeral-only',
     voice_id: 'voice-a',
@@ -86,12 +89,12 @@ function setup() {
     await pending
     return sockets.at(-1)!
   }
-  return { speech, sockets, sources, buffers, callbacks, connect }
+  return { speech, sockets, sources, buffers, callbacks, connect, context }
 }
 const pcm = btoa(String.fromCharCode(0, 64, 0, 192))
 
 it('plays PCM before the text ends and finishes only after the final audio drains', async () => {
-  const { speech, sources, buffers, callbacks, connect } = setup(),
+  const { speech, sources, buffers, callbacks, connect, context } = setup(),
     socket = await connect()
   speech.append('reply', 'Привет, мир. ')
   await vi.waitFor(() =>
@@ -102,7 +105,8 @@ it('plays PCM before the text ends and finishes only after the final audio drain
     ).toBe(true),
   )
   socket.receive({ contextId: 'reply', audio: pcm })
-  expect(callbacks.started).toHaveBeenCalledOnce()
+  context.currentTime = 1.1
+  await vi.waitFor(() => expect(callbacks.started).toHaveBeenCalledOnce())
   expect(sources[0].start).toHaveBeenCalledOnce()
   expect([...buffers[0]]).toEqual([0.5, -0.5])
   socket.receive({ context_id: 'reply', is_final: true })
@@ -118,13 +122,15 @@ it('plays PCM before the text ends and finishes only after the final audio drain
 })
 
 it('stops queued audio on interruption and ignores late chunks from the old answer', async () => {
-  const { speech, sources, callbacks, connect } = setup(),
+  const { speech, sources, callbacks, connect, context } = setup(),
     socket = await connect()
   speech.append('old', 'The old answer. ')
   await vi.waitFor(() =>
     expect(socket.sent.some((e) => e.context_id === 'old')).toBe(true),
   )
   socket.receive({ context_id: 'old', audio: pcm })
+  context.currentTime = 1.1
+  await vi.waitFor(() => expect(callbacks.started).toHaveBeenCalledOnce())
   speech.cancel()
   expect(sources[0].stop).toHaveBeenCalledOnce()
   socket.receive({ context_id: 'old', audio: pcm, is_final: true })
@@ -135,7 +141,8 @@ it('stops queued audio on interruption and ignores late chunks from the old answ
     expect(socket.sent.some((e) => e.context_id === 'next')).toBe(true),
   )
   socket.receive({ context_id: 'next', audio: pcm })
-  expect(callbacks.started).toHaveBeenCalledTimes(2)
+  context.currentTime = 1.2
+  await vi.waitFor(() => expect(callbacks.started).toHaveBeenCalledTimes(2))
   speech.close()
 })
 
@@ -173,7 +180,7 @@ it('uses a new one-use authorization when the selected narrator changes', async 
 })
 
 it('updates the discussed story when aligned audio reaches the next news paragraph', async () => {
-  const { speech, connect } = setup(),
+  const { speech, connect, context } = setup(),
     socket = await connect()
   vi.useFakeTimers()
   speech.setStoryOrder(['first-story', 'second-story', 'third-story'])
@@ -197,16 +204,94 @@ it('updates the discussed story when aligned audio reaches the next news paragra
       charStartTimesMs: [0, 20, 40, 60, 80, 90, 100, 120],
     },
   })
+  context.currentTime = 1.03
   await vi.advanceTimersByTimeAsync(30)
   expect(speech.currentStory).toBe('first-story')
+  context.currentTime = 1.53
   await vi.advanceTimersByTimeAsync(500)
   expect(speech.currentStory).toBe('first-story')
+  context.currentTime = 1.56
   await vi.advanceTimersByTimeAsync(30)
   expect(speech.currentStory).toBe('second-story')
+  context.currentTime = 1.66
   await vi.advanceTimersByTimeAsync(100)
   expect(speech.currentStory).toBe('third-story')
   speech.cancel()
   await vi.advanceTimersByTimeAsync(1000)
   expect(speech.currentStory).toBe('third-story')
+  speech.close()
+})
+
+it('does not claim to speak while Safari has suspended the output and resumes the same buffered answer', async () => {
+  const { speech, context, sources, callbacks, connect } = setup()
+  const socket = await connect()
+  speech.setStoryOrder(['heard-story'])
+  speech.append('safari', 'A buffered answer. ')
+  await vi.waitFor(() => expect(socket.sent.some(e => e.context_id === 'safari')).toBe(true))
+  vi.useFakeTimers()
+  context.state = 'suspended'
+  context.resume.mockImplementation(() => new Promise<void>(() => {}))
+  socket.receive({ contextId: 'safari', audio: pcm })
+  speech.finish('safari')
+  socket.receive({ contextId: 'safari', isFinal: true })
+  await vi.advanceTimersByTimeAsync(1400)
+  expect(callbacks.started).not.toHaveBeenCalled()
+  expect(callbacks.blocked).toHaveBeenCalledOnce()
+  expect(speech.currentStory).toBeUndefined()
+  expect(sources[0].stop).not.toHaveBeenCalled()
+  context.resume.mockImplementation(async () => { context.state = 'running' })
+  await speech.resume()
+  context.currentTime = 1.2
+  await vi.advanceTimersByTimeAsync(100)
+  expect(callbacks.started).toHaveBeenCalledOnce()
+  expect(context.resume).toHaveBeenCalledTimes(2)
+  expect(speech.currentStory).toBe('heard-story')
+  sources[0].onended()
+  expect(callbacks.finished).toHaveBeenCalledOnce()
+  speech.close()
+})
+
+it('recovers an interrupted output when Safari returns to the page', async () => {
+  const { speech, context, callbacks, connect } = setup()
+  const socket = await connect()
+  speech.append('reply', 'A long answer. ')
+  await vi.waitFor(() => expect(socket.sent.some(e => e.context_id === 'reply')).toBe(true))
+  vi.useFakeTimers()
+  socket.receive({ contextId: 'reply', audio: pcm })
+  context.currentTime = 1.2
+  await vi.advanceTimersByTimeAsync(100)
+  expect(callbacks.started).toHaveBeenCalledOnce()
+  context.state = 'interrupted'
+  context.resume.mockImplementation(() => new Promise<void>(() => {}))
+  context.dispatchEvent(new Event('statechange'))
+  await vi.advanceTimersByTimeAsync(1400)
+  expect(callbacks.blocked).toHaveBeenCalledOnce()
+  context.resume.mockImplementation(async () => { context.state = 'running' })
+  window.dispatchEvent(new Event('focus'))
+  context.currentTime = 1.4
+  await vi.advanceTimersByTimeAsync(100)
+  expect(callbacks.started).toHaveBeenCalledTimes(2)
+  speech.close()
+  context.resume.mockClear()
+  window.dispatchEvent(new Event('focus'))
+  expect(context.resume).not.toHaveBeenCalled()
+})
+
+it('restarts a Safari audio clock that is frozen despite reporting running', async () => {
+  const { speech, context, callbacks, connect } = setup()
+  const socket = await connect()
+  speech.append('reply', 'Buffered audio. ')
+  await vi.waitFor(() => expect(socket.sent.some(e => e.context_id === 'reply')).toBe(true))
+  vi.useFakeTimers()
+  socket.receive({ contextId: 'reply', audio: pcm })
+  await vi.advanceTimersByTimeAsync(1400)
+  expect(callbacks.blocked).toHaveBeenCalledOnce()
+  expect(callbacks.started).not.toHaveBeenCalled()
+  await speech.resume()
+  expect(context.suspend).toHaveBeenCalledOnce()
+  expect(context.resume).toHaveBeenCalledOnce()
+  context.currentTime = 1.2
+  await vi.advanceTimersByTimeAsync(100)
+  expect(callbacks.started).toHaveBeenCalledOnce()
   speech.close()
 })

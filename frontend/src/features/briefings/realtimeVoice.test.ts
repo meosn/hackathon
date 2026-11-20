@@ -11,6 +11,7 @@ const speechMock = vi.hoisted(() => ({
   prepare: vi.fn(),
   callbacks: null as any,
   setStoryOrder: vi.fn(),
+  resume: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('./elevenSpeech', () => ({
   ElevenSpeech: class {
@@ -24,6 +25,7 @@ vi.mock('./elevenSpeech', () => ({
     close = speechMock.close
     prepare = speechMock.prepare
     setStoryOrder = speechMock.setStoryOrder
+    resume = speechMock.resume
   },
 }))
 afterEach(() => {
@@ -211,7 +213,7 @@ it('warms the verified prefix silently without changing playback or conversation
 })
 
 it('streams GPT text to ElevenLabs and rejects late text from an interrupted answer', async () => {
-  const { voice, event, sent, callbacks } = setup()
+  const { voice, event, sent, callbacks, play } = setup()
   vi.stubGlobal(
     'AudioContext',
     class {
@@ -242,6 +244,11 @@ it('streams GPT text to ElevenLabs and rejects late text from an interrupted ans
   )
   speechMock.callbacks.started()
   expect(callbacks.phase).toHaveBeenLastCalledWith('speaking')
+  speechMock.callbacks.blocked()
+  expect(callbacks.phase).toHaveBeenLastCalledWith('blocked')
+  await voice.resumeOutput()
+  expect(speechMock.resume).toHaveBeenCalledOnce()
+  expect(play).not.toHaveBeenCalled()
   const cancellations = speechMock.cancel.mock.calls.length
   await voice.setMicrophone(false)
   expect(speechMock.cancel).toHaveBeenCalledTimes(cancellations)

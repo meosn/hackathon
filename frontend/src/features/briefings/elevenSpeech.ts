@@ -21,6 +21,7 @@ type Turn = {
 }
 type Callbacks = {
   started: () => void
+  blocked: () => void
   finished: () => void
   failed: (message: string) => void
 }
@@ -43,12 +44,72 @@ export class ElevenSpeech {
   private nextStories: string[] = []
   private spokenStory: string | undefined
   private storyTimers = new Set<ReturnType<typeof setTimeout>>()
+  private playbackTimer: ReturnType<typeof setInterval> | undefined
+  private audible = false
+  private blocked = false
+  private playbackAt = 0
+  private lastClock = 0
+  private stalledAt = 0
 
   constructor(
     private conversationId: string,
     private context: AudioContext,
     private callbacks: Callbacks,
-  ) {}
+  ) {
+    this.context.addEventListener('statechange', this.restorePlayback)
+    document.addEventListener('visibilitychange', this.restorePlayback)
+    window.addEventListener('focus', this.restorePlayback)
+  }
+
+  private restorePlayback = (event: Event) => {
+    if (event.type === 'statechange' && this.context.state === 'running') return
+    if (this.sources.size && document.visibilityState !== 'hidden')
+      void this.resume()
+  }
+
+  /** Also called directly from a click when Safari requires a fresh gesture. */
+  async resume() {
+    if (this.disposed || this.context.state === 'closed') return
+    // Some Safari interruptions leave state="running" with a frozen audio clock.
+    if (this.blocked && this.context.state === 'running') {
+      try {
+        await this.context.suspend()
+      } catch {
+        return
+      }
+    }
+    if (this.context.state !== 'running') {
+      try {
+        await this.context.resume()
+      } catch {
+        // Keep buffered PCM: a subsequent explicit click can unlock it.
+      }
+    }
+  }
+
+  private monitorPlayback() {
+    if (this.playbackTimer) return
+    this.lastClock = this.context.currentTime
+    this.stalledAt = performance.now()
+    this.playbackTimer = setInterval(() => {
+      if (!this.turn || !this.sources.size) return
+      const clock = this.context.currentTime
+      if (this.context.state === 'running' && clock > this.lastClock) {
+        this.stalledAt = performance.now()
+        if (clock >= this.playbackAt && !this.audible) {
+          this.audible = true
+          this.blocked = false
+          this.callbacks.started()
+        }
+      } else if (performance.now() - this.stalledAt > 1200 && !this.blocked) {
+        this.audible = false
+        this.blocked = true
+        this.callbacks.blocked()
+      }
+      this.lastClock = clock
+    }, 100)
+    void this.resume()
+  }
 
   get currentStory() {
     return this.spokenStory
@@ -329,7 +390,8 @@ export class ElevenSpeech {
     })
     if (!turn.started) {
       turn.started = true
-      this.callbacks.started()
+      this.playbackAt = at
+      this.monitorPlayback()
     }
   }
 
@@ -337,8 +399,10 @@ export class ElevenSpeech {
     const delay = Math.max(0, (at - this.context.currentTime) * 1000)
     const timer = setTimeout(() => {
       this.storyTimers.delete(timer)
-      if (this.turn === turn) this.spokenStory = id
-    }, delay)
+      if (this.turn !== turn) return
+      if (this.context.currentTime < at) this.storyAt(turn, id, at)
+      else this.spokenStory = id
+    }, Math.max(25, delay))
     this.storyTimers.add(timer)
   }
 
@@ -347,6 +411,10 @@ export class ElevenSpeech {
       return
     this.turn = null
     this.carry = undefined
+    clearInterval(this.playbackTimer)
+    this.playbackTimer = undefined
+    this.audible = false
+    this.blocked = false
     this.callbacks.finished()
   }
 
@@ -366,6 +434,10 @@ export class ElevenSpeech {
       source.disconnect()
     }
     this.sources.clear()
+    clearInterval(this.playbackTimer)
+    this.playbackTimer = undefined
+    this.audible = false
+    this.blocked = false
     for (const timer of this.storyTimers) clearTimeout(timer)
     this.storyTimers.clear()
     this.nextTime = this.context.currentTime
@@ -387,6 +459,9 @@ export class ElevenSpeech {
     this.disposed = true
     this.version++
     this.abort.abort()
+    this.context.removeEventListener('statechange', this.restorePlayback)
+    document.removeEventListener('visibilitychange', this.restorePlayback)
+    window.removeEventListener('focus', this.restorePlayback)
     clearInterval(this.heartbeat)
     this.socket?.close()
     this.socket = null

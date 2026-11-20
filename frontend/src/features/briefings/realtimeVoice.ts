@@ -7,6 +7,7 @@ export type VoicePhase =
   | 'listening'
   | 'thinking'
   | 'speaking'
+  | 'blocked'
   | 'idle'
 type Callbacks = {
   phase: (phase: VoicePhase) => void
@@ -23,6 +24,12 @@ export function unlockVoiceAudio(previous: AudioContext | null) {
   const context =
     previous?.state !== 'closed' && previous ? previous : new AudioContext()
   void context.resume().catch(() => {})
+  // Safari also needs a source started in the gesture, before async negotiation.
+  const source = context.createBufferSource()
+  source.buffer = context.createBuffer(1, 1, context.sampleRate)
+  source.connect(context.destination)
+  source.onended = () => source.disconnect()
+  source.start()
   return context
 }
 
@@ -170,6 +177,9 @@ export class RealtimeVoice {
           clearTimeout(this.idleTimer)
           this.callbacks.interrupt()
           this.callbacks.phase('speaking')
+        },
+        blocked: () => {
+          if (!this.closed) this.callbacks.phase('blocked')
         },
         finished: () => {
           if (this.closed) return
@@ -528,6 +538,8 @@ export class RealtimeVoice {
   }
 
   resumeOutput() {
+    if (this.speech) return this.speech.resume()
+    void this.outputContext?.resume().catch(() => {})
     return this.output.play()
   }
 

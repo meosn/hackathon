@@ -74,6 +74,7 @@ export function DailySession({
   const [listening, setListening] = useState(false)
   const [responding, setResponding] = useState(false)
   const [phase, setPhase] = useState('')
+  const [soundBlocked, setSoundBlocked] = useState(false)
   const [error, setError] = useState('')
   const [voiceConnecting, setVoiceConnecting] = useState(false)
   const [hasAnswer, setHasAnswer] = useState(false)
@@ -214,6 +215,7 @@ export function DailySession({
     if (realtime.current && !realtime.current.disposed) return realtime.current
     const conv = await ensureConversation()
     if (!mounted.current) throw new DOMException('Aborted', 'AbortError')
+    if (realtime.current && !realtime.current.disposed) return realtime.current
     realtime.current?.close()
     const voice = new RealtimeVoice(
       conv.id,
@@ -223,6 +225,7 @@ export function DailySession({
           setVoiceConnecting(value === 'connecting')
           setResponding(value === 'thinking')
           setAnswerPlaying(value === 'speaking')
+          setSoundBlocked(value === 'blocked')
           if (value === 'speaking') {
             setHasAnswer(true)
             briefingContext.current = false
@@ -234,6 +237,8 @@ export function DailySession({
                 ? 'Thinking…'
                 : value === 'speaking'
                   ? 'Speaking'
+                  : value === 'blocked'
+                    ? 'Tap Enable sound to hear your answer.'
                   : '',
           )
         },
@@ -587,6 +592,11 @@ export function DailySession({
         <span>{clockTime(edition?.duration_seconds || 0)}</span>
       </div>
       <div className="session-tools">
+        {soundBlocked && (
+          <button onClick={() => void realtime.current?.resumeOutput()}>
+            Enable sound
+          </button>
+        )}
         <button
           disabled={
             !url ||
