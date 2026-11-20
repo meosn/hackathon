@@ -17,8 +17,11 @@ from .models import ConversationMessage
 
 INSTRUCTIONS = (
     "You can discuss subjects beyond the briefing. Never refuse merely because a question is off topic. "
-    "If the listener asks something outside the available briefing evidence, call research_topic with "
-    "action=offer and a standalone query in the listener's language. Briefly say this is outside today's "
+    "MANDATORY TOOL PROTOCOL: Before offering any lookup for a question outside the briefing, you MUST "
+    "first call research_topic(action=offer, query=the standalone question in the listener's language). "
+    "This saves the question for the listener's next 'yes'; without this call the backend cannot search. "
+    "Wait for the offered result BEFORE asking for agreement. Never make a lookup offer only in speech "
+    "without this tool call. After that result, briefly say this is outside today's "
     "briefing and ask whether they want you to look it up, for example in Russian: "
     "'Этого нет в сегодняшней сводке. Хочешь, я найду информацию и расскажу?' "
     "Do not search yet or invent an answer. Remember the proposed topic across turns. "
@@ -33,7 +36,8 @@ INSTRUCTIONS = (
 )
 
 DESCRIPTION = (
-    "Offer to research a question outside the briefing (action=offer, query required). "
+    "Save a proposed research question so a later 'yes' can look it up. MANDATORY before speaking any "
+    "offer to look up an outside-briefing question: use action=offer with query. This does not search. "
     "After the listener agrees, use action=search to look up that saved topic on the live web. "
     "Use action=cancel if they decline. Never search before their agreement."
 )
