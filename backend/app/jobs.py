@@ -5,7 +5,6 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from celery import Celery
 from kombu import Exchange, Queue
 from sqlalchemy import DateTime, String, UniqueConstraint, select, text
@@ -13,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 from .config import settings
 from .db import Record, SessionLocal, engine, utcnow
+from .timezones import resolve_timezone
 
 log = logging.getLogger("sourcera.workers")
 local_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sourcera-local")
@@ -225,7 +225,7 @@ def discover(db, now):
         .with_for_update(skip_locked=True)
     ).all()
     for s in schedules:
-        local = now.astimezone(ZoneInfo(s.timezone))
+        local = now.astimezone(resolve_timezone(s.timezone))
         if local.weekday() not in s.days_of_week or s.last_local_date == local.date() or local.strftime("%H:%M") < s.time:
             continue
         s.last_local_date = local.date()

@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Annotated, Literal
-from zoneinfo import ZoneInfo, available_timezones
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import EmailStr, Field, field_validator
 from sqlalchemy import select
@@ -19,6 +18,7 @@ from .accounts import (
 from .auth import current_user, dummy_hash, hash_password, password_matches, token
 from .config import settings
 from .db import get_db, utcnow
+from .timezones import GMT_OFFSETS, gmt_name, resolve_timezone
 from .usage import costs
 
 from . import account_contracts as views
@@ -189,8 +189,7 @@ def schedule_data(s):
 
 @router.get("/timezones", response_model=list[str])
 def timezones(user=Depends(current_user)):
-    regions = {"Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic", "Australia", "Europe", "Indian", "Pacific"}
-    return ["UTC", *sorted(zone for zone in available_timezones() if zone.split("/")[0] in regions)]
+    return [gmt_name(offset) for offset in GMT_OFFSETS]
 
 
 def validate_schedule_slots(rows):
@@ -226,7 +225,7 @@ def replace_schedules(
         else:
             row.enabled = data["enabled"]
         if newly_enabled:
-            local = now.astimezone(ZoneInfo(data["timezone"]))
+            local = now.astimezone(resolve_timezone(data["timezone"]))
             if data["time"] <= local.strftime("%H:%M"):
                 row.last_local_date = local.date()
         selected.append(row)

@@ -3,16 +3,27 @@ import { ChevronDown, Plus, X } from 'lucide-react'
 import { useApi } from '../../api/client'
 import { ErrorNote } from '../../components/UI'
 import { DAYS, TIMES, frequencyFor, presetRoutine, type Frequency, type WeeklyRoutine } from './weeklySchedule'
+import { asGmtOffset, GMT_ZONES, gmtLabel } from './gmtOffsets'
+
+const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'))
+const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0'))
 
 export function TimeZoneSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const zones = useApi<string[]>('/timezones')
-  const options = [...new Set([value, 'UTC', ...(zones.data || [])])].sort()
+  const selected = asGmtOffset(value)
+  const options = [...new Set([...GMT_ZONES, ...(zones.data || []).filter(zone => zone.startsWith('GMT')), ...(selected ? [selected] : [])])]
+    .sort((a, b) => {
+      const offset = (zone: string) => (Number(zone.slice(4, 6)) * 60 + Number(zone.slice(7))) * (zone[3] === '+' ? 1 : -1)
+      return offset(a) - offset(b)
+    })
   return <>
     <label className="field">Time zone
-      <select value={value} onChange={event => onChange(event.target.value)}>
-        {options.map(zone => <option key={zone} value={zone}>{zone.replaceAll('_', ' ')}</option>)}
+      <select required value={selected || ''} onChange={event => onChange(event.target.value)}>
+        {!selected && <option value="" disabled>Choose GMT offset</option>}
+        {options.map(zone => <option key={zone} value={zone}>{gmtLabel(zone)}</option>)}
       </select>
     </label>
+    <p className="preference-hint">Times use this fixed GMT offset.</p>
     <ErrorNote error={zones.error} />
   </>
 }
@@ -66,13 +77,24 @@ export function SchedulePicker({ value, onChange }: { value: WeeklyRoutine; onCh
             </div>
             {open && <div className="schedule-day-times" id={`schedule-times-${index}`}>
               {times.map((time, slot) => <div className="schedule-time-slot" key={slot}>
-                <label className="field">{`Delivery ${slot + 1}`}
-                  <select aria-label={`${day} delivery time ${slot + 1}`} value={time} onChange={event => updateDay(index,
-                    times.map((previous, position) => position === slot ? event.target.value : previous))}>
-                    {[...new Set([...TIMES, time])].sort().filter(option => option === time || !times.includes(option))
-                      .map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                </label>
+                <div className="schedule-time-control">
+                  <span className="schedule-time-label">{`Delivery ${slot + 1}`}</span>
+                  <div className="schedule-time-parts">
+                    <label className="field">Hours
+                      <select aria-label={`${day} delivery ${slot + 1} hours`} value={time.slice(0, 2)}
+                        onChange={event => updateDay(index, times.map((previous, position) => position === slot ? `${event.target.value}:${time.slice(3)}` : previous))}>
+                        {HOURS.map(hour => <option key={hour} value={hour}>{hour}</option>)}
+                      </select>
+                    </label>
+                    <span className="schedule-time-colon" aria-hidden="true">:</span>
+                    <label className="field">Minutes
+                      <select aria-label={`${day} delivery ${slot + 1} minutes`} value={time.slice(3)}
+                        onChange={event => updateDay(index, times.map((previous, position) => position === slot ? `${time.slice(0, 2)}:${event.target.value}` : previous))}>
+                        {MINUTES.map(minute => <option key={minute} value={minute}>{minute}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                </div>
                 <button type="button" className="schedule-remove-time" aria-label={`Remove ${day} delivery ${slot + 1}`}
                   onClick={() => updateDay(index, times.filter((_, position) => position !== slot))}><X size={15} /></button>
               </div>)}

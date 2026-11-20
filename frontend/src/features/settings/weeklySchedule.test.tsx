@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Schedule } from '../../api/types'
 import { SchedulePicker, TimeZoneSelect } from './SchedulePicker'
+import { asGmtOffset, gmtLabel, GMT_ZONES } from './gmtOffsets'
 import { routineFromSchedules, scheduleRows, type WeeklyRoutine } from './weeklySchedule'
 
 afterEach(() => vi.restoreAllMocks())
@@ -18,13 +19,17 @@ it('offers frequency presets and lets Monday change without changing Tuesday', (
   fireEvent.click(screen.getByRole('checkbox', { name: 'Scheduled briefings' }))
   fireEvent.change(screen.getByRole('combobox', { name: 'News frequency' }), { target: { value: 'twice-daily' } })
   expect(plan().days.every(times => times.join(',') === '08:00,18:00')).toBe(true)
-  const time = screen.getByRole('combobox', { name: 'Monday delivery time 1' })
-  fireEvent.change(time, { target: { value: '09:15' } })
-  expect(plan().days[0]).toEqual(['09:15', '18:00'])
+  const hours = screen.getByRole('combobox', { name: 'Monday delivery 1 hours' })
+  const minutes = screen.getByRole('combobox', { name: 'Monday delivery 1 minutes' })
+  expect(hours.querySelectorAll('option')).toHaveLength(24)
+  expect(minutes.querySelectorAll('option')).toHaveLength(60)
+  fireEvent.change(hours, { target: { value: '09' } })
+  fireEvent.change(minutes, { target: { value: '17' } })
+  expect(plan().days[0]).toEqual(['09:17', '18:00'])
   expect(plan().frequency).toBe('twice-daily')
   expect(plan().days[1]).toEqual(['08:00', '18:00'])
   fireEvent.click(screen.getByRole('button', { name: 'Remove Monday delivery 2' }))
-  expect(plan().days[0]).toEqual(['09:15'])
+  expect(plan().days[0]).toEqual(['09:17'])
   expect(plan().days[1]).toHaveLength(2)
   fireEvent.click(screen.getByRole('button', { name: 'Add a time' }))
   expect(plan().days[0]).toHaveLength(2)
@@ -58,13 +63,24 @@ it('round-trips grouped weekday times and retains a disabled plan for later', ()
   expect(() => scheduleRows({ ...routine, days: [[], [], [], [], [], [], []] }, 'UTC')).toThrow('at least one')
 })
 
-it('uses a real timezone dropdown populated by the server', async () => {
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(['UTC', 'Europe/Berlin', 'America/New_York']))
+it('shows short GMT offsets without city names and accepts fractional offsets', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(GMT_ZONES))
   const changed = vi.fn()
   render(<QueryClientProvider client={new QueryClient()}><TimeZoneSelect value="UTC" onChange={changed} /></QueryClientProvider>)
   const select = screen.getByRole('combobox', { name: 'Time zone' })
-  await waitFor(() => expect(screen.getByRole('option', { name: 'Europe/Berlin' })).toBeInTheDocument())
-  fireEvent.change(select, { target: { value: 'Europe/Berlin' } })
-  expect(changed).toHaveBeenCalledWith('Europe/Berlin')
+  await waitFor(() => expect(screen.getByRole('option', { name: /^GMT\+2$/ })).toBeInTheDocument())
+  fireEvent.change(select, { target: { value: 'GMT+02:00' } })
+  expect(changed).toHaveBeenCalledWith('GMT+02:00')
+  expect(screen.getByRole('option', { name: 'GMT+5:45' })).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: /Europe|America/ })).toBeNull()
   expect(screen.queryByRole('textbox')).toBeNull()
+})
+
+it('displays saved regional zones at their current GMT offset', () => {
+  expect(asGmtOffset('Europe/Berlin', new Date('2026-11-21T12:00:00Z'))).toBe('GMT+01:00')
+  expect(asGmtOffset('Europe/Berlin', new Date('2026-07-21T12:00:00Z'))).toBe('GMT+02:00')
+  expect(asGmtOffset('Asia/Kathmandu')).toBe('GMT+05:45')
+  expect(asGmtOffset('GMT-03:30')).toBe('GMT-03:30')
+  expect(gmtLabel('GMT-03:30')).toBe('GMT-3:30')
+  expect(asGmtOffset('Unknown/Zone')).toBeNull()
 })

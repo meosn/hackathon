@@ -245,7 +245,8 @@ def test_weekly_schedule_is_atomic_private_and_preserves_completed_slots(client,
     other = client.post('/api/v1/auth/demo', json={'profile': 'finance'}).json()['access_token']
     assert client.get('/api/v1/schedules', headers={'Authorization': 'Bearer '+other}).json() == []
     zones = client.get('/api/v1/timezones', headers=headers).json()
-    assert {'UTC', 'Europe/Berlin', 'America/New_York', 'Asia/Tokyo'} <= set(zones)
+    assert {'GMT+00:00', 'GMT+02:00', 'GMT-05:00', 'GMT+05:45'} <= set(zones)
+    assert all(zone.startswith('GMT') for zone in zones)
     assert client.get('/api/v1/timezones').status_code == 401
     # A newly added past slot waits for its next occurrence; it does not replay today.
     past = client.put('/api/v1/schedules', json=[{**rows[0], 'time': '01:00'}], headers=headers).json()[0]
@@ -284,3 +285,37 @@ def test_schedule_weekday_uses_the_delivery_zone_across_midnight(session):
     discover(session, datetime(2026, 11, 22, 18, tzinfo=timezone.utc))
     row = session.scalar(select(Briefing))
     assert '/2026-11-23/08:00/' in row.schedule_key
+
+
+def test_fixed_gmt_offsets_validate_and_drive_delivery_and_daily_dates(session, client):
+    from app.timezones import resolve_timezone, timezone_name
+    from app.briefing.models import Briefing
+    from app.briefing.daily import ensure_daily
+    from app.accounts import set_preferences
+    user = demo_listener(session, 'tech')
+    set_preferences(session, user.id, {'timezone': 'GMT+5:45'})
+    assert timezone_name('GMT+5:45') == 'GMT+05:45'
+    assert resolve_timezone('GMT-03:30').utcoffset(None).total_seconds() == -12600
+    for invalid in ['GMT+14:15', 'GMT-12:30', 'GMT+2:60', 'GMT+99', 'GMT+NaN']:
+        with pytest.raises(ValueError):
+            timezone_name(invalid)
+    session.add(Schedule(user_id=user.id, time='08:17', timezone='GMT+05:45', days_of_week=[0], enabled=True))
+    session.commit()
+    discover(session, datetime(2026, 11, 23, 2, 31, tzinfo=timezone.utc))
+    assert session.scalar(select(func.count()).select_from(Briefing)) == 0
+    discover(session, datetime(2026, 11, 23, 2, 32, tzinfo=timezone.utc))
+    assert session.scalar(select(func.count()).select_from(Briefing)) == 1
+    discover(session, datetime(2026, 11, 23, 2, 33, tzinfo=timezone.utc))
+    assert session.scalar(select(func.count()).select_from(Briefing)) == 1
+    # The baseline also uses the fixed offset when UTC and local dates differ.
+    edition = ensure_daily(session, user.id, datetime(2026, 11, 22, 20, tzinfo=timezone.utc))
+    assert '/2026-11-23/top3' in edition.schedule_key
+    token = client.post('/api/v1/auth/demo', json={'profile': 'tech'}).json()['access_token']
+    headers = {'Authorization': 'Bearer ' + token}
+    patched = client.patch('/api/v1/users/me/preferences', headers=headers, json={'timezone': 'GMT-3:30'})
+    assert patched.status_code == 200
+    assert patched.json()['timezone'] == 'GMT-03:30'
+    saved = client.put('/api/v1/schedules', headers=headers,
+                       json=[{'time': '09:17', 'timezone': 'GMT+5:45', 'days_of_week': [0]}])
+    assert saved.status_code == 200, saved.text
+    assert saved.json()[0]['timezone'] == 'GMT+05:45'

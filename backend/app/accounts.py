@@ -1,6 +1,5 @@
 from datetime import date
 from uuid import uuid4
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
@@ -17,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 from fastapi import HTTPException
 from .db import Record
+from .timezones import timezone_name
 
 
 class User(Record):
@@ -94,14 +94,6 @@ class Schedule(Record):
 
 class Input(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-
-def timezone_name(value):
-    try:
-        ZoneInfo(value)
-    except (ValueError, ZoneInfoNotFoundError):
-        raise ValueError("Unknown IANA time zone")
-    return value
 
 
 class PreferencePatch(Input):

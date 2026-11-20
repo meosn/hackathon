@@ -31,6 +31,7 @@ import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import { SchedulePicker, TimeZoneSelect } from './SchedulePicker'
 import { routineFromSchedules, routineSummary, scheduleRows } from './weeklySchedule'
+import { asGmtOffset, gmtOffset } from './gmtOffsets'
 import './settings.css'
 
 type Engine = {
@@ -164,8 +165,9 @@ function SettingsForm({
         selectSection('briefing')
         throw new Error('Choose a briefing length between 1 and 30 minutes.')
       }
+      const timezone = asGmtOffset(prefs.timezone) || prefs.timezone
       let rows
-      try { rows = scheduleRows(routine, prefs.timezone) }
+      try { rows = scheduleRows(routine, timezone) }
       catch (error) {
         selectSection('routine')
         throw error
@@ -181,7 +183,7 @@ function SettingsForm({
       const updated = await api<Preferences>(
         '/users/me/preferences',
         'PATCH',
-        prefs,
+        { ...prefs, timezone },
       )
       queryClient.setQueryData(['/users/me/preferences'], updated)
       const savedSchedules = await api<Schedule[]>('/schedules', 'PUT', rows)
@@ -636,11 +638,11 @@ function SettingsForm({
                       onClick={() =>
                         patch(
                           'timezone',
-                          Intl.DateTimeFormat().resolvedOptions().timeZone,
+                          gmtOffset(-new Date().getTimezoneOffset()),
                         )
                       }
                     >
-                      <Globe2 size={14} /> Use my current time zone
+                      <Globe2 size={14} /> Use my current GMT offset
                     </button>
                     <p className="preference-hint">Scheduled editions appear in your <Link to="/briefings">briefing library</Link>.</p>
                   </section>
