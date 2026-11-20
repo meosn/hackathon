@@ -27,6 +27,7 @@ it('starts a signed voice WebSocket and refreshes episode context with the curre
     .mockResolvedValueOnce(Response.json({
       signed_url: 'wss://api.elevenlabs.io/v1/convai/conversation?signature=mock',
       context: 'initial episode context',
+      voice_id: 'custom-voice',
     }))
     .mockResolvedValueOnce(Response.json({ context: 'new episode context' }))
     .mockResolvedValueOnce(Response.json({ context: 'other recent news' }))
@@ -48,6 +49,7 @@ it('starts a signed voice WebSocket and refreshes episode context with the curre
     connectionType: 'websocket',
     textOnly: false,
     dynamicVariables: { sourcera_context: 'initial episode context' },
+    overrides: { tts: { voiceId: 'custom-voice' } },
   })
   position = 75
   expect(await options.clientTools?.get_sourcera_context({ briefing_id: 'foreign' }))

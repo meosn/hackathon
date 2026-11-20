@@ -19,13 +19,13 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
-from app.accounts import preferences
+from app.accounts import User, preferences
 from app.auth import current_user, user_for_token
 from app.config import settings
 from app.db import SessionLocal, get_db
 from app.messaging import emit
 from app.news.service import story_detail
-from . import agent, realtime, service, voice
+from . import agent, custom_voice, realtime, service, voice
 from .accounting import account_attempts
 from . import contracts
 from .contracts import BriefingRequest, MessageInput, StartConversation
@@ -166,7 +166,109 @@ def agent_session(
     agent_id, api_key = agent.require_agent()
     context = agent.context_for(db, user.id, data)
     response.headers["Cache-Control"] = "private, no-store"
-    return {"signed_url": agent.signed_session_url(agent_id, api_key), "context": context}
+    return {
+        "signed_url": agent.signed_session_url(agent_id, api_key),
+        "context": context,
+        "voice_id": user.custom_voice_id if user.custom_voice_active else None,
+    }
+
+
+def custom_voice_key(user):
+    if user.is_demo:
+        return None
+    try:
+        _, key = agent.require_agent()
+        return key
+    except HTTPException:
+        return None
+
+
+def custom_voice_view(db, user):
+    uploaded = db.scalar(
+        select(User.custom_voice_sample.is_not(None)).where(User.id == user.id)
+    )
+    return {
+        "saved": bool(user.custom_voice_id),
+        "active": bool(user.custom_voice_id and user.custom_voice_active),
+        "can_upload": not user.custom_voice_id,
+        "can_create": bool(custom_voice_key(user)),
+        "sample_uploaded": bool(uploaded),
+    }
+
+
+@router.get("/users/me/custom-voice", response_model=contracts.CustomVoice)
+def get_custom_voice(db=Depends(get_db), user=Depends(current_user)):
+    return custom_voice_view(db, user)
+
+
+def lock_custom_voice_owner(db, user):
+    owner = db.scalar(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if owner.custom_voice_id:
+        raise HTTPException(409, "A custom voice is already saved for this listener.")
+    return owner
+
+
+def provision_custom_voice(owner, api_key, sample):
+    owner.custom_voice_id = custom_voice.clone_voice(api_key, sample)
+    owner.custom_voice_active = True
+    owner.custom_voice_sample = None
+
+
+@router.post(
+    "/users/me/custom-voice", response_model=contracts.CustomVoice, status_code=201
+)
+def upload_custom_voice(
+    file: UploadFile = File(...),
+    consent: bool = Form(...),
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    if not consent:
+        raise HTTPException(422, "Confirm permission to clone the recorded voice.")
+    sample = custom_voice.checked_sample(file)
+    owner = lock_custom_voice_owner(db, user)
+    api_key = custom_voice_key(owner)
+    if api_key:
+        provision_custom_voice(owner, api_key, sample)
+    else:
+        owner.custom_voice_sample = sample
+    db.commit()
+    return custom_voice_view(db, owner)
+
+
+@router.post("/users/me/custom-voice/create", response_model=contracts.CustomVoice)
+def create_custom_voice(db=Depends(get_db), user=Depends(current_user)):
+    api_key = custom_voice_key(user)
+    if not api_key:
+        raise HTTPException(
+            503, "A personal account and configured ElevenLabs agent are required."
+        )
+    owner = lock_custom_voice_owner(db, user)
+    if not owner.custom_voice_sample:
+        raise HTTPException(404, "Upload a voice sample first.")
+    provision_custom_voice(owner, api_key, owner.custom_voice_sample)
+    db.commit()
+    return custom_voice_view(db, owner)
+
+
+@router.patch("/users/me/custom-voice", response_model=contracts.CustomVoice)
+def select_custom_voice(
+    data: contracts.SelectCustomVoice,
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    if data.active:
+        agent.require_agent()
+        if not user.custom_voice_id:
+            raise HTTPException(404, "No custom voice is saved for this listener.")
+    user.custom_voice_active = data.active
+    db.commit()
+    return custom_voice_view(db, user)
 
 
 @router.post("/agent-context", response_model=contracts.AgentContext)

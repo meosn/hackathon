@@ -384,6 +384,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/custom-voice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Custom Voice */
+        get: operations["get_custom_voice_api_v1_users_me_custom_voice_get"];
+        put?: never;
+        /** Upload Custom Voice */
+        post: operations["upload_custom_voice_api_v1_users_me_custom_voice_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Select Custom Voice */
+        patch: operations["select_custom_voice_api_v1_users_me_custom_voice_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/me/custom-voice/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Custom Voice */
+        post: operations["create_custom_voice_api_v1_users_me_custom_voice_create_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-context": {
         parameters: {
             query?: never;
@@ -824,6 +860,8 @@ export interface components {
             context: string;
             /** Signed Url */
             signed_url: string;
+            /** Voice Id */
+            voice_id?: string | null;
         };
         /** ArticleInfo */
         ArticleInfo: {
@@ -857,6 +895,13 @@ export interface components {
             file: string;
             /** Story Id */
             story_id?: string | null;
+        };
+        /** Body_upload_custom_voice_api_v1_users_me_custom_voice_post */
+        Body_upload_custom_voice_api_v1_users_me_custom_voice_post: {
+            /** File */
+            file: string;
+            /** Consent */
+            consent: boolean;
         };
         /** BriefingDetail */
         BriefingDetail: {
@@ -1037,6 +1082,19 @@ export interface components {
             };
             /** Pricing Note */
             pricing_note: string;
+        };
+        /** CustomVoice */
+        CustomVoice: {
+            /** Saved */
+            saved: boolean;
+            /** Active */
+            active: boolean;
+            /** Can Upload */
+            can_upload: boolean;
+            /** Can Create */
+            can_create: boolean;
+            /** Sample Uploaded */
+            sample_uploaded: boolean;
         };
         /** Decision */
         Decision: {
@@ -1437,6 +1495,11 @@ export interface components {
             /** End Seconds */
             end_seconds: number;
         };
+        /** SelectCustomVoice */
+        SelectCustomVoice: {
+            /** Active */
+            active: boolean;
+        };
         /** SessionToken */
         SessionToken: {
             /** Access Token */
@@ -1594,12 +1657,14 @@ export type SchemaAgentContextRequest = components['schemas']['AgentContextReque
 export type SchemaAgentSession = components['schemas']['AgentSession'];
 export type SchemaArticleInfo = components['schemas']['ArticleInfo'];
 export type SchemaBodySendRecordingApiV1ConversationsConversationIdAudioPost = components['schemas']['Body_send_recording_api_v1_conversations__conversation_id__audio_post'];
+export type SchemaBodyUploadCustomVoiceApiV1UsersMeCustomVoicePost = components['schemas']['Body_upload_custom_voice_api_v1_users_me_custom_voice_post'];
 export type SchemaBriefingDetail = components['schemas']['BriefingDetail'];
 export type SchemaBriefingRequest = components['schemas']['BriefingRequest'];
 export type SchemaBriefingView = components['schemas']['BriefingView'];
 export type SchemaCitation = components['schemas']['Citation'];
 export type SchemaConversationView = components['schemas']['ConversationView'];
 export type SchemaCostReport = components['schemas']['CostReport'];
+export type SchemaCustomVoice = components['schemas']['CustomVoice'];
 export type SchemaDecision = components['schemas']['Decision'];
 export type SchemaDemo = components['schemas']['Demo'];
 export type SchemaDetail = components['schemas']['Detail'];
@@ -1629,6 +1694,7 @@ export type SchemaScheduleInput = components['schemas']['ScheduleInput'];
 export type SchemaSchedulePatch = components['schemas']['SchedulePatch'];
 export type SchemaScheduleView = components['schemas']['ScheduleView'];
 export type SchemaSegment = components['schemas']['Segment'];
+export type SchemaSelectCustomVoice = components['schemas']['SelectCustomVoice'];
 export type SchemaSessionToken = components['schemas']['SessionToken'];
 export type SchemaSourceInfo = components['schemas']['SourceInfo'];
 export type SchemaSources = components['schemas']['Sources'];
@@ -2397,6 +2463,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_custom_voice_api_v1_users_me_custom_voice_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomVoice"];
+                };
+            };
+        };
+    };
+    upload_custom_voice_api_v1_users_me_custom_voice_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_custom_voice_api_v1_users_me_custom_voice_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomVoice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_custom_voice_api_v1_users_me_custom_voice_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectCustomVoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomVoice"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_custom_voice_api_v1_users_me_custom_voice_create_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomVoice"];
                 };
             };
         };

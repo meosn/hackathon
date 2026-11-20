@@ -964,6 +964,134 @@
         ]
       }
     },
+    "/api/v1/users/me/custom-voice": {
+      "get": {
+        "summary": "Get Custom Voice",
+        "operationId": "get_custom_voice_api_v1_users_me_custom_voice_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomVoice"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Upload Custom Voice",
+        "operationId": "upload_custom_voice_api_v1_users_me_custom_voice_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_custom_voice_api_v1_users_me_custom_voice_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomVoice"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Select Custom Voice",
+        "operationId": "select_custom_voice_api_v1_users_me_custom_voice_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectCustomVoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomVoice"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/custom-voice/create": {
+      "post": {
+        "summary": "Create Custom Voice",
+        "operationId": "create_custom_voice_api_v1_users_me_custom_voice_create_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomVoice"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/agent-context": {
       "post": {
         "summary": "Agent Context",
@@ -2317,6 +2445,17 @@
           "signed_url": {
             "type": "string",
             "title": "Signed Url"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id"
           }
         },
         "type": "object",
@@ -2423,6 +2562,25 @@
           "file"
         ],
         "title": "Body_send_recording_api_v1_conversations__conversation_id__audio_post"
+      },
+      "Body_upload_custom_voice_api_v1_users_me_custom_voice_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "consent": {
+            "type": "boolean",
+            "title": "Consent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "consent"
+        ],
+        "title": "Body_upload_custom_voice_api_v1_users_me_custom_voice_post"
       },
       "BriefingDetail": {
         "properties": {
@@ -2953,6 +3111,40 @@
           "pricing_note"
         ],
         "title": "CostReport"
+      },
+      "CustomVoice": {
+        "properties": {
+          "saved": {
+            "type": "boolean",
+            "title": "Saved"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "can_upload": {
+            "type": "boolean",
+            "title": "Can Upload"
+          },
+          "can_create": {
+            "type": "boolean",
+            "title": "Can Create"
+          },
+          "sample_uploaded": {
+            "type": "boolean",
+            "title": "Sample Uploaded"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "saved",
+          "active",
+          "can_upload",
+          "can_create",
+          "sample_uploaded"
+        ],
+        "title": "CustomVoice"
       },
       "Decision": {
         "properties": {
@@ -4178,6 +4370,20 @@
           "end_seconds"
         ],
         "title": "Segment"
+      },
+      "SelectCustomVoice": {
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "active"
+        ],
+        "title": "SelectCustomVoice"
       },
       "SessionToken": {
         "properties": {

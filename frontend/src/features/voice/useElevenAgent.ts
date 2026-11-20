@@ -9,7 +9,7 @@ export type AgentScope = {
   playback_seconds?: number
 }
 type AgentStatus = 'disconnected' | 'connecting' | 'connected'
-type SessionDetails = { signed_url: string; context: string }
+type SessionDetails = { signed_url: string; context: string; voice_id?: string | null }
 type AgentCallbacks = Pick<
   Callbacks,
   'onMessage' | 'onModeChange' | 'onDisconnect' | 'onVadScore' | 'onInterruption'
@@ -96,6 +96,7 @@ export function useElevenAgent(enabled = false) {
           connectionType: 'websocket',
           textOnly: false,
           dynamicVariables: { sourcera_context: session.context },
+          ...(session.voice_id ? { overrides: { tts: { voiceId: session.voice_id } } } : {}),
           clientTools: {
             ...callbacks.clientTools,
             get_sourcera_context: () => refreshContext(),

@@ -26,6 +26,7 @@ import type {
   Voice,
 } from '../../api/types'
 import { Button, Dropdown, ErrorNote, Loading } from '../../components/UI'
+import { CustomVoiceSettings } from '../voice/CustomVoice'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import './settings.css'
 
@@ -591,6 +592,7 @@ function SettingsForm({
                       Your new voice applies to future editions.
                     </p>
                   </section>
+                  <CustomVoiceSettings />
                   <section className="preference-block">
                     <div className="preference-label">
                       <h3>Briefing language</h3>

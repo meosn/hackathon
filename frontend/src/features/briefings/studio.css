@@ -662,3 +662,21 @@ html {
   color: #95a486;
   font-size: 12px;
 }
+
+.music-hosts {
+  flex-wrap: wrap;
+  column-gap: clamp(1.25rem, 4vw, 3rem);
+  row-gap: 1.25rem;
+}
+
+.custom-voice-icon {
+  border: 1px dashed #b9ce8670;
+  color: #ddecaa;
+  background: #263120;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.music-host:has(.custom-voice-icon) {
+  text-decoration: none;
+}
