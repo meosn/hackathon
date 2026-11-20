@@ -21,6 +21,7 @@ it('offers frequency presets and lets Monday change without changing Tuesday', (
   const time = screen.getByRole('combobox', { name: 'Monday delivery time 1' })
   fireEvent.change(time, { target: { value: '09:15' } })
   expect(plan().days[0]).toEqual(['09:15', '18:00'])
+  expect(plan().frequency).toBe('twice-daily')
   expect(plan().days[1]).toEqual(['08:00', '18:00'])
   fireEvent.click(screen.getByRole('button', { name: 'Remove Monday delivery 2' }))
   expect(plan().days[0]).toEqual(['09:15'])

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, Plus, X } from 'lucide-react'
 import { useApi } from '../../api/client'
 import { ErrorNote } from '../../components/UI'
-import { DAYS, TIMES, presetRoutine, type Frequency, type WeeklyRoutine } from './weeklySchedule'
+import { DAYS, TIMES, frequencyFor, presetRoutine, type Frequency, type WeeklyRoutine } from './weeklySchedule'
 
 export function TimeZoneSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const zones = useApi<string[]>('/timezones')
@@ -20,7 +20,8 @@ export function TimeZoneSelect({ value, onChange }: { value: string; onChange: (
 export function SchedulePicker({ value, onChange }: { value: WeeklyRoutine; onChange: (value: WeeklyRoutine) => void }) {
   const [expanded, setExpanded] = useState(Math.max(0, value.days.findIndex(times => times.length)))
   function updateDay(day: number, times: string[]) {
-    onChange({ ...value, frequency: 'custom', days: value.days.map((previous, index) => index === day ? times : previous) })
+    const days = value.days.map((previous, index) => index === day ? times : previous)
+    onChange({ ...value, days, frequency: times.length === value.days[day].length ? value.frequency : frequencyFor(days) })
   }
   return <div className="routine-controls">
     <label className="routine-toggle">

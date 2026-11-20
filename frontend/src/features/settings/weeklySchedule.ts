@@ -6,17 +6,17 @@ export const TIMES = Array.from({ length: 288 }, (_, index) =>
 export type Frequency = 'daily' | 'twice-daily' | 'weekdays' | 'weekly' | 'twice-weekly' | 'custom'
 export type WeeklyRoutine = { enabled: boolean; days: string[][]; frequency: Frequency }
 
-function frequencyFor(days: string[][]): Frequency {
+export function frequencyFor(days: string[][]): Frequency {
   const active = days.map((times, index) => times.length ? index : -1).filter(day => day >= 0)
   const first = days[active[0]] || []
-  const same = active.every(day => JSON.stringify(days[day]) === JSON.stringify(first))
-  if (same && first.length === 1) {
+  const sameCount = active.every(day => days[day].length === first.length)
+  if (sameCount && first.length === 1) {
     if (active.length === 7) return 'daily'
     if (active.join(',') === '0,1,2,3,4') return 'weekdays'
     if (active.length === 1) return 'weekly'
     if (active.length === 2) return 'twice-weekly'
   }
-  return same && first.length === 2 && active.length === 7 ? 'twice-daily' : 'custom'
+  return sameCount && first.length === 2 && active.length === 7 ? 'twice-daily' : 'custom'
 }
 
 export function routineFromSchedules(rows: Schedule[]): WeeklyRoutine {
@@ -60,7 +60,8 @@ export function scheduleRows(routine: WeeklyRoutine, timezone: string) {
 export function routineSummary(routine: WeeklyRoutine) {
   if (!routine.enabled) return 'On your terms'
   const count = routine.days.flat().length
-  if (routine.frequency === 'daily') return `Every day · ${routine.days[0][0]}`
+  if (routine.frequency === 'daily') return routine.days.every(times => times[0] === routine.days[0][0])
+    ? `Every day · ${routine.days[0][0]}` : 'Every day · individual times'
   if (routine.frequency === 'twice-daily') return 'Twice a day'
   if (routine.frequency === 'weekly') {
     const day = routine.days.findIndex(times => times.length)
