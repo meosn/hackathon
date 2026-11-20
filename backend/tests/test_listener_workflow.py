@@ -89,6 +89,84 @@ def test_listeners_audio_boundaries_and_cache(session):
     assert results["en"] != results["de"]
 
 
+def test_revoice_keeps_verified_script_and_reuses_audio(session, monkeypatch):
+    from app.jobs import ProcessingJob
+    from app.briefing.models import BriefingItem
+
+    user = listener(session, "revoice", "en", ["technology"])
+    source = service.create_briefing(
+        session, user.id, BriefingRequest(period="week", story_limit=3)
+    )
+    service.generate_script(session, source.id)
+    service.synthesize_briefing(session, source.id)
+
+    def unexpected(*args):
+        pytest.fail("Changing only the voice must not regenerate the script")
+
+    monkeypatch.setattr(service, "model_output", unexpected)
+    set_preferences(session, user.id, {"voice_profile_id": "energetic"})
+    item = service.revoice_briefing(session, source, user.id)
+    assert item.status == "script_ready" and not item.audio_id
+    assert item.voice_profile_id == "energetic"
+    assert item.request["source_briefing_id"] == source.id
+    original = service.segments_for(session, source.id)
+    copied = service.segments_for(session, item.id)
+    fields = (
+        "text",
+        "claim_ids",
+        "citations",
+        "source_article_ids",
+        "story_id",
+        "language",
+    )
+    assert [[getattr(row, key) for key in fields] for row in copied] == [
+        [getattr(row, key) for key in fields] for row in original
+    ]
+    assert all(row.start_seconds == row.end_seconds == 0 for row in copied)
+    assert list(
+        session.scalars(
+            select(BriefingItem.story_id)
+            .where(BriefingItem.briefing_id == item.id)
+            .order_by(BriefingItem.position)
+        )
+    ) == list(
+        session.scalars(
+            select(BriefingItem.story_id)
+            .where(BriefingItem.briefing_id == source.id)
+            .order_by(BriefingItem.position)
+        )
+    )
+    assert (
+        session.scalar(
+            select(ProcessingJob.kind).where(ProcessingJob.entity_id == item.id)
+        )
+        == "voice"
+    )
+    service.synthesize_briefing(session, item.id)
+    assert item.audio_id != source.audio_id
+    repeated = service.revoice_briefing(session, source, user.id)
+    monkeypatch.setattr(voice, "render_aligned", unexpected)
+    monkeypatch.setattr(voice, "render_segment", unexpected)
+    service.synthesize_briefing(session, repeated.id)
+    assert repeated.audio_id == item.audio_id
+
+
+def test_revoice_still_blocks_changed_evidence(session):
+    from app.news.models import Fact
+
+    user = listener(session, "revoice-evidence", "en", ["technology"])
+    source = service.create_briefing(session, user.id, BriefingRequest(period="week"))
+    service.generate_script(session, source.id)
+    service.synthesize_briefing(session, source.id)
+    item = service.revoice_briefing(session, source, user.id)
+    line = next(row for row in service.segments_for(session, item.id) if row.claim_ids)
+    session.get(Fact, line.claim_ids[0]).status = "unsupported"
+    session.commit()
+    with pytest.raises(service.VerificationError):
+        service.synthesize_briefing(session, item.id)
+    assert not item.audio_id
+
+
 def test_hallucination_blocks_publication(session, monkeypatch):
     user = listener(session, "listener", "en", ["technology"])
     item = service.create_briefing(session, user.id, BriefingRequest())

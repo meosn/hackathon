@@ -22,9 +22,11 @@ import { createVoiceConnection, useVoiceChoice, type VoiceConnection } from '../
 export function DailySession({
   selectedId = '',
   playRequest = 0,
+  onEditionChange,
 }: {
   selectedId?: string
   playRequest?: number
+  onEditionChange?: (edition: BriefingDetail | undefined) => void
 }) {
   const health = useApi<Health>('/health')
   const choice = useVoiceChoice()
@@ -54,6 +56,7 @@ export function DailySession({
         : false,
   })
   const edition = selectedId ? custom.data : daily.data
+  useEffect(() => { onEditionChange?.(edition) }, [edition, onEditionChange])
   const retry = useMutation({
     mutationFn: () => api('/briefings/' + edition?.id + '/retry', 'POST'),
     onSuccess: () => {

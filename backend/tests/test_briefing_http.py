@@ -75,6 +75,54 @@ def wait_for_edition(api, path, headers):
     pytest.fail("The local worker did not finish within 20 seconds")
 
 
+def test_revoice_is_private_and_runs_only_narration(api, monkeypatch):
+    from app.briefing import service
+
+    token = api.post(V1 + "/auth/demo", json={"profile": "tech"}).json()["access_token"]
+    headers = {"Authorization": "Bearer " + token}
+    result = api.post(
+        V1 + "/briefings",
+        headers=headers,
+        json={"period": "week", "story_limit": 3, "duration_minutes": 1},
+    )
+    path = V1 + "/briefings/" + result.json()["briefing_id"]
+    source = wait_for_edition(api, path, headers)
+    assert source["status"] == "completed"
+    other_token = api.post(V1 + "/auth/demo", json={"profile": "finance"}).json()[
+        "access_token"
+    ]
+    assert (
+        api.post(
+            path + "/revoice", headers={"Authorization": "Bearer " + other_token}
+        ).status_code
+        == 404
+    )
+
+    def unexpected(*args):
+        pytest.fail("A revoice request must skip script generation")
+
+    monkeypatch.setattr(service, "generate_script", unexpected)
+    assert (
+        api.patch(
+            V1 + "/users/me/preferences",
+            headers=headers,
+            json={"voice_profile_id": "energetic"},
+        ).status_code
+        == 200
+    )
+    result = api.post(path + "/revoice", headers=headers)
+    assert result.status_code == 202
+    item = wait_for_edition(
+        api, V1 + "/briefings/" + result.json()["briefing_id"], headers
+    )
+    assert item["status"] == "completed"
+    assert item["voice_profile_id"] == "energetic"
+    assert item["items"] == source["items"]
+    assert [s["text"] for s in item["segments"]] == [
+        s["text"] for s in source["segments"]
+    ]
+
+
 def test_private_http_player_conversation_and_recovery(api):
     def profile(name):
         return api.post(V1 + "/auth/demo", json={"profile": name}).json()[

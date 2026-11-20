@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { AudioLines, Check, Play, Plus } from 'lucide-react'
 import { api, clockTime, niceDate, queryClient, useApi } from '../../api/client'
 import type { Health } from '../../api/client'
-import type { Briefing, Preferences, User } from '../../api/types'
+import type { Briefing, BriefingDetail, Preferences, User } from '../../api/types'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import { ErrorNote } from '../../components/UI'
 import { customVoicePath, setCustomVoice, type CustomVoiceState } from '../voice/CustomVoice'
@@ -37,6 +37,7 @@ export function StudioHome({ user }: { user: User }) {
   const [selectedId, setSelectedId] = useState('')
   const [playRequest, setPlayRequest] = useState(0)
   const [voiceChanged, setVoiceChanged] = useState(false)
+  const [edition, setEdition] = useState<BriefingDetail>()
   const engine = useMutation({
     mutationFn: (voice_engine: string) => api<Preferences>('/users/me/preferences', 'PATCH', { voice_engine }),
     onSuccess: data => {
@@ -85,6 +86,15 @@ export function StudioHome({ user }: { user: User }) {
       void briefs.refetch()
     },
   })
+  const revoice = useMutation({
+    mutationFn: (id: string) =>
+      api<{ briefing_id: string }>('/briefings/' + id + '/revoice', 'POST'),
+    onSuccess: (r) => {
+      selectEpisode(r.briefing_id)
+      setVoiceChanged(false)
+      void briefs.refetch()
+    },
+  })
   function selectEpisode(id: string) {
     setSelectedId(id)
     setPlayRequest((n) => n + 1)
@@ -106,7 +116,7 @@ export function StudioHome({ user }: { user: User }) {
   return (
     <>
       <main id="main" className="music-main">
-        <DailySession selectedId={selectedId} playRequest={playRequest} />
+        <DailySession selectedId={selectedId} playRequest={playRequest} onEditionChange={setEdition} />
         <section className="music-voices" aria-label="Choose your voice">
           <div className="music-section-heading">
             <h2>Your voice</h2>
@@ -164,8 +174,8 @@ export function StudioHome({ user }: { user: User }) {
               <>
                 <span>New replies use this voice.</span>
                 <button
-                  onClick={() => generate.mutate('day')}
-                  disabled={generate.isPending}
+                  onClick={() => edition && revoice.mutate(edition.id)}
+                  disabled={revoice.isPending || save.isPending || edition?.status !== 'completed'}
                 >
                   Create with this voice
                 </button>
@@ -174,7 +184,7 @@ export function StudioHome({ user }: { user: User }) {
               'Saving voice…'
             ) : null}
           </div>
-          <ErrorNote error={save.error || prefs.error || generate.error || selectCustom.error} />
+          <ErrorNote error={save.error || prefs.error || generate.error || revoice.error || selectCustom.error} />
         </section>
         <section className="music-library" aria-label="Podcast library">
           <div className="music-section-heading">

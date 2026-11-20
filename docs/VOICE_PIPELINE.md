@@ -70,6 +70,8 @@ Introductory and transitional lines come from a fixed English, German or Dutch v
 
 Audio uses signed-in API routes. MinIO stores the file, and the database stores its key, provider, SHA-256 cache key, duration and boundaries. Cache keys include ordered segment text, language, speaker style and the active voice/model configuration. Playback times are calculated from the actual PCM frame count, including the short gap between segments. The cache is shared for identical audio. Access to each edition and spoken conversation answer still requires its owner's token.
 
+The studio's “Create with this voice” action revoices the current completed episode. It copies the approved script and story order into a listener-owned edition and commits a voice job in the same transaction. It skips the briefing writer, keeps both evidence checks around synthesis, and uses the same audio cache. Weekly edition creation continues to retrieve and write a new script.
+
 ## Provider configuration
 
 | Variable | Meaning |

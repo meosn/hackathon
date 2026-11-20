@@ -418,6 +418,63 @@ def segments_for(db, briefing_id):
     ).all()
 
 
+def revoice_briefing(db, source, user_id):
+    """Keep the listener's approved episode and enqueue only its new narration."""
+    from app.jobs import queue_record
+
+    if source.user_id != user_id or source.status != "completed":
+        raise ValueError("Choose a completed episode to change its voice.")
+    selected = preferences(db, user_id)["voice_profile_id"]
+    profile = db.scalar(select(VoiceProfile).where(VoiceProfile.slug == selected))
+    if not profile:
+        raise ValueError("Unknown voice profile")
+    rows = segments_for(db, source.id)
+    if not rows:
+        raise ValueError("This episode has no script to narrate.")
+    item = Briefing(
+        user_id=user_id,
+        title=source.title,
+        language=source.language,
+        voice_profile_id=profile.slug,
+        request={
+            **source.request,
+            "voice_profile_id": profile.slug,
+            "source_briefing_id": source.id,
+        },
+        status="script_ready",
+        duration_seconds=source.duration_seconds,
+    )
+    db.add(item)
+    db.flush()
+    for row in rows:
+        values = segment_view(row)
+        for key in ("id", "start_seconds", "end_seconds"):
+            values.pop(key)
+        db.add(BriefingSegment(briefing_id=item.id, **values))
+    for row in db.scalars(
+        select(BriefingItem).where(BriefingItem.briefing_id == source.id)
+    ):
+        db.add(
+            BriefingItem(
+                briefing_id=item.id,
+                story_id=row.story_id,
+                title=row.title,
+                position=row.position,
+            )
+        )
+    # Commit the copied script and its durable job together. The voice worker
+    # still revalidates current evidence both before and after synthesis.
+    queue_record(db, "voice", item.id)
+    for event in (
+        "briefing.requested",
+        "briefing.script.ready",
+        "briefing.audio.requested",
+    ):
+        emit(db, event, item.id)
+    db.commit()
+    return item
+
+
 def synthesize_briefing(db, briefing_id):
     with account_attempts(db):
         return _synthesize_briefing(db, briefing_id)

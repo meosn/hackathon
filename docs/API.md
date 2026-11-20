@@ -28,6 +28,8 @@ For ElevenAgents voice sessions, send optional `briefing_id`, `story_id` and `pl
 HTTP errors include `error.code`, `error.message` and `detail`. Invalid inputs return 422. The gateway bounds uploaded bytes, rate-limits expensive requests and omits request bodies and access tokens from application logging.
 
 
+`POST /briefings/{id}/revoice` creates a new narration of the authenticated listener's completed episode using their currently selected preset voice. It preserves the script, story order, language and citations, queues only the voice stage, and returns the usual 202 queued response. Current evidence is still checked before and after synthesis. Another listener's episode returns 404; an unfinished episode returns 409. Identical narration uses the existing audio cache.
+
 ## Streamed audio
 
 `POST /conversations/{id}/realtime` accepts `{ "sdp": "<WebRTC offer>" }` and returns `application/sdp`. It requires the conversation owner, `REALTIME_ENABLED=1` and a configured OpenAI key. Provider credentials stay on the server. `GET /health` advertises `realtime_voice`.

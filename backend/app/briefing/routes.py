@@ -63,6 +63,21 @@ def queue(db, item):
     return {"briefing_id": item.id, "status": "queued"}
 
 
+@router.post(
+    "/briefings/{briefing_id}/revoice", status_code=202, response_model=contracts.Queued
+)
+def revoice_briefing(briefing_id: str, db=Depends(get_db), user=Depends(current_user)):
+    from app.jobs import enqueue
+
+    source = owned(db, Briefing, briefing_id, user.id)
+    try:
+        item = service.revoice_briefing(db, source, user.id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    enqueue("voice", item.id)
+    return {"briefing_id": item.id, "status": "queued"}
+
+
 @router.post("/briefings", status_code=202, response_model=contracts.Queued)
 def request_briefing(
     data: BriefingRequest, db=Depends(get_db), user=Depends(current_user)

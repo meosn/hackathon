@@ -721,6 +721,50 @@
         ]
       }
     },
+    "/api/v1/briefings/{briefing_id}/revoice": {
+      "post": {
+        "summary": "Revoice Briefing",
+        "operationId": "revoice_briefing_api_v1_briefings__briefing_id__revoice_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "briefing_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Briefing Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Queued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/briefings": {
       "get": {
         "summary": "List Briefings",
