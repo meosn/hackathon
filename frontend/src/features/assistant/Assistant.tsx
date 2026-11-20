@@ -4,7 +4,11 @@ import { AudioLines, LoaderCircle, Mic, MicOff, Plus, Send } from 'lucide-react'
 import { api, request, useApi, type Health } from '../../api/client'
 import type { Conversation, Message, User } from '../../api/types'
 import { Button, Card, ErrorNote } from '../../components/UI'
-import { RealtimeVoice, type VoicePhase } from '../briefings/realtimeVoice'
+import {
+  RealtimeVoice,
+  unlockVoiceAudio,
+  type VoicePhase,
+} from '../briefings/realtimeVoice'
 import { useElevenAgent, type AgentConversation } from '../voice/useElevenAgent'
 import { LiveMicrophone } from '../briefings/liveMicrophone'
 
@@ -41,6 +45,7 @@ function VoiceConversation({
   const [error, setError] = useState('')
   const alive = useRef(true)
   const voice = useRef<RealtimeVoice | null>(null)
+  const voiceOutput = useRef<AudioContext | null>(null)
   const microphone = useRef<LiveMicrophone | null>(null)
   const conversation = useRef<Promise<string> | null>(null)
   const audio = useRef<HTMLAudioElement>(null)
@@ -52,6 +57,7 @@ function VoiceConversation({
     return () => {
       alive.current = false
       voice.current?.close()
+      void voiceOutput.current?.close()
       microphone.current?.stop()
       abort.current?.abort()
       if (audioUrl.current) URL.revokeObjectURL(audioUrl.current)
@@ -83,27 +89,31 @@ function VoiceConversation({
     const id = await ensure()
     if (!alive.current) throw new DOMException('Aborted', 'AbortError')
     voice.current?.close()
-    return (voice.current = new RealtimeVoice(id, {
-      phase: (p) => {
-        if (alive.current) setPhase(p)
+    return (voice.current = new RealtimeVoice(
+      id,
+      {
+        phase: (p) => {
+          if (alive.current) setPhase(p)
+        },
+        microphone: (value) => {
+          if (alive.current) setListening(value)
+        },
+        interrupt: () => {
+          audio.current?.pause()
+          abort.current?.abort()
+        },
+        story: () => undefined,
+        action: () => {},
+        finished: () => {},
+        failed: (message) => {
+          if (alive.current) {
+            setError(message)
+            setPhase('idle')
+          }
+        },
       },
-      microphone: (value) => {
-        if (alive.current) setListening(value)
-      },
-      interrupt: () => {
-        audio.current?.pause()
-        abort.current?.abort()
-      },
-      story: () => undefined,
-      action: () => {},
-      finished: () => {},
-      failed: (message) => {
-        if (alive.current) {
-          setError(message)
-          setPhase('idle')
-        }
-      },
-    }))
+      voiceOutput.current || undefined,
+    ))
   }
   async function recordedAnswer(input: string | Blob) {
     abort.current?.abort()
@@ -149,6 +159,7 @@ function VoiceConversation({
     }
   }
   async function send(text: string) {
+    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     setDraft('')
     try {
@@ -169,6 +180,7 @@ function VoiceConversation({
     }
   }
   async function toggleMicrophone() {
+    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     if (useAgent) {
       if (agent.status !== 'disconnected') {
