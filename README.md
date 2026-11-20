@@ -20,7 +20,7 @@ The setup wrapper creates the environment file and input directory automatically
 ./scripts/setup.sh
 ```
 
-Open [localhost:5173](http://localhost:5173) and select **Technology enthusiast** or **Financial analyst**. Registration also supports a new listener with arbitrary interests. First startup applies database migrations, imports synthetic news and prepares the demo editions in the background. Play becomes available after the recording has been prepared and buffered.
+Open [localhost:5173](http://localhost:5173) to enter the listening room. The demo starts with the **Technology enthusiast** profile. Use **Switch listener** to select **Financial analyst**, sign in or register. First startup applies database migrations, imports synthetic news and prepares the demo editions in the background. Play becomes available after the recording has been prepared and buffered.
 
 | Service | Local address |
 |---|---|

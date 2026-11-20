@@ -567,7 +567,7 @@ input[type='range'] {
   display: grid;
   gap: 1.15rem;
 }
-.auth-body h2 {
+.auth-body h1 {
   font-size: clamp(2rem, 3.3vw, 3rem);
   font-weight: 515;
   letter-spacing: -0.06em;
@@ -1512,4 +1512,30 @@ progress {
   .auth-art {
     mask-image: linear-gradient(90deg, transparent 0%, #0007 38%, #000 70%);
   }
+}
+
+.listener-access {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+
+.listener-access .auth-form {
+  width: min(100%, 560px);
+}
+
+.speaker-avatar {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.speaker-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }

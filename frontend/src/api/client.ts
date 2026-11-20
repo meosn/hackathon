@@ -80,6 +80,7 @@ export const useApi = <T>(path: string, enabled = true) =>
 export const label = (s: string) =>
   s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 export type Health = {
+  demo_mode?: boolean
   realtime_voice?: boolean
   news_reference_time?: string | null
   corpus?: string

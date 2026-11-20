@@ -5,22 +5,17 @@ import { AudioLines, Check, Play } from 'lucide-react'
 import { api, clockTime, niceDate, queryClient, useApi } from '../../api/client'
 import type { Health } from '../../api/client'
 import type { Briefing, Preferences, User } from '../../api/types'
+import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import { ErrorNote } from '../../components/UI'
 import { DailySession } from './DailySession'
 import './studio.css'
 
 const hosts = [
-  { id: 'professional', name: 'The Anchor', look: 'anchor' },
-  { id: 'casual', name: 'Street Signal', look: 'street' },
-  { id: 'jarvis', name: 'Studio Assistant', look: 'assistant' },
+  { id: 'professional', name: 'The Anchor' },
+  { id: 'casual', name: 'Street Signal' },
+  { id: 'jarvis', name: 'Studio Assistant' },
+  { id: 'energetic', name: 'Energetic Commentator' },
 ]
-function Portrait({ look }: { look: string }) {
-  return (
-    <div className={'host-portrait abstract-voice ' + look} aria-hidden="true">
-      <AudioLines size={42} strokeWidth={1} />
-    </div>
-  )
-}
 export function StudioHome({ user }: { user: User }) {
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -105,7 +100,7 @@ export function StudioHome({ user }: { user: User }) {
                 onClick={() => save.mutate(host.id)}
               >
                 <span className="portrait-wrap">
-                  <Portrait look={host.look} />
+                  <SpeakerAvatar id={host.id} />
                   {prefs.data?.voice_profile_id === host.id && (
                     <span className="voice-check">
                       <Check size={13} />

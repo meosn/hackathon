@@ -1,4 +1,16 @@
 import { test, expect, type Page } from '@playwright/test'
+test('opens the listening room directly with illustrated speakers', async ({ page }) => {
+  await page.goto('/')
+  const voices = page.getByRole('region', { name: 'Choose your voice' })
+  await expect(voices).toBeVisible()
+  await expect(voices.locator('img')).toHaveCount(4)
+  const loaded = await voices.locator('img').evaluateAll((images) =>
+    Promise.all((images as HTMLImageElement[]).map((image) => image.decode()))
+      .then(() => true),
+  )
+  expect(loaded).toBe(true)
+  await expect(page.getByRole('heading', { name: 'Choose a listener' })).toHaveCount(0)
+})
 async function login(page: Page, listener: string) {
   await page.getByRole('button', { name: listener }).click()
   await expect(
@@ -30,7 +42,7 @@ test('two listeners can generate and hear a source-grounded synthetic edition', 
       )
     }
   })
-  await page.goto('/')
+  await page.goto('/login')
   const firstA = await login(page, 'Technology enthusiast')
   await expect(
     page.getByRole('button', { name: 'Play daily briefing', exact: true }),
@@ -149,7 +161,7 @@ test('arbitrary listener can complete onboarding and schedule a briefing on mobi
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
+  await page.goto('/login')
   await page.getByRole('button', { name: 'Register', exact: true }).click()
   await page.getByLabel('Name', { exact: true }).fill('Science listener')
   await page
@@ -158,15 +170,18 @@ test('arbitrary listener can complete onboarding and schedule a briefing on mobi
   await page.getByLabel('Password', { exact: true }).fill('SyntheticDemo57235!')
   await page.getByRole('button', { name: 'Create profile' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Tune your briefing' }),
+    page.getByRole('heading', { name: "Today's news." }),
   ).toBeVisible()
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: 'Add your own topic' }).click()
   await page.getByPlaceholder('Enter a topic').fill('low carbon science')
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await page.getByRole('tab', { name: /Daily routine/ }).click()
   await page.getByLabel('Daily briefing', { exact: false }).check()
   await page.getByLabel('Delivery time', { exact: true }).fill('10:20')
-  await page.getByRole('button', { name: 'Finish setup' }).click()
+  await page.getByRole('button', { name: /save preferences/i }).click()
+  await expect(page.getByText('Preferences saved.')).toBeVisible()
+  await page.goto('/')
   await expect(
     page.getByRole('heading', { name: "Today's news." }),
   ).toBeVisible()
@@ -195,7 +210,7 @@ test('arbitrary listener can complete onboarding and schedule a briefing on mobi
 test('voice clicks and settings navigation keep the shell and prepared audio stable', async ({
   page,
 }) => {
-  await page.goto('/')
+  await page.goto('/login')
   await login(page, 'Technology enthusiast')
   await expect(
     page.getByRole('button', { name: 'Play daily briefing', exact: true }),
@@ -266,7 +281,7 @@ test('voice clicks and settings navigation keep the shell and prepared audio sta
 test('preferences stay focused with many sources and preserve edits between sections', async ({
   page,
 }) => {
-  await page.goto('/')
+  await page.goto('/login')
   await login(page, 'Technology enthusiast')
   const sources = Array.from({ length: 31 }, (_, i) => ({
     id: 'publication-' + i,
@@ -346,7 +361,7 @@ test('muting input preserves narration and spoken additional news without showin
       return destination.stream
     }
   })
-  await page.goto('/')
+  await page.goto('/login')
   await login(page, 'Technology enthusiast')
   const play = page.getByRole('button', {
     name: 'Play daily briefing',

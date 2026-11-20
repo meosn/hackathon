@@ -4,7 +4,6 @@ import { useMutation } from '@tanstack/react-query'
 import {
   ArrowLeft,
   ArrowRight,
-  AudioLines,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -27,6 +26,7 @@ import type {
   Voice,
 } from '../../api/types'
 import { Button, Dropdown, ErrorNote, Loading } from '../../components/UI'
+import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import './settings.css'
 
 type Engine = {
@@ -567,19 +567,14 @@ function SettingsForm({
                       <span>One voice, every edition</span>
                     </div>
                     <div className="narrator-options">
-                      {voices.map((v, i) => (
+                      {voices.map((v) => (
                         <button
                           key={v.id}
                           type="button"
                           aria-pressed={prefs.voice_profile_id === v.id}
                           onClick={() => patch('voice_profile_id', v.id)}
                         >
-                          <span
-                            className={'narrator-symbol narrator-' + i}
-                            aria-hidden="true"
-                          >
-                            <AudioLines size={22} strokeWidth={1.4} />
-                          </span>
+                          <span className="narrator-symbol"><SpeakerAvatar id={v.id} /></span>
                           <span>
                             <strong>{v.name}</strong>
                             <small>{v.description}</small>
