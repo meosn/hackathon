@@ -241,7 +241,7 @@ def discussion_models(user=Depends(current_user)):
     name = os.getenv("LLM_MODEL") or {
         "ollama": "Local Ollama",
         "api": "API model",
-        "mock": "Local assistant",
+        "mock": "Source search (offline)",
     }.get(provider, "Configured assistant")
     return [
         {
@@ -257,7 +257,7 @@ def discussion_models(user=Depends(current_user)):
             + (
                 "local intent rules."
                 if provider == "mock"
-                else provider + " intent recognition."
+                else provider + " conversation and evidence-grounded answers."
             ),
             "available": True,
         },

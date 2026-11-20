@@ -15,6 +15,7 @@ class BriefingRequest(Strict):
     language: Literal["en", "de", "nl"] | None = None
     voice_profile_id: str | None = Field(default=None, min_length=1, max_length=80)
     selected_story_ids: list[str] = Field(default_factory=list, max_length=100)
+    story_limit: int | None = Field(default=None, ge=1, le=30)
 
 
 class Line(Strict):
@@ -25,6 +26,14 @@ class Line(Strict):
 
 class Script(Strict):
     lines: list[Line] = Field(min_length=1, max_length=60)
+
+
+class Answer(Strict):
+    lines: list[Line] = Field(default_factory=list, max_length=6)
+
+
+class Entailment(Strict):
+    supported: bool
 
 
 class StartConversation(Strict):
@@ -39,6 +48,7 @@ class MessageInput(Strict):
 Intent = Literal[
     "GET_LATEST_NEWS",
     "GET_PERIOD_NEWS",
+    "GET_MORE_NEWS",
     "FILTER_TOPIC",
     "SELECT_STORY",
     "EXPLAIN_STORY",
@@ -57,6 +67,7 @@ class Decision(Strict):
     ordinal: int | None = Field(default=None, ge=1, le=100)
     topic: str | None = Field(default=None, max_length=100)
     period: Literal["day", "week", "month"] = "day"
+    retrieval_query: str | None = Field(default=None, max_length=1000)
 
 
 class Queued(BaseModel):

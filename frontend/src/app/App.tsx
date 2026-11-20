@@ -3,6 +3,7 @@ import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom'
 import { LogOut, Settings2 } from 'lucide-react'
 import { getToken, setToken, useApi } from '../api/client'
 import type { User } from '../api/types'
+import type { Health } from '../api/client'
 import { Brand, ErrorNote, Loading } from '../components/UI'
 import { Auth } from '../features/auth/Auth'
 import {
@@ -24,6 +25,7 @@ const subscribe = (callback: () => void) => {
 export function App() {
   const token = useSyncExternalStore(subscribe, getToken)
   const user = useApi<User>('/auth/me', !!token)
+  const health = useApi<Health>('/health', !!token)
   const location = useLocation()
   const setActive = usePlayer((state) => state.setActive)
   if (!token) return <Auth />
@@ -75,6 +77,12 @@ export function App() {
           </button>
         </div>
       </header>
+      {health.data?.news_reference_time && (
+        <p className="corpus-notice" role="status">
+          Hackathon archive · news through {new Date(health.data.news_reference_time).toLocaleDateString()}.
+          {' '}Short source excerpts and AI-generated narration.
+        </p>
+      )}
       {home ? (
         <StudioHome user={me} />
       ) : (

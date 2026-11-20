@@ -3,6 +3,14 @@
 @import '@fontsource/instrument-serif/latin-400-italic.css';
 @tailwind base;
 @tailwind components;
+.corpus-notice {
+  margin: 0;
+  padding: 10px 24px;
+  color: #c4c7ce;
+  font-size: 13px;
+  text-align: center;
+  background: #202126;
+}
 @tailwind utilities;
 
 :root {

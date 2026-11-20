@@ -2134,7 +2134,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           },
           "story_id": {
@@ -2331,6 +2331,19 @@
             "type": "array",
             "maxItems": 100,
             "title": "Selected Story Ids"
+          },
+          "story_limit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 30.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Limit"
           }
         },
         "additionalProperties": false,
@@ -3031,7 +3044,8 @@
             "enum": [
               "fixture",
               "dataset",
-              "rss"
+              "rss",
+              "crawl"
             ],
             "title": "Kind",
             "default": "fixture"
@@ -3188,6 +3202,7 @@
                 "enum": [
                   "GET_LATEST_NEWS",
                   "GET_PERIOD_NEWS",
+                  "GET_MORE_NEWS",
                   "FILTER_TOPIC",
                   "SELECT_STORY",
                   "EXPLAIN_STORY",
@@ -3988,6 +4003,7 @@
                 "enum": [
                   "GET_LATEST_NEWS",
                   "GET_PERIOD_NEWS",
+                  "GET_MORE_NEWS",
                   "FILTER_TOPIC",
                   "SELECT_STORY",
                   "EXPLAIN_STORY",
@@ -4061,6 +4077,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

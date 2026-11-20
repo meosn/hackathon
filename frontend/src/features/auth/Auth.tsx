@@ -95,8 +95,7 @@ export function Auth() {
           {tab === 'demo' ? (
             <>
               <p className="muted">
-                Open a fresh demo session with a listener profile. Each profile
-                starts with the same synthetic news edition.
+                Try a listener profile with its own interests, language and briefing.
               </p>
               {[
                 { id: 'tech', name: 'Technology enthusiast', icon: Cpu },

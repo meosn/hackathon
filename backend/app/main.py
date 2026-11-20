@@ -204,7 +204,13 @@ app.add_middleware(
 
 @app.get(prefix + "/health")
 def health():
-    return {"status": "ok", "service": "sourcera", "demo_mode": settings.demo_mode}
+    return {
+        "status": "ok",
+        "service": "sourcera",
+        "demo_mode": settings.demo_mode,
+        "news_reference_time": os.getenv("NEWS_REFERENCE_TIME"),
+        "corpus": os.getenv("ACTIVE_CORPUS", "demo" if settings.demo_mode else "live"),
+    }
 
 
 @app.get(prefix + "/ready")
@@ -212,7 +218,11 @@ def ready():
     try:
         with SessionLocal() as db:
             db.execute(text("select version_num from alembic_version")).scalar_one()
-            if settings.demo_mode and settings.job_mode == "celery":
+            if (
+                settings.demo_mode
+                and settings.job_mode == "celery"
+                and os.getenv("ACTIVE_CORPUS") != "licensed"
+            ):
                 from .news.models import IngestionJob
                 from sqlalchemy import select
 

@@ -90,7 +90,7 @@ def costs(db):
         ),
         else_=0,
     )
-    groups = db.execute(
+    query = (
         select(
             ModelUsage.scope,
             ModelUsage.stage,
@@ -106,6 +106,21 @@ def costs(db):
         .join(CostEvent)
         .group_by(ModelUsage.scope, ModelUsage.stage)
     )
+    if os.getenv("ACTIVE_CORPUS") == "licensed":
+        from .news.models import Article, IngestionJob, Story
+
+        references = (
+            select(IngestionJob.id)
+            .where(IngestionJob.kind != "fixture")
+            .union(
+                select(Article.id).where(Article.is_synthetic.is_(False)),
+                select(Story.id).where(Story.is_synthetic.is_(False)),
+            )
+        )
+        query = query.where(
+            (ModelUsage.scope != "dataset") | ModelUsage.reference_id.in_(references)
+        )
+    groups = db.execute(query)
     totals = {
         "llm_calls": 0,
         "embedding_calls": 0,

@@ -297,14 +297,6 @@ def tick():
 
                 seed_templates(db)
                 db.commit()
-        if settings.demo_mode:
-            from .news.models import Story
-
-            if db.scalar(select(Story.id).limit(1)):
-                from .briefing.daily import seed_templates
-
-                seed_templates(db)
-                db.commit()
         discover(db, utcnow())
         discover_rss(db, utcnow())
     recover()

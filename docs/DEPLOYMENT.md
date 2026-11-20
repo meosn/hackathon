@@ -52,4 +52,18 @@ For shutdown with data retained, run `./scripts/compose.sh down`. At license exp
 
 ## Local process profile
 
+### Dated Newstex archives and provider configuration
+
+`NEWS_REFERENCE_TIME` is an optional ISO-8601 archive timestamp. `ACTIVE_CORPUS=licensed` limits new recommendations and story browsing to imported articles. `NEWS_EDITION_VERSION` distinguishes prepared daily recordings across corpus changes. Existing listening records remain available in history.
+
+`DAILY_NEWS_PERIOD` defaults to `day`. Daily editions select three stories from that period. Archive deployments retain actual source dates and use their disclosed reference timestamp. `ANALYSIS_BATCH_SIZE` defaults to ten articles on PostgreSQL. Completed batches commit their valid evidence and progress atomically, allowing interrupted imports to resume. The analysis worker uses a thirty-minute graceful shutdown window during deployment.
+
+`FACT_EXTRACTION_PROVIDER=hybrid` adds structured extraction for articles with sparse rule-derived evidence. Returned quotations must match exact private source spans. `CLUSTER_LLM_VERIFY=1` enables model review for uncertain event candidates above `CLUSTER_REVIEW_SIMILARITY`, which defaults to 0.78. `LLM_TIMEOUT_SECONDS` defaults to 180. `CRAWL_URLS` allowlists exact HTTPS article URLs for operator-submitted crawl jobs. The crawler requires explicit publication metadata and identifiable article content.
+
+`STT_USD_PER_MINUTE` prices decoded audio duration. LLM and TTS prices use the existing per-million environment variables. These values are operator estimates. Vendor invoices require separate reconciliation.
+
+The container frontend serves a production build through Nginx. The backend remains private behind its configured loopback port. A host reverse proxy must preserve WebSocket upgrade headers and permit audio uploads up to 12 MiB.
+
+For an offline local-to-Compose migration, stop the old API and mount its dedicated data directory read-only into a one-off backend container. Set `PYTHONPATH=/app` for the script process and mount `scripts/` read-only at `/ops`. Run `/ops/migrate-local-state.py` with `--database` and `--audio`. The command migrates schema, copies records transactionally into an empty destination and uploads referenced audio to MinIO. It preserves account IDs and password hashes. Reuse the signing secret to preserve valid sessions. Start Compose and verify readiness before changing the host proxy.
+
 Run `./scripts/local-demo.sh` with Python 3.12+, npm and Node 20.19+/22.12+. Linux requires eSpeak NG and FFmpeg. The macOS Python dependency supplies offline eSpeak NG. The script uses the same API and frontend and stores local demo data under `.local/demo/`. Compose is used for multi-process validation.

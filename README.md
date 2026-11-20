@@ -34,6 +34,10 @@ The example environment uses local speech and deterministic AI adapters, so the 
 
 ## ElevenLabs speech and voice questions
 
+Set `LLM_PROVIDER=api`, `LLM_MODEL` and `LLM_API_KEY` to enable generated conversation answers and rewritten narration. `LLM_BASE_URL` supports compatible APIs. `LLM_PROVIDER=ollama` selects a reachable Ollama service. Conversation generation receives the current story, preferences, recent messages and retrieved claims. Each answer sentence cites one stored claim and passes source checks. Failed generation returns source search results with an explicit fallback indicator.
+
+`EMBEDDING_PROVIDER=sentence_transformers` and `BACKEND_EXTRAS=[ml,crawl]` enable multilingual neural embeddings and Scrapling. Models are cached in a private Compose volume. Optional `CLUSTER_LLM_VERIFY=1` reviews uncertain semantic event matches. `FACT_EXTRACTION_PROVIDER=hybrid` recovers short exact evidence quotations when cheap extraction finds fewer than three claims.
+
 For hosted narration and speech recognition, edit these entries in your local `.env`:
 
 ```dotenv
@@ -59,6 +63,8 @@ Recognition, retrieval and synthesis run as asynchronous turns while microphone 
 ## Daily editions and personalization
 
 A listener's baseline edition is prepared once per local calendar day with the **Professional news** voice. New listeners receive a default 06:00 preparation schedule in their profile time zone when they have no schedule. Existing schedules can be edited or disabled.
+
+Daily editions select three highest-ranked eligible stories. Choose **More news**, or ask for more news by voice, to hear additional stories without repeating the original selection. Follow-up questions can request more detail about a story. Dated archives display their reference date in the listening room.
 
 The recording is downloaded before Play is enabled. Pressing Play uses the buffered audio. Selecting another voice saves the preference; **Create with this voice** generates a separate edition. Prepared weekly editions play from their cover. A missing weekly edition is presented as a creation action.
 
@@ -86,6 +92,10 @@ For authorized Newstex files, place JSON, JSONL or NDJSON exports in the ignored
 ```bash
 ./scripts/compose.sh exec api python -m app.cli ingest export.jsonl
 ```
+
+The challenge ZIP can be prepared with `python3 scripts/prepare-dataset.py /path/to/archive.zip`. This validates JSON and splits large feeds into bounded private files. Use its printed filenames for `DATASET_FILES`, then run `./scripts/compose.sh exec api python -m app.cli ingest-all`. The importer maps Newstex publication, author, source permalink and article ID explicitly.
+
+For a dated archive, set `NEWS_REFERENCE_TIME` to its latest publication timestamp and `ACTIVE_CORPUS=licensed`. Date filters use this reference and the interface displays the archive date. `NEWS_EDITION_VERSION` creates a new daily baseline when switching corpora. Public licensed-story views expose limited short quotations and source links. Original article text stays in private storage.
 
 The hackathon dataset remains subject to its authorized usage period. At expiry, the following command deletes this deployment's data volumes, generated audio, derived records and dedicated input directory:
 

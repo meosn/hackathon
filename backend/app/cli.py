@@ -33,7 +33,7 @@ def bootstrap():
             topology(channel)
     with SessionLocal.begin() as db:
         seed_voices(db)
-        if settings.demo_mode:
+        if settings.demo_mode and os.getenv("ACTIVE_CORPUS") != "licensed":
             from .news.service import create_job, import_fixture
             from .news.models import IngestionJob
 
@@ -74,6 +74,7 @@ def main():
     sub.add_parser("replay-events")
     imp = sub.add_parser("ingest")
     imp.add_argument("filename")
+    sub.add_parser("ingest-all")
     grant = sub.add_parser("grant-admin")
     grant.add_argument("email")
     retry = sub.add_parser("retry")
@@ -111,6 +112,32 @@ def main():
             from .usage import costs
 
             print(json.dumps(costs(db), indent=2))
+        elif args.name == "ingest-all":
+            from .news.service import create_job, run_ingestion, run_analysis
+
+            filenames = [
+                v.strip()
+                for v in os.getenv("DATASET_FILES", "").split(",")
+                if v.strip()
+            ]
+            if not filenames:
+                raise ValueError("Configure DATASET_FILES before importing")
+            for filename in filenames:
+                job = create_job(db, kind="dataset", locator=filename)
+                run_ingestion(db, job.id)
+                run_analysis(db, job.id)
+                db.commit()
+                print(
+                    json.dumps(
+                        {
+                            "file": filename,
+                            "received": job.received,
+                            "duplicates": job.duplicates,
+                            "analyzed": job.analyzed,
+                        }
+                    ),
+                    flush=True,
+                )
         elif args.name == "ingest":
             from .news.service import create_job
             from .jobs import enqueue_ingestion

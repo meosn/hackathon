@@ -9,8 +9,8 @@ if [ ! -x .venv/bin/python ]; then python3.12 -m venv .venv; fi
 (cd frontend && npm ci)
 export DATABASE_URL="sqlite:///$root/.local/demo/sourcera.db"
 export AUDIO_DIR="$root/.local/demo/audio" STATE_DIR="$root/.local/demo/state" AUDIO_STORAGE=local JOB_MODE=local
-export DEMO_MODE=true TTS_PROVIDER=local LLM_PROVIDER=mock STT_PROVIDER=mock
-export EMBEDDING_PROVIDER=local_hash
+export DEMO_MODE="${DEMO_MODE:-true}" TTS_PROVIDER="${TTS_PROVIDER:-local}" LLM_PROVIDER="${LLM_PROVIDER:-mock}" STT_PROVIDER="${STT_PROVIDER:-mock}"
+export EMBEDDING_PROVIDER="${EMBEDDING_PROVIDER:-local_hash}"
 export API_PORT="${API_PORT:-8000}" FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 export CORS_ORIGINS="http://127.0.0.1:$FRONTEND_PORT,http://localhost:$FRONTEND_PORT"
 (cd backend && ../.venv/bin/python -m app.cli bootstrap)

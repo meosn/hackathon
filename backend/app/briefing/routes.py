@@ -45,8 +45,11 @@ from .ranking import recommendations
 router = APIRouter()
 
 
-def owned(db, kind, item_id, user_id):
-    item = db.scalar(select(kind).where(kind.id == item_id, kind.user_id == user_id))
+def owned(db, kind, item_id, user_id, lock=False):
+    query = select(kind).where(kind.id == item_id, kind.user_id == user_id)
+    if lock:
+        query = query.with_for_update()
+    item = db.scalar(query)
     if not item:
         raise HTTPException(404, "Item not found")
     return item
@@ -323,7 +326,7 @@ def send_message(
     db=Depends(get_db),
     user=Depends(current_user),
 ):
-    conv = owned(db, Conversation, conversation_id, user.id)
+    conv = owned(db, Conversation, conversation_id, user.id, lock=True)
     try:
         with account_attempts(db):
             return message_view(respond(db, conv, data.text))
@@ -341,7 +344,7 @@ def send_recording(
     db=Depends(get_db),
     user=Depends(current_user),
 ):
-    conv = owned(db, Conversation, conversation_id, user.id)
+    conv = owned(db, Conversation, conversation_id, user.id, lock=True)
     if story_id and conv.briefing_id:
         membership = db.scalar(
             select(BriefingItem.id).where(

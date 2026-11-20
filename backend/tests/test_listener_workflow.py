@@ -366,7 +366,9 @@ def test_named_followup_leaves_current_story_with_matching_evidence(session):
     assert followup.story_id == current["id"] and "24 languages" in followup.text
 
 
-def test_usage_survives_a_rejected_remote_draft(session, monkeypatch):
+def test_rejected_remote_wording_is_replaced_and_usage_is_retained(
+    session, monkeypatch
+):
     import json
     from app.usage import CostEvent
 
@@ -398,9 +400,7 @@ def test_usage_survives_a_rejected_remote_draft(session, monkeypatch):
         lambda **kwargs: original(transport=httpx.MockTransport(server), **kwargs),
     )
     item = service.create_briefing(session, user.id, BriefingRequest())
-    with pytest.raises(service.VerificationError):
-        service.generate_script(session, item.id)
-    session.rollback()
+    assert service.generate_script(session, item.id) == "script_ready"
     calls = session.scalars(
         select(ModelUsage).where(
             ModelUsage.stage == "llm", ModelUsage.reference_id == item.id
@@ -411,7 +411,11 @@ def test_usage_survives_a_rejected_remote_draft(session, monkeypatch):
         select(CostEvent).where(CostEvent.usage_id == calls[0].id)
     ).one()
     assert charge.estimated_usd == pytest.approx(0.002) and charge.measured_usd is None
-    assert item.audio_id is None and not service.segments_for(session, item.id)
+    assert item.audio_id is None
+    assert item.request["source_wording_claim_ids"]
+    assert all(
+        "400 million" not in s.text for s in service.segments_for(session, item.id)
+    )
     assert service.generate_script(session, item.id) == "script_ready"
     assert service.generate_script(session, item.id) == "script_ready"
     calls = session.scalars(
@@ -419,8 +423,8 @@ def test_usage_survives_a_rejected_remote_draft(session, monkeypatch):
             ModelUsage.stage == "llm", ModelUsage.reference_id == item.id
         )
     ).all()
-    assert len(calls) == len(attempts) == 2
-    assert sum(c.input_tokens for c in calls) == 2000
+    assert len(calls) == len(attempts) == 1
+    assert sum(c.input_tokens for c in calls) == 1000
 
 
 def test_daily_calendar_idempotence_and_prepared_profile_copy(session):
