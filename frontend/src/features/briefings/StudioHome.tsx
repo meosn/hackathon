@@ -10,12 +10,14 @@ import { ErrorNote } from '../../components/UI'
 import { customVoicePath, setCustomVoice, type CustomVoiceState } from '../voice/CustomVoice'
 import { DailySession } from './DailySession'
 import './studio.css'
+import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 
 const hosts = [
   { id: 'professional', name: 'The Anchor' },
   { id: 'casual', name: 'Street Signal' },
   { id: 'jarvis', name: 'Studio Assistant' },
-  { id: 'energetic', name: 'Energetic Commentator' },
+  { id: 'energetic', name: 'Energetic Speaker' },
+  { id: 'gangsta', name: 'CJ · GTA Gangsta' },
 ]
 export function StudioHome({ user }: { user: User }) {
   useEffect(() => {
@@ -24,7 +26,10 @@ export function StudioHome({ user }: { user: User }) {
   const custom = useApi<CustomVoiceState>(customVoicePath)
   const selectCustom = useMutation({
     mutationFn: setCustomVoice,
-    onSuccess: (data) => queryClient.setQueryData([customVoicePath], data),
+    onSuccess: (data) => {
+      queryClient.setQueryData([customVoicePath], data)
+      void queryClient.invalidateQueries({ queryKey: ['/users/me/preferences'] })
+    },
   })
   const prefs = useApi<Preferences>('/users/me/preferences')
   const briefs = useApi<Briefing[]>('/briefings')
@@ -32,6 +37,13 @@ export function StudioHome({ user }: { user: User }) {
   const [selectedId, setSelectedId] = useState('')
   const [playRequest, setPlayRequest] = useState(0)
   const [voiceChanged, setVoiceChanged] = useState(false)
+  const engine = useMutation({
+    mutationFn: (voice_engine: string) => api<Preferences>('/users/me/preferences', 'PATCH', { voice_engine }),
+    onSuccess: data => {
+      queryClient.setQueryData(['/users/me/preferences'], data)
+      void queryClient.invalidateQueries({ queryKey: [customVoicePath] })
+    },
+  })
   const save = useMutation({
     mutationFn: (voice_profile_id: string) =>
       api<Preferences>('/users/me/preferences', 'PATCH', { voice_profile_id }),
@@ -95,6 +107,9 @@ export function StudioHome({ user }: { user: User }) {
             <h2>Your voice</h2>
             <Link to="/settings?section=audio">Change voice</Link>
           </div>
+          <VoiceEnginePicker value={prefs.data?.voice_engine || 'openai'} disabled={engine.isPending || !prefs.data}
+            onChange={value => engine.mutate(value)} />
+          <ErrorNote error={engine.error} />
           <div className="music-hosts">
             {hosts.map((host) => (
               <button
@@ -129,7 +144,7 @@ export function StudioHome({ user }: { user: User }) {
                   <span className="speaker-avatar custom-voice-icon" aria-hidden="true">C</span>
                   {custom.data.active && <span className="voice-check"><Check size={13} /></span>}
                 </span>
-                <span>Custom</span>
+                <span>{custom.data.name || 'Custom'}</span>
               </button>
             )}
             <Link to="/settings?section=audio#custom-voice" className="music-host">
@@ -140,7 +155,7 @@ export function StudioHome({ user }: { user: User }) {
             </Link>
           </div>
           <div className="voice-apply" role="status">
-            {custom.data?.active ? 'Custom voice selected for live chat.' : voiceChanged ? (
+            {custom.data?.active && prefs.data?.voice_engine === 'elevenlabs' ? 'Custom voice selected for ElevenLabs live chat.' : voiceChanged ? (
               <>
                 <span>New replies use this voice.</span>
                 <button

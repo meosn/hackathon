@@ -23,6 +23,7 @@ class PreferenceView(BaseModel):
     timezone: str
     depth: str
     discussion_model: str
+    voice_engine: str
     interests: list[str]
     preferred_sources: list[str]
     excluded_sources: list[str]

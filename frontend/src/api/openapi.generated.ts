@@ -384,6 +384,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/voice-engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Voice Engines */
+        get: operations["voice_engines_api_v1_voice_engines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/custom-voice": {
         parameters: {
             query?: never;
@@ -856,6 +873,8 @@ export interface components {
         };
         /** AgentContextRequest */
         AgentContextRequest: {
+            /** Conversation Id */
+            conversation_id?: string | null;
             /** Briefing Id */
             briefing_id?: string | null;
             /** Story Id */
@@ -879,6 +898,16 @@ export interface components {
             signed_url: string;
             /** Voice Id */
             voice_id?: string | null;
+            /**
+             * Persona
+             * @default
+             */
+            persona: string;
+            /**
+             * Language
+             * @default en
+             */
+            language: string;
         };
         /** ArticleInfo */
         ArticleInfo: {
@@ -919,6 +948,16 @@ export interface components {
             file: string;
             /** Consent */
             consent: boolean;
+            /**
+             * Name
+             * @default Custom
+             */
+            name: string;
+            /**
+             * Persona
+             * @default Natural, conversational delivery.
+             */
+            persona: string;
         };
         /** BriefingDetail */
         BriefingDetail: {
@@ -1102,6 +1141,10 @@ export interface components {
         };
         /** CustomVoice */
         CustomVoice: {
+            /** Name */
+            name: string;
+            /** Persona */
+            persona: string;
             /** Saved */
             saved: boolean;
             /** Active */
@@ -1377,6 +1420,8 @@ export interface components {
             depth?: ("brief" | "standard" | "detailed") | null;
             /** Discussion Model */
             discussion_model?: ("grounded" | "configured") | null;
+            /** Voice Engine */
+            voice_engine?: ("openai" | "elevenlabs") | null;
             /** Interests */
             interests?: string[] | null;
             /** Preferred Sources */
@@ -1398,6 +1443,8 @@ export interface components {
             depth: string;
             /** Discussion Model */
             discussion_model: string;
+            /** Voice Engine */
+            voice_engine: string;
             /** Interests */
             interests: string[];
             /** Preferred Sources */
@@ -1520,7 +1567,11 @@ export interface components {
         /** SelectCustomVoice */
         SelectCustomVoice: {
             /** Active */
-            active: boolean;
+            active?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Persona */
+            persona?: string | null;
         };
         /** SessionToken */
         SessionToken: {
@@ -1671,6 +1722,17 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VoiceEngine */
+        VoiceEngine: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Available */
+            available: boolean;
+            /** Description */
+            description: string;
+        };
         /** VoiceView */
         VoiceView: {
             /** Id */
@@ -1742,6 +1804,7 @@ export type SchemaTopicSelection = components['schemas']['TopicSelection'];
 export type SchemaTranscribedReply = components['schemas']['TranscribedReply'];
 export type SchemaTurn = components['schemas']['Turn'];
 export type SchemaValidationError = components['schemas']['ValidationError'];
+export type SchemaVoiceEngine = components['schemas']['VoiceEngine'];
 export type SchemaVoiceView = components['schemas']['VoiceView'];
 export type $defs = Record<string, never>;
 export interface operations {
@@ -2499,6 +2562,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    voice_engines_api_v1_voice_engines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceEngine"][];
                 };
             };
         };

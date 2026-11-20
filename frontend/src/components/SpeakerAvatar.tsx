@@ -4,6 +4,7 @@ const portraits: Record<string, string> = {
   professional: 'anchor',
   energetic: 'commentator',
   casual: 'street',
+  gangsta: 'street',
   jarvis: 'jarvis',
 }
 

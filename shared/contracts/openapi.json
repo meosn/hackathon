@@ -964,6 +964,33 @@
         ]
       }
     },
+    "/api/v1/voice-engines": {
+      "get": {
+        "summary": "Voice Engines",
+        "operationId": "voice_engines_api_v1_voice_engines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VoiceEngine"
+                  },
+                  "type": "array",
+                  "title": "Response Voice Engines Api V1 Voice Engines Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/me/custom-voice": {
       "get": {
         "summary": "Get Custom Voice",
@@ -2437,6 +2464,19 @@
       },
       "AgentContextRequest": {
         "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
           "briefing_id": {
             "anyOf": [
               {
@@ -2500,6 +2540,16 @@
               }
             ],
             "title": "Voice Id"
+          },
+          "persona": {
+            "type": "string",
+            "title": "Persona",
+            "default": ""
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "en"
           }
         },
         "type": "object",
@@ -2617,6 +2667,20 @@
           "consent": {
             "type": "boolean",
             "title": "Consent"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "default": "Custom"
+          },
+          "persona": {
+            "type": "string",
+            "maxLength": 600,
+            "minLength": 1,
+            "title": "Persona",
+            "default": "Natural, conversational delivery."
           }
         },
         "type": "object",
@@ -3158,6 +3222,14 @@
       },
       "CustomVoice": {
         "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "persona": {
+            "type": "string",
+            "title": "Persona"
+          },
           "saved": {
             "type": "boolean",
             "title": "Saved"
@@ -3182,6 +3254,8 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "name",
+          "persona",
           "saved",
           "active",
           "can_upload",
@@ -3981,6 +4055,21 @@
             ],
             "title": "Discussion Model"
           },
+          "voice_engine": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "elevenlabs"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Engine"
+          },
           "interests": {
             "anyOf": [
               {
@@ -4057,6 +4146,10 @@
             "type": "string",
             "title": "Discussion Model"
           },
+          "voice_engine": {
+            "type": "string",
+            "title": "Voice Engine"
+          },
           "interests": {
             "items": {
               "type": "string"
@@ -4087,6 +4180,7 @@
           "timezone",
           "depth",
           "discussion_model",
+          "voice_engine",
           "interests",
           "preferred_sources",
           "excluded_sources"
@@ -4423,15 +4517,45 @@
       "SelectCustomVoice": {
         "properties": {
           "active": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "persona": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 600,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persona"
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "active"
-        ],
         "title": "SelectCustomVoice"
       },
       "SessionToken": {
@@ -4879,6 +5003,34 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VoiceEngine": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "available",
+          "description"
+        ],
+        "title": "VoiceEngine"
       },
       "VoiceView": {
         "properties": {

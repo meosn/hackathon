@@ -468,6 +468,7 @@ def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeyp
         )
     assert created == []
     monkeypatch.setenv("CONVERSATION_PROVIDER", "local")
+    monkeypatch.delenv("ELEVENLABS_API_KEY")
     result = api.post(path, headers=owner, data={"consent": "true"}, files=sample(30))
     assert result.status_code == 201, result.text
     assert result.json()["sample_uploaded"] is True
@@ -475,7 +476,7 @@ def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeyp
     assert result.json()["can_create"] is False
     assert api.get(path, headers=other).json()["sample_uploaded"] is False
     assert created == []
-    monkeypatch.setenv("CONVERSATION_PROVIDER", "elevenagents")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
     assert api.post(path + "/create", headers=other).status_code == 404
     result = api.post(path + "/create", headers=owner)
     assert result.status_code == 200
@@ -484,7 +485,7 @@ def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeyp
     assert api.get(path, headers=other).json()["saved"] is False
     assert (
         api.post(V1 + "/agent-session", headers=other, json={}).json()["voice_id"]
-        is None
+        == "onwK4e9ZLuTAKqWW03F9"
     )
     assert (
         api.post(V1 + "/agent-session", headers=owner, json={}).json()["voice_id"]
@@ -493,9 +494,15 @@ def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeyp
     assert api.patch(path, headers=owner, json={"active": False}).json()["saved"]
     assert (
         api.post(V1 + "/agent-session", headers=owner, json={}).json()["voice_id"]
-        is None
+        == "onwK4e9ZLuTAKqWW03F9"
     )
+    edited = api.patch(path, headers=owner, json={"name": "My private host", "persona": "Warm, unhurried delivery."})
+    assert edited.json()["name"] == "My private host"
+    assert api.get(path, headers=other).json()["name"] == "Custom"
+    assert api.get(path, headers=owner).json()["persona"] == "Warm, unhurried delivery."
     assert created == [True]
+    assert api.get(V1 + "/users/me/preferences", headers=owner).json()["voice_engine"] == "elevenlabs"
+    assert api.get(V1 + "/users/me/preferences", headers=other).json()["voice_engine"] == "openai"
 
 
 def test_streamed_speech_token_is_private_and_uses_the_selected_voice(api, monkeypatch):
@@ -549,3 +556,55 @@ def test_streamed_speech_token_is_private_and_uses_the_selected_voice(api, monke
         json={"voice_profile_id": "casual"},
     )
     assert api.post(path, headers=headers).json()["voice_id"] == "voice-b"
+
+
+def test_voice_engines_and_database_characters_are_private_per_listener(api, monkeypatch):
+    from app.accounts import VoiceProfile
+    from sqlalchemy import select
+    from app.briefing import realtime
+
+    def listener():
+        token = api.post(V1 + '/auth/demo', json={'profile': 'tech'}).json()['access_token']
+        return {'Authorization': 'Bearer ' + token}
+
+    owner, other = listener(), listener()
+    monkeypatch.setenv('ELEVENLABS_AGENT_ID', 'agent_test')
+    monkeypatch.setenv('ELEVENLABS_API_KEY', 'test-key')
+    monkeypatch.setenv('REALTIME_ENABLED', '1')
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-openai')
+    monkeypatch.setenv('ELEVENLABS_ALLOW_LICENSED_CONTEXT', '1')
+    monkeypatch.setattr(agent, 'signed_session_url', lambda *_: 'wss://api.elevenlabs.io/signed')
+    options = api.get(V1 + '/voice-engines', headers=owner)
+    assert options.status_code == 200
+    assert {row['id'] for row in options.json() if row['available']} == {'openai', 'elevenlabs'}
+    assert api.get(V1 + '/voice-engines').status_code == 401
+    path = V1 + '/users/me/preferences'
+    chosen = api.patch(path, headers=owner, json={'voice_engine': 'elevenlabs', 'voice_profile_id': 'gangsta'})
+    assert chosen.json()['voice_engine'] == 'elevenlabs'
+    assert api.get(path, headers=other).json()['voice_engine'] == 'openai'
+    assert api.patch(path, headers=other, json={'voice_engine': 'invalid'}).status_code == 422
+
+    with routes.SessionLocal.begin() as db:
+        character = db.scalar(select(VoiceProfile).where(VoiceProfile.slug == 'gangsta'))
+        assert character.elevenlabs_voice_id == 'N2lVS1w4EtoT3dr4eOWO'
+        assert character.openai_voice == 'ash'
+        character.elevenlabs_voice_id = 'saved-shared-character'
+    selected = api.post(V1 + '/agent-session', headers=owner, json={}).json()
+    assert selected['voice_id'] == 'saved-shared-character'
+    assert 'West Coast' in selected['persona']
+    assert api.post(V1 + '/agent-session', headers=other, json={}).json()['voice_id'] == 'onwK4e9ZLuTAKqWW03F9'
+
+    conv = api.post(V1 + '/conversations', headers=owner, json={}).json()['id']
+    assert api.post(V1 + '/agent-session', headers=other, json={'conversation_id': conv}).status_code == 404
+    exchanged = []
+    def exchange(url, **kwargs):
+        config = json.loads(kwargs['files']['session'][1])
+        exchanged.append(config)
+        return httpx.Response(201, text='answer-sdp', request=httpx.Request('POST', url))
+    monkeypatch.setattr(realtime.httpx, 'post', exchange)
+    result = api.post(f'{V1}/conversations/{conv}/realtime', headers=owner, json={'sdp': 'v=0\r\n' + 'a=test\r\n' * 4, 'speech_stream': False})
+    assert result.status_code == 200
+    assert result.headers['x-speech-output'] == 'openai'
+    assert exchanged[0]['output_modalities'] == ['audio']
+    assert exchanged[0]['audio']['output']['voice'] == 'ash'
+    assert 'West Coast' in exchanged[0]['instructions']

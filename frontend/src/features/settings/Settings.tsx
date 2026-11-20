@@ -17,7 +17,7 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react'
-import { api, label, queryClient, useApi, type Health } from '../../api/client'
+import { api, label, queryClient, useApi } from '../../api/client'
 import type {
   Preferences,
   Schedule,
@@ -27,6 +27,7 @@ import type {
 } from '../../api/types'
 import { Button, Dropdown, ErrorNote, Loading } from '../../components/UI'
 import { CustomVoiceSettings } from '../voice/CustomVoice'
+import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import './settings.css'
 
@@ -135,9 +136,8 @@ function SettingsForm({
   voices: Voice[]
   engines: Engine[]
 }) {
-  const elevenAgents =
-    useApi<Health>('/health').data?.conversation_provider === 'elevenagents'
   const [prefs, setPrefs] = useState(base)
+  const elevenAgents = prefs.voice_engine === 'elevenlabs'
   const [time, setTime] = useState(schedule?.time.slice(0, 5) || '08:00')
   const [enabled, setEnabled] = useState(schedule?.enabled || false)
   const [extra, setExtra] = useState('')
@@ -145,6 +145,10 @@ function SettingsForm({
   const [saved, setSaved] = useState(false)
   const [currentSchedule, setCurrentSchedule] = useState(schedule?.id)
   const [snapshot, setSnapshot] = useState({ prefs: base, time, enabled })
+  useEffect(() => {
+    setPrefs(previous => ({ ...previous, voice_engine: base.voice_engine }))
+    setSnapshot(previous => ({ ...previous, prefs: { ...previous.prefs, voice_engine: base.voice_engine } }))
+  }, [base.voice_engine])
   const [sourceSearch, setSourceSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState('all')
   const [page, setPage] = useState(0)
@@ -564,6 +568,11 @@ function SettingsForm({
                     <p>A familiar voice. A language that feels like home.</p>
                   </div>
                   <section className="preference-block">
+                    <h3>Voice model</h3>
+                    <VoiceEnginePicker value={prefs.voice_engine} onChange={value => patch('voice_engine', value)} />
+                    <p className="preference-hint">Applied to your next live conversation. Custom voices use ElevenLabs.</p>
+                  </section>
+                  <section className="preference-block">
                     <div className="preference-label">
                       <h3>Your narrator</h3>
                       <span>One voice, every edition</span>
@@ -590,8 +599,7 @@ function SettingsForm({
                       ))}
                     </div>
                     <p className="preference-hint">
-                      Used for new editions and your next ElevenLabs voice
-                      reply.
+                      Used for new editions and live replies. OpenAI uses the character’s delivery with an OpenAI voice.
                     </p>
                   </section>
                   <CustomVoiceSettings />

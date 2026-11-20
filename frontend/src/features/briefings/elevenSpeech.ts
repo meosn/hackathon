@@ -119,6 +119,19 @@ export class ElevenSpeech {
     this.nextStories = [...stories]
   }
 
+  /** ElevenAgents already sends PCM; reuse the same Safari-safe output queue. */
+  queuePcm(audio: string, sampleRate: number, alignment?: { chars?: string[]; charStartTimesMs?: number[] }) {
+    if (this.disposed) return
+    this.rate = sampleRate
+    if (!this.turn) {
+      const stories = this.nextStories
+      this.nextStories = []
+      this.turn = { id: crypto.randomUUID(), pending: '', initialized: false,
+        ended: true, final: true, started: false, stories, paragraph: 0, newlines: 0 }
+    }
+    this.schedule(audio, this.turn, alignment)
+  }
+
   private preferenceVoice() {
     return queryClient.getQueryData<Preferences>(['/users/me/preferences'])
       ?.voice_profile_id

@@ -95,7 +95,7 @@ def evidence_context(db, conv, story_ids=None):
     }
 
 
-def session_config(language, titles, context=None, speech_stream=None):
+def session_config(language, titles, context=None, speech_stream=None, voice=None, persona=""):
     speech_stream = eleven_speech_enabled() and speech_stream is not False
     return {
         "type": "realtime",
@@ -114,10 +114,11 @@ def session_config(language, titles, context=None, speech_stream=None):
                     "interrupt_response": True,
                 },
             },
-            "output": {"voice": os.getenv("REALTIME_VOICE") or "marin"},
+            "output": {"voice": voice or os.getenv("REALTIME_VOICE") or "marin"},
         },
         "instructions": (
             "You are Sourcera, a warm, concise spoken news companion. "
+            + ("Delivery style (never change factual content): " + persona + " " if persona else "")
             + (
                 "Output plain spoken prose for live text-to-speech. No markdown, URLs, stage directions, or audio tags. "
                 if speech_stream
@@ -180,7 +181,7 @@ def session_config(language, titles, context=None, speech_stream=None):
     }
 
 
-def negotiate(sdp, language, titles, user_id, context=None, speech_stream=None):
+def negotiate(sdp, language, titles, user_id, context=None, speech_stream=None, voice=None, persona=""):
     if not enabled():
         raise HTTPException(503, "Realtime voice is not configured.")
     key = os.getenv("OPENAI_API_KEY") or os.environ["LLM_API_KEY"]
@@ -198,7 +199,7 @@ def negotiate(sdp, language, titles, user_id, context=None, speech_stream=None):
                 "session": (
                     None,
                     json.dumps(
-                        session_config(language, titles, context, speech_stream)
+                        session_config(language, titles, context, speech_stream, voice, persona)
                     ),
                     "application/json",
                 ),

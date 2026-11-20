@@ -27,6 +27,8 @@ class User(Record):
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     custom_voice_id: Mapped[str | None] = mapped_column(String(128))
     custom_voice_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    custom_voice_name: Mapped[str] = mapped_column(String(80), default="Custom")
+    custom_voice_persona: Mapped[str] = mapped_column(String(600), default="Natural, conversational delivery.")
     custom_voice_sample: Mapped[bytes | None] = mapped_column(
         LargeBinary, deferred=True
     )
@@ -37,6 +39,9 @@ class VoiceProfile(Record):
     slug: Mapped[str] = mapped_column(String(40), unique=True)
     name: Mapped[str]
     description: Mapped[str]
+    elevenlabs_voice_id: Mapped[str | None] = mapped_column(String(128))
+    openai_voice: Mapped[str] = mapped_column(String(24), default="marin")
+    persona: Mapped[str] = mapped_column(default="")
 
 
 class UserPreference(Record):
@@ -52,6 +57,7 @@ class UserPreference(Record):
     timezone: Mapped[str] = mapped_column(default="UTC")
     depth: Mapped[str] = mapped_column(default="standard")
     discussion_model: Mapped[str] = mapped_column(String(24), default="configured")
+    voice_engine: Mapped[str] = mapped_column(String(24), default="openai")
 
 
 class UserInterest(Record):
@@ -103,6 +109,7 @@ class PreferencePatch(Input):
     timezone: str | None = Field(None, max_length=80)
     depth: Literal["brief", "standard", "detailed"] | None = None
     discussion_model: Literal["grounded", "configured"] | None = None
+    voice_engine: Literal["openai", "elevenlabs"] | None = None
     interests: list[str] | None = Field(None, max_length=50)
     preferred_sources: list[str] | None = Field(None, max_length=150)
     excluded_sources: list[str] | None = Field(None, max_length=150)
@@ -126,10 +133,19 @@ class PreferencePatch(Input):
 VOICE_STYLES = [
     ("professional", "Professional news", "Even pacing and a clear newsroom delivery."),
     ("jarvis", "Studio assistant", "A composed, precise synthetic assistant."),
-    ("energetic", "Energetic commentator", "A brisk, animated delivery."),
+    ("energetic", "Energetic Speaker", "A brisk, animated delivery."),
     ("casual", "Street casual", "Relaxed conversational pacing."),
     ("cyberpunk", "Cyberpunk narrator", "Low, measured late-night narration."),
+    ("gangsta", "CJ · GTA Gangsta", "A laid-back West Coast character with confident street delivery."),
 ]
+VOICE_DEFAULTS = {
+    "professional": ("onwK4e9ZLuTAKqWW03F9", "marin", "Speak with clear, composed newsroom delivery."),
+    "jarvis": ("JBFqnCBsd6RMkjVDRZzb", "cedar", "Speak with calm precision, like a helpful studio assistant."),
+    "energetic": ("TX3LPaxmHKxFdv7VOQHJ", "verse", "Speak like an energetic speaker: lively, upbeat and engaging, without shouting."),
+    "casual": ("IKne3meq5aSn9XLyUdCD", "ash", "Speak in a relaxed, conversational tone."),
+    "cyberpunk": ("nPczCjzI2devNBz1zQrb", "echo", "Use a low, measured, late-night delivery."),
+    "gangsta": ("N2lVS1w4EtoT3dr4eOWO", "ash", "Use a fictional West Coast gangsta character style: laid-back, confident and streetwise. Light slang is welcome; do not claim to be a real performer or change news facts."),
+}
 DEMO_PROFILES = {
     "tech": {
         "name": "Technology enthusiast",
@@ -150,8 +166,17 @@ DEMO_PROFILES = {
 
 def seed_voices(db):
     for slug, name, description in VOICE_STYLES:
-        if not db.scalar(select(VoiceProfile).where(VoiceProfile.slug == slug)):
-            db.add(VoiceProfile(slug=slug, name=name, description=description))
+        row = db.scalar(select(VoiceProfile).where(VoiceProfile.slug == slug))
+        if not row:
+            row = VoiceProfile(slug=slug, name=name, description=description)
+            db.add(row)
+        if slug == "energetic" and row.name == "Energetic commentator":
+            row.name = name
+        voice_id, openai_voice, persona = VOICE_DEFAULTS[slug]
+        if not row.elevenlabs_voice_id:
+            row.elevenlabs_voice_id = voice_id
+        if not row.persona:
+            row.openai_voice, row.persona = openai_voice, persona
     db.flush()
 
 
@@ -174,6 +199,7 @@ def preferences(db, user_id):
                 "timezone",
                 "depth",
                 "discussion_model",
+                "voice_engine",
             )
         },
         "interests": sorted(
@@ -190,6 +216,10 @@ def set_preferences(db, user_id, changes):
     from .news.models import Source
 
     delta = PreferencePatch.model_validate(changes).model_dump(exclude_none=True)
+    if delta.get("voice_engine") == "openai":
+        owner = db.get(User, user_id)
+        if owner:
+            owner.custom_voice_active = False
     old = preferences(db, user_id)
     pref = db.scalar(select(UserPreference).where(UserPreference.user_id == user_id))
     if "voice_profile_id" in delta and not db.scalar(

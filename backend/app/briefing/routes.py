@@ -1,4 +1,5 @@
 import asyncio
+import os
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Literal
@@ -19,13 +20,13 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
-from app.accounts import User, preferences
+from app.accounts import User, preferences, set_preferences
 from app.auth import current_user, user_for_token
 from app.config import settings
 from app.db import SessionLocal, get_db
 from app.messaging import emit
 from app.news.service import story_detail
-from . import agent, conversation_speech, custom_voice, realtime, service, voice
+from . import agent, characters, conversation_speech, custom_voice, realtime, service, voice
 from .accounting import account_attempts
 from . import contracts
 from .contracts import BriefingRequest, MessageInput, StartConversation
@@ -165,22 +166,29 @@ def agent_session(
 ):
     agent_id, api_key = agent.require_agent()
     context = agent.context_for(db, user.id, data)
+    character = characters.selected(db, user)
     response.headers["Cache-Control"] = "private, no-store"
     return {
         "signed_url": agent.signed_session_url(agent_id, api_key),
         "context": context,
-        "voice_id": user.custom_voice_id if user.custom_voice_active else None,
+        "voice_id": character["voice_id"],
+        "persona": character["persona"],
+        "language": character["language"],
     }
+
+
+@router.get("/voice-engines", response_model=list[contracts.VoiceEngine])
+def voice_engines(user=Depends(current_user)):
+    return [
+        {"id": "openai", "name": "OpenAI Realtime", "available": realtime.enabled(), "description": "Direct speech-to-speech with OpenAI voices."},
+        {"id": "elevenlabs", "name": "ElevenLabs Realtime", "available": agent.available(), "description": "Live voice chat over WebSocket with character and custom voices."},
+    ]
 
 
 def custom_voice_key(user):
     if user.is_demo:
         return None
-    try:
-        _, key = agent.require_agent()
-        return key
-    except HTTPException:
-        return None
+    return os.getenv("ELEVENLABS_API_KEY") or None
 
 
 def custom_voice_view(db, user):
@@ -188,6 +196,8 @@ def custom_voice_view(db, user):
         select(User.custom_voice_sample.is_not(None)).where(User.id == user.id)
     )
     return {
+        "name": user.custom_voice_name,
+        "persona": user.custom_voice_persona,
         "saved": bool(user.custom_voice_id),
         "active": bool(user.custom_voice_id and user.custom_voice_active),
         "can_upload": not user.custom_voice_id,
@@ -225,6 +235,8 @@ def provision_custom_voice(owner, api_key, sample):
 def upload_custom_voice(
     file: UploadFile = File(...),
     consent: bool = Form(...),
+    name: str = Form("Custom", min_length=1, max_length=80),
+    persona: str = Form("Natural, conversational delivery.", min_length=1, max_length=600),
     db=Depends(get_db),
     user=Depends(current_user),
 ):
@@ -232,9 +244,11 @@ def upload_custom_voice(
         raise HTTPException(422, "Confirm permission to clone the recorded voice.")
     sample = custom_voice.checked_sample(file)
     owner = lock_custom_voice_owner(db, user)
+    owner.custom_voice_name, owner.custom_voice_persona = name.strip() or "Custom", persona.strip() or "Natural, conversational delivery."
     api_key = custom_voice_key(owner)
     if api_key:
         provision_custom_voice(owner, api_key, sample)
+        set_preferences(db, owner.id, {"voice_engine": "elevenlabs"})
     else:
         owner.custom_voice_sample = sample
     db.commit()
@@ -246,12 +260,13 @@ def create_custom_voice(db=Depends(get_db), user=Depends(current_user)):
     api_key = custom_voice_key(user)
     if not api_key:
         raise HTTPException(
-            503, "A personal account and configured ElevenLabs agent are required."
+            503, "A personal account and configured ElevenLabs key are required."
         )
     owner = lock_custom_voice_owner(db, user)
     if not owner.custom_voice_sample:
         raise HTTPException(404, "Upload a voice sample first.")
     provision_custom_voice(owner, api_key, owner.custom_voice_sample)
+    set_preferences(db, owner.id, {"voice_engine": "elevenlabs"})
     db.commit()
     return custom_voice_view(db, owner)
 
@@ -263,10 +278,16 @@ def select_custom_voice(
     user=Depends(current_user),
 ):
     if data.active:
-        agent.require_agent()
         if not user.custom_voice_id:
             raise HTTPException(404, "No custom voice is saved for this listener.")
-    user.custom_voice_active = data.active
+    if data.active is not None:
+        user.custom_voice_active = data.active
+    if data.name is not None:
+        user.custom_voice_name = data.name.strip() or "Custom"
+    if data.persona is not None:
+        user.custom_voice_persona = data.persona.strip() or "Natural, conversational delivery."
+    if data.active:
+        set_preferences(db, user.id, {"voice_engine": "elevenlabs"})
     db.commit()
     return custom_voice_view(db, user)
 
@@ -557,9 +578,11 @@ def realtime_session(
         else []
     )
     context = realtime.evidence_context(db, conv)
+    character = characters.selected(db, user)
     speech_stream = data.speech_stream and conversation_speech.enabled()
     sdp = realtime.negotiate(
-        data.sdp, conv.language, titles, user.id, context, speech_stream
+        data.sdp, conv.language, titles, user.id, context, speech_stream,
+        character["openai_voice"], character["persona"],
     )
     return Response(
         sdp,

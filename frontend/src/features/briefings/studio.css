@@ -680,3 +680,28 @@ html {
 .music-host:has(.custom-voice-icon) {
   text-decoration: none;
 }
+
+.voice-engine-options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 24px;
+  border: 1px solid var(--line, #303a27);
+  border-radius: 100px;
+}
+.voice-engine-options button {
+  border: 0;
+  border-radius: 100px;
+  padding: 9px 16px;
+  background: transparent;
+  color: var(--muted, #9ba88c);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.voice-engine-options button[aria-pressed="true"] {
+  background: var(--accent, #dceda7);
+  color: #18200f;
+}
+.voice-engine-options button:disabled { opacity: .45; cursor: default; }

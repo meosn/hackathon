@@ -42,6 +42,7 @@ class StartConversation(Strict):
 
 
 class AgentContextRequest(Strict):
+    conversation_id: str | None = Field(default=None, min_length=1, max_length=80)
     briefing_id: str | None = Field(default=None, min_length=1, max_length=80)
     story_id: str | None = Field(default=None, min_length=1, max_length=80)
     playback_seconds: float = Field(default=0, ge=0, le=86400)
@@ -55,9 +56,20 @@ class AgentContext(BaseModel):
 class AgentSession(AgentContext):
     signed_url: str
     voice_id: str | None = None
+    persona: str = ""
+    language: str = "en"
+
+
+class VoiceEngine(BaseModel):
+    id: str
+    name: str
+    available: bool
+    description: str
 
 
 class CustomVoice(Strict):
+    name: str
+    persona: str
     saved: bool
     active: bool
     can_upload: bool
@@ -66,7 +78,9 @@ class CustomVoice(Strict):
 
 
 class SelectCustomVoice(Strict):
-    active: bool
+    active: bool | None = None
+    name: str | None = Field(None, min_length=1, max_length=80)
+    persona: str | None = Field(None, min_length=1, max_length=600)
 
 
 class MessageInput(Strict):

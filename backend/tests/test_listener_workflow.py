@@ -316,7 +316,7 @@ def test_whisper_and_elevenlabs_wire_contracts(session, monkeypatch):
             return httpx.Response(
                 200, request=request, json={"text": "Compare sources."}
             )
-        assert url.endswith("/v1/text-to-speech/licensed-test-voice")
+        assert url.endswith("/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9")
         assert kwargs["headers"]["xi-api-key"] == "test-tts"
         assert kwargs["json"]["text"] == "Compare sources."
         return httpx.Response(200, request=request, content=recording)

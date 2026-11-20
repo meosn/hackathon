@@ -9,7 +9,7 @@ export type VoicePhase =
   | 'speaking'
   | 'blocked'
   | 'idle'
-type Callbacks = {
+export type VoiceCallbacks = {
   phase: (phase: VoicePhase) => void
   interrupt: () => void
   microphone: (enabled: boolean) => void
@@ -63,7 +63,7 @@ export class RealtimeVoice {
 
   constructor(
     private conversationId: string,
-    private callbacks: Callbacks,
+    private callbacks: VoiceCallbacks,
     private outputContext?: AudioContext,
   ) {
     this.output = new Audio()
@@ -160,7 +160,7 @@ export class RealtimeVoice {
     const response = await request(
       `/conversations/${this.conversationId}/realtime`,
       'POST',
-      { sdp: offer.sdp, speech_stream: true },
+      { sdp: offer.sdp, speech_stream: false },
       this.abort.signal,
     )
     if (this.closed) return

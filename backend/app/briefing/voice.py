@@ -27,6 +27,7 @@ STYLES = {
     "casual": (150, 55),
     "cyberpunk": (146, 35),
     "jarvis": (154, 42),
+    "gangsta": (146, 43),
 }
 
 
@@ -103,7 +104,7 @@ def local_pcm(text, lang, voice):
     return pcm
 
 
-def provider_config(voice):
+def provider_config(voice, db=None):
     kind = os.getenv("TTS_PROVIDER", "local")
     if kind in {"local", "mock"}:
         return "local", "espeak-ng", voice
@@ -112,6 +113,9 @@ def provider_config(voice):
     voice_id = json.loads(os.getenv("ELEVENLABS_VOICE_MAP") or "{}").get(
         voice
     ) or os.getenv("ELEVENLABS_VOICE_ID")
+    if db is not None:
+        from app.accounts import VoiceProfile
+        voice_id = db.scalar(select(VoiceProfile.elevenlabs_voice_id).where(VoiceProfile.slug == voice)) or voice_id
     if not voice_id or not os.getenv("ELEVENLABS_API_KEY"):
         raise ValueError("Configure a permitted ElevenLabs voice and API key")
     return kind, os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2", voice_id
@@ -195,7 +199,7 @@ def read_object(key):
 
 
 def render_audio(db, segments, voice, reference_id):
-    config = provider_config(voice)
+    config = provider_config(voice, db)
     try:
         return _render_audio(db, segments, voice, reference_id, config)
     except (httpx.HTTPError, subprocess.SubprocessError):

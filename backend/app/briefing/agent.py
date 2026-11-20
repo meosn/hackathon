@@ -30,8 +30,6 @@ def conversation_provider():
 
 
 def require_agent():
-    if conversation_provider() != "elevenagents":
-        raise HTTPException(503, "ElevenAgents is disabled")
     agent_id = os.getenv("ELEVENLABS_AGENT_ID", "").strip()
     api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
     if not agent_id or not api_key:
@@ -39,6 +37,14 @@ def require_agent():
     if os.getenv("ACTIVE_CORPUS") == "licensed" and not licensed_context_allowed():
         raise HTTPException(503, "The licensed corpus is disabled for ElevenAgents")
     return agent_id, api_key
+
+
+def available():
+    try:
+        require_agent()
+        return True
+    except HTTPException:
+        return False
 
 
 def licensed_context_allowed():
@@ -200,6 +206,12 @@ def episode_context(db, briefing, data, excluded):
 
 
 def context_for(db, user_id: str, data: AgentContextRequest) -> str:
+    if data.conversation_id:
+        from .models import Conversation
+        conv = db.scalar(select(Conversation).where(Conversation.id == data.conversation_id, Conversation.user_id == user_id))
+        if not conv:
+            raise HTTPException(404, "Conversation not found")
+        data = data.model_copy(update={"briefing_id": conv.briefing_id, "story_id": data.story_id or conv.story_id})
     prefs = preferences(db, user_id)
     excluded = set(prefs["excluded_sources"])
     language = prefs["language"]
