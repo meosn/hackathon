@@ -195,3 +195,5 @@ def test_both_voice_engines_can_offer_and_perform_research():
         ]
         assert tool["parameters"]["properties"]["action"]["description"]
     assert "additionalProperties" not in eleven["tools"][-1]["parameters"]
+    assert eleven["prompt"].startswith(research.RUSSIAN_INSTRUCTIONS)
+    assert agent_setup.configuration()["conversation_config"]["realtime_model"] == "eleven_realtime_v1_max"

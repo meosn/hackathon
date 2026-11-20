@@ -15,6 +15,14 @@ from .accounting import observe
 from .contracts import ResearchResult, ResearchSource
 from .models import ConversationMessage
 
+RUSSIAN_INSTRUCTIONS = (
+    'Для вопросов на русском: если ответа нет в контексте сводки, НЕ отвечай из памяти, даже если знаешь ответ. '
+    'СНАЧАЛА обязательно вызови research_topic с action="offer" и query с полным вопросом пользователя. '
+    'Только ПОСЛЕ результата offered скажи: «Этого нет в сегодняшней сводке. Хочешь, я найду информацию и расскажу?» '
+    'Услышав «да», «давай», «найди», ОБЯЗАТЕЛЬНО вызови research_topic с action="search". '
+    'При отказе вызови action="cancel". Не выдумывай ответ и не произноси названия инструментов.\n\n'
+)
+
 INSTRUCTIONS = (
     "You can discuss subjects beyond the briefing. Never refuse merely because a question is off topic. "
     "MANDATORY TOOL PROTOCOL: Before offering any lookup for a question outside the briefing, you MUST "

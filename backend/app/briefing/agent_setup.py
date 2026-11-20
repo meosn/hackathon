@@ -8,7 +8,7 @@ def configuration():
     return {
         "name": "Sourcera Realtime",
         "conversation_config": {
-            "realtime_model": "eleven_realtime_v1_mini",
+            "realtime_model": "eleven_realtime_v1_max",
             "asr": {"user_input_audio_format": "pcm_16000"},
             "tts": {"model_id": "eleven_flash_v2", "voice_id": "onwK4e9ZLuTAKqWW03F9", "agent_output_audio_format": "pcm_24000"},
             "language_presets": {lang: {"overrides": {"agent": {"language": lang, "first_message": ""}, "tts": {"model_id": "eleven_flash_v2_5"}}} for lang in ("ru", "de", "nl")},
@@ -21,7 +21,7 @@ def configuration():
                 "prompt": {
                     "llm": "gpt-4o-mini", "temperature": 0.2,
                     "prompt": (
-                        "You are Sourcera, a concise spoken news companion. "
+                        research.RUSSIAN_INSTRUCTIONS + "You are Sourcera, a concise spoken news companion. "
                         "Reply only in spoken prose, without markdown, citations or stage directions. "
                         "Understand Russian, English, German and Dutch; answer in the language the listener uses. "
                         "Delivery style: {{sourcera_persona}}. Style never changes facts. "
