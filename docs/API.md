@@ -11,6 +11,7 @@ All application paths begin with `/api/v1`. Use the interactive Swagger page at 
 | Briefing | POST/GET `/briefings`; GET `/briefings/{id}` and its `transcript`, `sources`, `audio` resources; POST `/briefings/{id}/retry` |
 | Feedback | PUT `/listening-history/{story_id}` and `/feedback/{story_id}` |
 | Assistant | POST `/conversations`, GET `/conversations/{id}`, POST `/conversations/{id}/messages` or `/audio`; GET `/conversations/{id}/messages/{message_id}/audio` |
+| Live voice | POST `/agent-session`, POST `/agent-context`; provider selection from GET `/health` |
 | Schedules | GET/POST `/schedules`; PATCH/DELETE `/schedules/{id}` |
 | Operations | POST `/ingestion/jobs`, GET `/ingestion/jobs/{id}`; operator-only story merge/split; GET `/metrics/costs`, `/health`, `/ready` |
 
@@ -21,6 +22,8 @@ All application paths begin with `/api/v1`. Use the interactive Swagger page at 
 For live progress, open `/api/v1/ws/briefings/{id}` on the same host. The first client frame must be JSON with a `token` property. The gateway verifies ownership and origin, then emits status changes and closes on a terminal state. The event name has the form `briefing.<status>`. Each frame includes the briefing ID, UTC timestamp and progress. Reconnecting gets the latest state. REST remains available during reconnects.
 
 Login uses JSON email/password. Registration also takes a display name. Schedule creation takes `time` in HH:MM, `timezone` as an IANA zone, and `enabled`. Conversation creation accepts an optional story or briefing context. Text turns take `{"text":"What do other sources say?"}`; voice turns use multipart field `file`.
+
+For ElevenAgents voice sessions, send optional `briefing_id`, `story_id` and `playback_seconds` in the authenticated `POST /agent-session` request. Use the returned `signed_url` to connect over WebSocket and pass the bounded `context` string in the `sourcera_context` dynamic variable. `POST /agent-context` refreshes the authorized context with the same request format. Set `more_news: true` to retrieve other recent news while excluding the specified briefing's stories.
 
 HTTP errors include `error.code`, `error.message` and `detail`. Invalid inputs return 422. The gateway bounds uploaded bytes, rate-limits expensive requests and omits request bodies and access tokens from application logging.
 

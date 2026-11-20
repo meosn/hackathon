@@ -41,6 +41,21 @@ class StartConversation(Strict):
     story_id: str | None = None
 
 
+class AgentContextRequest(Strict):
+    briefing_id: str | None = Field(default=None, min_length=1, max_length=80)
+    story_id: str | None = Field(default=None, min_length=1, max_length=80)
+    playback_seconds: float = Field(default=0, ge=0, le=86400)
+    more_news: bool = False
+
+
+class AgentContext(BaseModel):
+    context: str
+
+
+class AgentSession(AgentContext):
+    signed_url: str
+
+
 class MessageInput(Strict):
     text: str = Field(min_length=1, max_length=2000)
 

@@ -18,6 +18,7 @@ import {
   unlockVoiceAudio,
   type VoicePhase,
 } from './realtimeVoice'
+import { useElevenAgent, type AgentConversation } from '../voice/useElevenAgent'
 
 export function DailySession({
   selectedId = '',
@@ -27,6 +28,9 @@ export function DailySession({
   playRequest?: number
 }) {
   const health = useApi<Health>('/health')
+  const useAgent = health.data?.conversation_provider === 'elevenagents'
+  const agent = useElevenAgent(useAgent)
+  const live = useRef<AgentConversation | null>(null)
   const daily = useQuery({
     queryKey: ['daily-edition'],
     queryFn: () => {
@@ -129,7 +133,17 @@ export function DailySession({
     setAnswerPlaying(false)
     setPhase('')
   }
+  function stopAgent() {
+    live.current = null
+    void agent.stop()
+    setListening(false)
+    setAnswerPlaying(false)
+  }
   function stopMicrophone() {
+    if (useAgent) {
+      stopAgent()
+      return
+    }
     microphone.current?.stop()
     microphone.current = null
     void realtime.current?.setMicrophone(false)
@@ -244,11 +258,47 @@ export function DailySession({
     realtime.current = voice
     return voice
   }
+  async function startAgent() {
+    const briefingId = editionRef.current?.id
+    if (!briefingId) return null
+    if (live.current) return live.current
+    pauseLocalAudio()
+    setHasAnswer(true)
+    const session = await agent.start(
+      () => ({ briefing_id: briefingId, playback_seconds: narration.current?.currentTime || 0 }),
+      {
+        onModeChange: ({ mode }) => setAnswerPlaying(mode === 'speaking'),
+        onDisconnect: stopAgent,
+        onError: setError,
+        clientTools: {
+          resume_sourcera_briefing: () => {
+            const active = live.current
+            window.setTimeout(() => {
+              if (!active || active !== live.current) return
+              stopAgent()
+              setHasAnswer(false)
+              void narration.current?.play().catch((e) => setError(e.message))
+            }, 0)
+            return 'Resuming the prepared briefing.'
+          },
+        },
+      },
+    )
+    if (session) {
+      live.current = session
+      setListening(true)
+    }
+    return session
+  }
   async function startListening() {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     setVoiceConnecting(true)
     try {
+      if (useAgent) {
+        await startAgent()
+        return
+      }
       if (health.data?.realtime_voice) {
         const voice = await realtimeConnection()
         await voice.setMicrophone(true)
@@ -279,8 +329,12 @@ export function DailySession({
     }
   }
   async function moreNews() {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
+    if (useAgent) {
+      live.current?.sendUserMessage('Find other recent stories using get_more_sourcera_news.')
+      return
+    }
     if (health.data?.realtime_voice) {
       try {
         const voice = await realtimeConnection()
@@ -373,6 +427,12 @@ export function DailySession({
   }
   function play() {
     setError('')
+    if (useAgent && agent.status !== 'disconnected') {
+      stopAgent()
+      setHasAnswer(false)
+      void narration.current?.play().catch((e) => setError(e.message))
+      return
+    }
     resumeAfterAnswer.current = false
     if (playing || answerPlaying) {
       answer.current?.pause()
@@ -503,13 +563,13 @@ export function DailySession({
       </div>
       <div className="session-tools">
         <button
-          disabled={!url || responding || voiceConnecting}
+          disabled={!url || !health.data || responding || voiceConnecting || (useAgent && !listening)}
           onClick={() => void moreNews()}
         >
           More news
         </button>
         <button
-          disabled={!url || voiceConnecting}
+          disabled={!url || !health.data || voiceConnecting}
           className={'microphone-control' + (listening ? ' active' : '')}
           onClick={() => (listening ? stopMicrophone() : void startListening())}
           aria-label={listening ? 'Turn microphone off' : 'Turn microphone on'}
@@ -521,6 +581,7 @@ export function DailySession({
         {hasAnswer && (
           <button
             onClick={() => {
+              if (useAgent) stopAgent()
               realtime.current?.interrupt()
               cancelTurn()
               setHasAnswer(false)
@@ -537,7 +598,7 @@ export function DailySession({
         AI narration ·{' '}
         {listening
           ? 'Microphone active'
-          : 'Listen freely. Turn the mic on to join in.'}
+          : useAgent ? 'Voice chat sends microphone audio and briefing context to ElevenLabs.' : 'Listen freely. Turn the mic on to join in.'}
       </span>
       {edition?.status === 'failed' && (
         <>

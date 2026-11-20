@@ -918,6 +918,98 @@
         }
       }
     },
+    "/api/v1/agent-session": {
+      "post": {
+        "summary": "Agent Session",
+        "operationId": "agent_session_api_v1_agent_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentContextRequest",
+                "default": {
+                  "playback_seconds": 0.0,
+                  "more_news": false
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSession"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/agent-context": {
+      "post": {
+        "summary": "Agent Context",
+        "operationId": "agent_context_api_v1_agent_context_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentContextRequest",
+                "default": {
+                  "playback_seconds": 0.0,
+                  "more_news": false
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentContext"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/briefings/{briefing_id}/audio": {
       "get": {
         "summary": "Get Audio",
@@ -2158,6 +2250,82 @@
   },
   "components": {
     "schemas": {
+      "AgentContext": {
+        "properties": {
+          "context": {
+            "type": "string",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "context"
+        ],
+        "title": "AgentContext"
+      },
+      "AgentContextRequest": {
+        "properties": {
+          "briefing_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Briefing Id"
+          },
+          "story_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Id"
+          },
+          "playback_seconds": {
+            "type": "number",
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Playback Seconds",
+            "default": 0
+          },
+          "more_news": {
+            "type": "boolean",
+            "title": "More News",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AgentContextRequest"
+      },
+      "AgentSession": {
+        "properties": {
+          "context": {
+            "type": "string",
+            "title": "Context"
+          },
+          "signed_url": {
+            "type": "string",
+            "title": "Signed Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "context",
+          "signed_url"
+        ],
+        "title": "AgentSession"
+      },
       "ArticleInfo": {
         "properties": {
           "id": {

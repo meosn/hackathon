@@ -15,6 +15,7 @@ from .config import settings
 from .db import SessionLocal, load_models
 from .account_routes import router as accounts
 from .news.routes import router as news
+from .briefing.agent import conversation_provider
 from .briefing.routes import router as briefings
 
 
@@ -207,12 +208,13 @@ def health():
     from .briefing.realtime import enabled as realtime_enabled
 
     return {
-        "realtime_voice": realtime_enabled(),
+        "realtime_voice": conversation_provider() == "local" and realtime_enabled(),
         "status": "ok",
         "service": "sourcera",
         "demo_mode": settings.demo_mode,
         "news_reference_time": os.getenv("NEWS_REFERENCE_TIME"),
         "corpus": os.getenv("ACTIVE_CORPUS", "demo" if settings.demo_mode else "live"),
+        "conversation_provider": conversation_provider(),
     }
 
 

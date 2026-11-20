@@ -25,7 +25,7 @@ from app.config import settings
 from app.db import SessionLocal, get_db
 from app.messaging import emit
 from app.news.service import story_detail
-from . import service, voice, realtime
+from . import agent, realtime, service, voice
 from .accounting import account_attempts
 from . import contracts
 from .contracts import BriefingRequest, MessageInput, StartConversation
@@ -154,6 +154,31 @@ def transcript(briefing_id: str, db=Depends(get_db), user=Depends(current_user))
 def sources(briefing_id: str, db=Depends(get_db), user=Depends(current_user)):
     owned(db, Briefing, briefing_id, user.id)
     return [c for row in service.segments_for(db, briefing_id) for c in row.citations]
+
+
+@router.post("/agent-session", response_model=contracts.AgentSession)
+def agent_session(
+    response: Response,
+    data: contracts.AgentContextRequest = contracts.AgentContextRequest(),
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    agent_id, api_key = agent.require_agent()
+    context = agent.context_for(db, user.id, data)
+    response.headers["Cache-Control"] = "private, no-store"
+    return {"signed_url": agent.signed_session_url(agent_id, api_key), "context": context}
+
+
+@router.post("/agent-context", response_model=contracts.AgentContext)
+def agent_context(
+    response: Response,
+    data: contracts.AgentContextRequest = contracts.AgentContextRequest(),
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    agent.require_agent()
+    response.headers["Cache-Control"] = "private, no-store"
+    return {"context": agent.context_for(db, user.id, data)}
 
 
 def audio_response(audio):
@@ -345,6 +370,8 @@ def send_recording(
     user=Depends(current_user),
 ):
     conv = owned(db, Conversation, conversation_id, user.id, lock=True)
+    if agent.conversation_provider() == "elevenagents":
+        raise HTTPException(409, "Voice conversations use ElevenAgents")
     if story_id and conv.briefing_id:
         membership = db.scalar(
             select(BriefingItem.id).where(
@@ -414,6 +441,8 @@ def realtime_session(
     user=Depends(current_user),
 ):
     conv = owned(db, Conversation, conversation_id, user.id)
+    if agent.conversation_provider() == "elevenagents":
+        raise HTTPException(409, "Start an ElevenAgents voice session instead")
     titles = (
         list(
             db.scalars(
@@ -442,6 +471,8 @@ def realtime_evidence(
     user=Depends(current_user),
 ):
     conv = owned(db, Conversation, conversation_id, user.id, lock=True)
+    if agent.conversation_provider() == "elevenagents":
+        raise HTTPException(409, "Use the ElevenAgents context endpoint instead")
     if data.story_id:
         membership = db.scalar(
             select(BriefingItem.id).where(

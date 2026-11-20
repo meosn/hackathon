@@ -18,7 +18,7 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react'
-import { api, label, queryClient, useApi } from '../../api/client'
+import { api, label, queryClient, useApi, type Health } from '../../api/client'
 import type {
   Preferences,
   Schedule,
@@ -134,6 +134,7 @@ function SettingsForm({
   voices: Voice[]
   engines: Engine[]
 }) {
+  const elevenAgents = useApi<Health>('/health').data?.conversation_provider === 'elevenagents'
   const [prefs, setPrefs] = useState(base)
   const [time, setTime] = useState(schedule?.time.slice(0, 5) || '08:00')
   const [enabled, setEnabled] = useState(schedule?.enabled || false)
@@ -621,7 +622,7 @@ function SettingsForm({
                     </summary>
                     <div>
                       <Dropdown
-                        label="Assistant model"
+                        label={elevenAgents ? 'Text assistant model' : 'Assistant model'}
                         value={prefs.discussion_model}
                         onChange={(v) => patch('discussion_model', v)}
                       >

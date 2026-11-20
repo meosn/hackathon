@@ -9,6 +9,7 @@ import {
   unlockVoiceAudio,
   type VoicePhase,
 } from '../briefings/realtimeVoice'
+import { useElevenAgent, type AgentConversation } from '../voice/useElevenAgent'
 import { LiveMicrophone } from '../briefings/liveMicrophone'
 
 export function Assistant({ user }: { user: User }) {
@@ -34,6 +35,10 @@ function VoiceConversation({
   briefing: string | null
 }) {
   const health = useApi<Health>('/health')
+  const useAgent = health.data?.conversation_provider === 'elevenagents'
+  const agent = useElevenAgent(useAgent)
+  const live = useRef<AgentConversation | null>(null)
+  const [turns, setTurns] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [phase, setPhase] = useState<VoicePhase>('idle')
   const [listening, setListening] = useState(false)
@@ -154,11 +159,18 @@ function VoiceConversation({
     }
   }
   async function send(text: string) {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     setDraft('')
     try {
-      if (health.data?.realtime_voice) await (await connection()).sendText(text)
+      if (useAgent) {
+        if (live.current) live.current.sendUserMessage(text)
+        else {
+          const id = await ensure()
+          const reply = await api<Message>(`/conversations/${id}/messages`, 'POST', { text })
+          if (alive.current) setTurns((items) => [...items.slice(-48), text, reply.text])
+        }
+      } else if (health.data?.realtime_voice) await (await connection()).sendText(text)
       else await recordedAnswer(text)
     } catch (e) {
       if (alive.current) {
@@ -168,8 +180,35 @@ function VoiceConversation({
     }
   }
   async function toggleMicrophone() {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
+    if (useAgent) {
+      if (agent.status !== 'disconnected') {
+        live.current = null
+        void agent.stop()
+        setListening(false)
+        setPhase('idle')
+        return
+      }
+      abort.current?.abort()
+      audio.current?.pause()
+      setPhase('connecting')
+      const session = await agent.start(
+        { story_id: story || undefined, briefing_id: briefing || undefined },
+        {
+          onMessage: ({ message }) => setTurns((items) => [...items.slice(-49), message]),
+          onModeChange: ({ mode }) => setPhase(mode === 'speaking' ? 'speaking' : 'listening'),
+          onDisconnect: () => { live.current = null; setListening(false); setPhase('idle') },
+          onError: (message) => { setError(message); setPhase('idle') },
+        },
+      )
+      if (session) {
+        live.current = session
+        setListening(true)
+        setPhase('listening')
+      }
+      return
+    }
     if (listening) {
       microphone.current?.stop()
       microphone.current = null
@@ -213,6 +252,9 @@ function VoiceConversation({
     }
   }
   function restart() {
+    live.current = null
+    void agent.stop()
+    setTurns([])
     voice.current?.close()
     voice.current = null
     microphone.current?.stop()
@@ -270,10 +312,10 @@ function VoiceConversation({
             type="button"
             variant={listening ? 'outline' : 'primary'}
             aria-label={
-              listening ? 'Turn microphone off' : 'Turn microphone on'
+              useAgent ? (listening ? 'End voice session' : 'Start voice session') : (listening ? 'Turn microphone off' : 'Turn microphone on')
             }
             aria-pressed={listening}
-            disabled={phase === 'connecting'}
+            disabled={phase === 'connecting' || !health.data}
             onClick={() => void toggleMicrophone()}
           >
             {listening ? <Mic size={17} /> : <MicOff size={17} />}{' '}
@@ -313,12 +355,18 @@ function VoiceConversation({
             </button>
           </form>
         </details>
+        {useAgent && <p className="muted">Voice chat sends microphone audio and news context to ElevenLabs.</p>}
+        {turns.length > 0 && (
+          <section aria-label="Conversation transcript" aria-live="polite">
+            {turns.map((turn, index) => <p key={index}>{turn}</p>)}
+          </section>
+        )}
         <audio
           ref={audio}
           onPlay={() => setPhase('speaking')}
           onEnded={() => setPhase(listening ? 'listening' : 'idle')}
         />
-        <ErrorNote error={error} />
+        <ErrorNote error={error || health.error} />
       </Card>
     </>
   )

@@ -83,6 +83,7 @@ export type Health = {
   realtime_voice?: boolean
   news_reference_time?: string | null
   corpus?: string
+  conversation_provider?: 'elevenagents' | 'local'
 }
 export const clockTime = (s: number) => {
   const n = Math.max(0, Math.floor(Number.isFinite(s) ? s : 0))
