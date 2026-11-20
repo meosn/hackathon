@@ -102,6 +102,13 @@ def test_daily_has_three_stories_and_more_news_excludes_previous_stories(
         discussion.classify(session, conv.id, "Give me more details").intent
         != "GET_MORE_NEWS"
     )
+    standalone = Conversation(user_id=user.id, language="en")
+    session.add(standalone)
+    session.commit()
+    discussion.respond(session, standalone, "What happened this week?")
+    extra = discussion.respond(session, standalone, "More news")
+    selected = discussion.respond(session, standalone, "Explain the first story")
+    assert selected.story_id == extra.action["story_ids"][0]
 
 
 def test_aligned_speech_batches_preserve_segment_boundaries(session, monkeypatch):
@@ -237,6 +244,32 @@ def test_generated_answer_receives_history_and_validates_ids(session, monkeypatc
         discussion,
         "model_output",
         lambda *args: Answer(
+            lines=[
+                Line(
+                    story_id=story["id"],
+                    claim_id=fact["id"],
+                    text="The project costs 999999 dollars.",
+                )
+            ]
+        ),
+    )
+    text, citations = discussion.generated_answer(
+        session,
+        conv,
+        story,
+        "What happened in this story?",
+        preferences(session, user.id),
+        "EXPLAIN_STORY",
+    )
+    assert text == fact["text"] and citations
+    assert (
+        discussion.classify(session, conv.id, "What happened in this story?").intent
+        == "EXPLAIN_STORY"
+    )
+    monkeypatch.setattr(
+        discussion,
+        "model_output",
+        lambda *args: Answer(
             lines=[Line(story_id="unrelated", claim_id=fact["id"], text=fact["text"])]
         ),
     )
@@ -249,3 +282,35 @@ def test_generated_answer_receives_history_and_validates_ids(session, monkeypatc
             preferences(session, user.id),
             "FOLLOW_UP",
         )
+
+
+def test_realtime_evidence_does_not_wait_for_another_text_model(session, monkeypatch):
+    from app.briefing.contracts import Decision
+
+    user = listener(session, "realtime-grounding", "en", ["technology"])
+    from app.briefing.ranking import recommendations
+
+    sid = recommendations(session, user.id, period="week")[0]["id"]
+    conv = Conversation(user_id=user.id, story_id=sid, language="en")
+    session.add(conv)
+    session.commit()
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError(
+            "Realtime evidence must not call a second generative model"
+        )
+
+    monkeypatch.setattr(discussion, "model_output", unexpected)
+    monkeypatch.setenv("LLM_PROVIDER", "api")
+    message = discussion.respond(
+        session,
+        conv,
+        "Что произошло в этой новости?",
+        decision=Decision(
+            intent="EXPLAIN_STORY", retrieval_query="What happened in this story?"
+        ),
+        extractive=True,
+    )
+    assert message.citations
+    assert message.action["response_provider"] == "realtime_evidence"
+    assert message.story_id == sid

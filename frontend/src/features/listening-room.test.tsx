@@ -6,9 +6,9 @@ import type { ReactNode } from 'react'
 import { Auth } from './auth/Auth'
 import { SourceCitation } from '../components/UI'
 import { activeSegment, BriefingForm } from './briefings/Briefings'
-import { ChatMessage } from './assistant/Assistant'
+import { Assistant } from './assistant/Assistant'
 import { Explore } from './news/News'
-import type { Message, Segment } from '../api/types'
+import type { Segment } from '../api/types'
 import { clockTime } from '../api/client'
 const wrap = (node: ReactNode) =>
   render(
@@ -18,7 +18,7 @@ const wrap = (node: ReactNode) =>
       }
     >
       <MemoryRouter>{node}</MemoryRouter>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   )
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -29,7 +29,7 @@ beforeEach(() => {
   sessionStorage.clear()
   vi.restoreAllMocks()
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
-    () => null
+    () => null,
   )
 })
 describe('source traceability and timing', () => {
@@ -42,11 +42,11 @@ describe('source traceability and timing', () => {
           article_id: 'a',
           excerpt: 'The launch took place on Tuesday.',
         }}
-      />
+      />,
     )
     expect(screen.getByText('The launch took place on Tuesday.')).toBeVisible()
     expect(
-      screen.getByRole('link', { name: 'Original article' })
+      screen.getByRole('link', { name: 'Original article' }),
     ).toHaveAttribute('href', 'https://news.example.org/report')
   })
   it('labels a synthetic source and omits a fabricated destination', () => {
@@ -59,7 +59,7 @@ describe('source traceability and timing', () => {
           excerpt: 'A synthetic example.',
           is_synthetic: true,
         }}
-      />
+      />,
     )
     expect(screen.getByText('Synthetic source')).toBeVisible()
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
@@ -82,10 +82,10 @@ describe('listener workflows', () => {
       .mockResolvedValue(json({ access_token: 'demo-test' }))
     wrap(<Auth />)
     fireEvent.click(
-      screen.getByRole('button', { name: 'Technology enthusiast' })
+      screen.getByRole('button', { name: 'Technology enthusiast' }),
     )
     await waitFor(() =>
-      expect(sessionStorage.getItem('sourcera.session')).toBe('demo-test')
+      expect(sessionStorage.getItem('sourcera.session')).toBe('demo-test'),
     )
     expect(fetcher.mock.calls[0][0]).toBe('/api/v1/auth/demo')
     expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({
@@ -99,8 +99,8 @@ describe('listener workflows', () => {
         json(
           String(path).endsWith('topics')
             ? [{ name: 'finance', count: 1 }]
-            : { items: [], next_cursor: null }
-        )
+            : { items: [], next_cursor: null },
+        ),
       )
     wrap(<Explore />)
     await screen.findByRole('option', { name: 'Finance' })
@@ -121,9 +121,9 @@ describe('listener workflows', () => {
             'search=emissions',
             'sort=importance',
             'date_from=',
-          ].every((part) => String(p).includes(part))
-        )
-      ).toBe(true)
+          ].every((part) => String(p).includes(part)),
+        ),
+      ).toBe(true),
     )
   })
   it('submits duration, voice and language from the current profile', async () => {
@@ -145,13 +145,13 @@ describe('listener workflows', () => {
       })
     wrap(<BriefingForm />)
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Generate audio briefing' })
+      await screen.findByRole('button', { name: 'Generate audio briefing' }),
     )
     await waitFor(() =>
       expect(
         fetcher.mock.calls.find(
-          ([p, o]) => p === '/api/v1/briefings' && o?.method === 'POST'
-        )?.[1]?.body
+          ([p, o]) => p === '/api/v1/briefings' && o?.method === 'POST',
+        )?.[1]?.body,
       ).toEqual(
         JSON.stringify({
           period: 'week',
@@ -160,30 +160,22 @@ describe('listener workflows', () => {
           language: 'de',
           voice_profile_id: 'professional',
           selected_story_ids: [],
-        })
-      )
+        }),
+      ),
     )
   })
-  it('exposes source evidence and the spoken answer action', () => {
-    const speak = vi.fn()
-    const msg = {
-      id: 'm',
-      role: 'assistant',
-      text: 'The agency announced the release.',
-      action: {},
-      citations: [
-        {
-          article_id: '1',
-          source: 'Desk',
-          url: 'https://desk.example/story',
-          excerpt: 'The agency announced the release.',
-        },
-      ],
-    } as Message
-    wrap(<ChatMessage message={msg} onSpeak={speak} busy={false} />)
-    fireEvent.click(screen.getByText('View evidence (1)'))
-    expect(screen.getByText('Desk')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: 'Listen to answer' }))
-    expect(speak).toHaveBeenCalledOnce()
+  it('keeps the assistant voice-only and offers an explicit question input', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json({ realtime_voice: false }),
+    )
+    wrap(<Assistant user={{ id: 'listener' } as never} />)
+    expect(screen.getByText('A conversation, out loud.')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Turn microphone on' }),
+    ).toBeVisible()
+    expect(screen.getByLabelText('Your question')).not.toBeVisible()
+    fireEvent.click(screen.getByText('Type a question'))
+    expect(screen.getByRole('textbox', { name: 'Your question' })).toBeVisible()
+    expect(screen.queryByText('Listen to answer')).not.toBeInTheDocument()
   })
 })

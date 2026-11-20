@@ -1,97 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link, useSearchParams } from 'react-router-dom'
-import { AudioLines, Mic, MicOff, Plus, Send, Volume2 } from 'lucide-react'
-import { api, request, queryClient, useApi, type Health } from '../../api/client'
+import { useSearchParams } from 'react-router-dom'
+import { AudioLines, LoaderCircle, Mic, MicOff, Plus, Send } from 'lucide-react'
+import { api, request, useApi, type Health } from '../../api/client'
 import type { Conversation, Message, User } from '../../api/types'
-import {
-  Button,
-  Card,
-  ErrorNote,
-  Loading,
-  SourceCitation,
-} from '../../components/UI'
-import { useElevenAgent } from '../voice/useElevenAgent'
+import { Button, Card, ErrorNote } from '../../components/UI'
+import { RealtimeVoice, type VoicePhase } from '../briefings/realtimeVoice'
+import { useElevenAgent, type AgentConversation } from '../voice/useElevenAgent'
+import { LiveMicrophone } from '../briefings/liveMicrophone'
 
-type LiveTurn = { id: string; role: 'assistant' | 'user'; text: string }
-
-export function ChatMessage({
-  message: m,
-  onSpeak,
-  busy,
-}: {
-  message: Message
-  onSpeak: () => void
-  busy: boolean
-}) {
-  return (
-    <article className={'chat-message ' + m.role}>
-      <div className="chat-speaker">
-        {m.role === 'user' ? (
-          'You'
-        ) : (
-          <>
-            <AudioLines size={15} /> Sourcera
-          </>
-        )}
-      </div>
-      <p>{m.text}</p>
-      {m.action?.response_provider === 'source_search' && typeof m.action?.fallback_reason === 'string' && (
-        <small>The AI answer was unavailable. Showing source search results.</small>
-      )}
-      {m.citations?.length > 0 && (
-        <details>
-          <summary>View evidence ({m.citations.length})</summary>
-          {m.citations.map((c, i) => (
-            <SourceCitation key={i} citation={c} />
-          ))}
-        </details>
-      )}
-      {m.role !== 'user' && (
-        <div className="chat-actions">
-          {m.action?.type === 'CHANGE_PREFERENCES' && (
-            <Link className="text-link" to="/settings">
-              Open settings
-            </Link>
-          )}
-          <button className="text-link" disabled={busy} onClick={onSpeak}>
-            <Volume2 size={15} />
-            Listen to answer
-          </button>
-          {m.briefing_id && (
-            <Link className="text-link" to={'/briefings/' + m.briefing_id}>
-              Open briefing
-            </Link>
-          )}
-          {m.story_id && (
-            <Link className="text-link" to={'/stories/' + m.story_id}>
-              Open story
-            </Link>
-          )}
-        </div>
-      )}
-    </article>
-  )
-}
 export function Assistant({ user }: { user: User }) {
   const [params] = useSearchParams()
-  const story = params.get('story')
-  const briefing = params.get('briefing')
-  const key =
-    'sourcera.conversation.' +
-    user.id +
-    '.' +
-    (story && briefing ? story + '.' + briefing : story || briefing || 'general')
+  const storageKey = `sourcera.conversation.${user.id}.${params.get('story') || params.get('briefing') || 'general'}`
   return (
-    <ChatSession
-      key={key}
-      storageKey={key}
-      story={story}
-      briefing={briefing}
+    <VoiceConversation
+      key={storageKey}
+      storageKey={storageKey}
+      story={params.get('story')}
+      briefing={params.get('briefing')}
     />
   )
 }
-function ChatSession({
+
+function VoiceConversation({
   storageKey,
   story,
   briefing,
@@ -100,335 +30,331 @@ function ChatSession({
   story: string | null
   briefing: string | null
 }) {
-  const [id, setId] = useState(() => sessionStorage.getItem(storageKey) || ''),
-    [draft, setDraft] = useState(''),
-    [error, setError] = useState(''),
-    [recording, setRecording] = useState(false),
-    [audioUrl, setAudioUrl] = useState(''),
-    [speaking, setSpeaking] = useState(false)
-  const [liveTurns, setLiveTurns] = useState<LiveTurn[]>([])
-  const [agentSpeaking, setAgentSpeaking] = useState(false)
-  const recorder = useRef<MediaRecorder | null>(null),
-    stream = useRef<MediaStream | null>(null),
-    alive = useRef(true),
-    spoken = useRef<HTMLAudioElement>(null)
-  const speechRequest = useRef<AbortController | null>(null)
   const health = useApi<Health>('/health')
-  const agentEnabled = health.data?.conversation_provider === 'elevenagents'
-  const agent = useElevenAgent(agentEnabled)
-  const localVoiceEnabled = health.data?.conversation_provider === 'local'
-  const agentActive = agent.status !== 'disconnected'
-  const q = useQuery({
-    queryKey: ['conversation', id],
-    enabled: !!id,
-    queryFn: ({ signal }) =>
-      api<Conversation>('/conversations/' + id, 'GET', undefined, signal),
-  })
-  const ensure = async () => {
-    if (id) return id
-    const v = await api<Conversation>('/conversations', 'POST', {
-      briefing_id: briefing,
-      story_id: story,
-    })
-    sessionStorage.setItem(storageKey, v.id)
-    setId(v.id)
-    return v.id
-  }
-  const send = useMutation({
-    mutationFn: async (content: string | Blob) => {
-      const cid = await ensure()
-      if (typeof content === 'string')
-        await api<Message>('/conversations/' + cid + '/messages', 'POST', {
-          text: content,
-        })
-      else {
-        const data = new FormData()
-        data.set(
-          'file',
-          content,
-          'question.' + (content.type.includes('mp4') ? 'mp4' : 'webm')
-        )
-        await api<Message>('/conversations/' + cid + '/audio', 'POST', data)
-      }
-      return api<Conversation>('/conversations/' + cid)
-    },
-    onSuccess: (conv) => {
-      setDraft('')
-      queryClient.setQueryData(['conversation', conv.id], conv)
-      const action = conv.messages.at(-1)?.action?.type
-      if (action === 'STOP_PLAYBACK') spoken.current?.pause()
-      if (action === 'CHANGE_VOICE')
-        queryClient.invalidateQueries({ queryKey: ['/users/me/preferences'] })
-    },
-  })
+  const useAgent = health.data?.conversation_provider === 'elevenagents'
+  const agent = useElevenAgent(useAgent)
+  const live = useRef<AgentConversation | null>(null)
+  const [turns, setTurns] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  const [phase, setPhase] = useState<VoicePhase>('idle')
+  const [listening, setListening] = useState(false)
+  const [error, setError] = useState('')
+  const alive = useRef(true)
+  const voice = useRef<RealtimeVoice | null>(null)
+  const microphone = useRef<LiveMicrophone | null>(null)
+  const conversation = useRef<Promise<string> | null>(null)
+  const audio = useRef<HTMLAudioElement>(null)
+  const audioUrl = useRef('')
+  const abort = useRef<AbortController | null>(null)
+
   useEffect(() => {
     alive.current = true
     return () => {
       alive.current = false
-      speechRequest.current?.abort()
-      if (recorder.current?.state === 'recording') {
-        recorder.current.onstop = null
-        recorder.current.stop()
-      }
-      stream.current?.getTracks().forEach((t) => t.stop())
+      voice.current?.close()
+      microphone.current?.stop()
+      abort.current?.abort()
+      if (audioUrl.current) URL.revokeObjectURL(audioUrl.current)
     }
   }, [])
-  useEffect(
-    () => () => {
-      if (audioUrl) URL.revokeObjectURL(audioUrl)
-    },
-    [audioUrl]
-  )
-  async function mic() {
-    setError('')
-    if (agentActive) {
-      agent.stop()
-      return
+
+  async function ensure() {
+    if (!conversation.current) {
+      const existing = sessionStorage.getItem(storageKey)
+      conversation.current = existing
+        ? Promise.resolve(existing)
+        : api<Conversation>('/conversations', 'POST', {
+            story_id: story,
+            briefing_id: briefing,
+          }).then((c) => {
+            sessionStorage.setItem(storageKey, c.id)
+            return c.id
+          })
     }
-    if (agentEnabled) {
-      speechRequest.current?.abort()
-      setSpeaking(false)
-      spoken.current?.pause()
-      setAudioUrl('')
-      setLiveTurns([])
-      setAgentSpeaking(false)
-      await agent.start(
-        {
-          briefing_id: briefing || undefined,
-          story_id: story || undefined,
-        },
-        {
-          onMessage: ({ message, role, event_id }) => {
-            if (!message.trim()) return
-            setLiveTurns((turns) => [
-              ...turns.slice(-49),
-              {
-                id: role + '-' + event_id,
-                role: role === 'user' ? 'user' : 'assistant',
-                text: message,
-              },
-            ])
-          },
-          onModeChange: ({ mode }) => setAgentSpeaking(mode === 'speaking'),
-          onError: setError,
-        }
-      )
-      return
-    }
-    if (recorder.current?.state === 'recording') {
-      recorder.current.stop()
-      return
-    }
-    if (!localVoiceEnabled) return
     try {
-      if (
-        !navigator.mediaDevices?.getUserMedia ||
-        typeof MediaRecorder === 'undefined'
-      )
-        throw Error(
-          'Microphone recording requires a supported browser on localhost or HTTPS.'
-        )
-      const media = await navigator.mediaDevices.getUserMedia({ audio: true })
-      if (!alive.current) {
-        media.getTracks().forEach((t) => t.stop())
-        return
-      }
-      stream.current = media
-      const r = new MediaRecorder(media)
-      recorder.current = r
-      const chunks: BlobPart[] = []
-      r.ondataavailable = (e) => {
-        if (e.data.size) chunks.push(e.data)
-      }
-      r.onstop = () => {
-        media.getTracks().forEach((t) => t.stop())
-        if (!alive.current) return
-        setRecording(false)
-        if (chunks.length) send.mutate(new Blob(chunks, { type: r.mimeType }))
-      }
-      r.start()
-      setRecording(true)
+      return await conversation.current
     } catch (e) {
-      stream.current?.getTracks().forEach((t) => t.stop())
-      setError(e instanceof Error ? e.message : 'Microphone unavailable.')
+      conversation.current = null
+      throw e
     }
   }
-  async function speak(m: Message) {
-    setError('')
-    setSpeaking(true)
-    const controller = new AbortController()
-    speechRequest.current = controller
+  async function connection() {
+    if (voice.current?.ready) return voice.current
+    const id = await ensure()
+    if (!alive.current) throw new DOMException('Aborted', 'AbortError')
+    voice.current?.close()
+    return (voice.current = new RealtimeVoice(id, {
+      phase: (p) => {
+        if (alive.current) setPhase(p)
+      },
+      microphone: (value) => {
+        if (alive.current) setListening(value)
+      },
+      interrupt: () => {
+        audio.current?.pause()
+        abort.current?.abort()
+      },
+      story: () => undefined,
+      action: () => {},
+      finished: () => {},
+      failed: (message) => {
+        if (alive.current) {
+          setError(message)
+          setPhase('idle')
+        }
+      },
+    }))
+  }
+  async function recordedAnswer(input: string | Blob) {
+    abort.current?.abort()
+    const controller = (abort.current = new AbortController())
+    audio.current?.pause()
+    setPhase('thinking')
     try {
-      const r = await request(
-        '/conversations/' + id + '/messages/' + m.id + '/audio',
+      const cid = await ensure()
+      const data = typeof input === 'string' ? { text: input } : new FormData()
+      if (data instanceof FormData && input instanceof Blob)
+        data.set(
+          'file',
+          input,
+          input.type.includes('mp4') ? 'question.m4a' : 'question.webm',
+        )
+      const message = await api<Message>(
+        `/conversations/${cid}/${typeof input === 'string' ? 'messages' : 'audio'}`,
+        'POST',
+        data,
+        controller.signal,
+      )
+      const response = await request(
+        `/conversations/${cid}/messages/${message.id}/audio`,
         'GET',
         undefined,
-        controller.signal
+        controller.signal,
       )
-      const blob = await r.blob()
+      const blob = await response.blob()
+      if (!alive.current || controller.signal.aborted) return
+      if (audioUrl.current) URL.revokeObjectURL(audioUrl.current)
+      audioUrl.current = URL.createObjectURL(blob)
+      audio.current!.src = audioUrl.current
+      await audio.current!.play()
+    } catch (e) {
       if (alive.current && !controller.signal.aborted) {
-        setAudioUrl(URL.createObjectURL(blob))
+        setError(
+          e instanceof Error
+            ? e.message
+            : 'Spoken answer unavailable. Please try again.',
+        )
+        setPhase('idle')
+      }
+    }
+  }
+  async function send(text: string) {
+    setError('')
+    setDraft('')
+    try {
+      if (useAgent) {
+        if (live.current) live.current.sendUserMessage(text)
+        else {
+          const id = await ensure()
+          const reply = await api<Message>(`/conversations/${id}/messages`, 'POST', { text })
+          if (alive.current) setTurns((items) => [...items.slice(-48), text, reply.text])
+        }
+      } else if (health.data?.realtime_voice) await (await connection()).sendText(text)
+      else await recordedAnswer(text)
+    } catch (e) {
+      if (alive.current) {
+        setError(e instanceof Error ? e.message : 'Voice connection failed.')
+        setPhase('idle')
+      }
+    }
+  }
+  async function toggleMicrophone() {
+    setError('')
+    if (useAgent) {
+      if (agent.status !== 'disconnected') {
+        live.current = null
+        void agent.stop()
+        setListening(false)
+        setPhase('idle')
+        return
+      }
+      abort.current?.abort()
+      audio.current?.pause()
+      setPhase('connecting')
+      const session = await agent.start(
+        { story_id: story || undefined, briefing_id: briefing || undefined },
+        {
+          onMessage: ({ message }) => setTurns((items) => [...items.slice(-49), message]),
+          onModeChange: ({ mode }) => setPhase(mode === 'speaking' ? 'speaking' : 'listening'),
+          onDisconnect: () => { live.current = null; setListening(false); setPhase('idle') },
+          onError: (message) => { setError(message); setPhase('idle') },
+        },
+      )
+      if (session) {
+        live.current = session
+        setListening(true)
+        setPhase('listening')
+      }
+      return
+    }
+    if (listening) {
+      microphone.current?.stop()
+      microphone.current = null
+      await voice.current?.setMicrophone(false)
+      setListening(false)
+      return
+    }
+    setPhase('connecting')
+    try {
+      if (health.data?.realtime_voice)
+        await (await connection()).setMicrophone(true)
+      else {
+        const mic = new LiveMicrophone(
+          () => {
+            audio.current?.pause()
+            abort.current?.abort()
+            setPhase('listening')
+          },
+          (blob) => void recordedAnswer(blob),
+          (message) => {
+            setError(message)
+            setListening(false)
+            microphone.current = null
+          },
+        )
+        microphone.current = mic
+        await mic.start()
+        if (alive.current) {
+          setListening(true)
+          setPhase('listening')
+        }
       }
     } catch (e) {
-      if (!controller.signal.aborted)
-        setError(e instanceof Error ? e.message : 'Audio unavailable.')
-    } finally {
-      if (alive.current && !controller.signal.aborted) setSpeaking(false)
+      voice.current?.close()
+      voice.current = null
+      microphone.current?.stop()
+      microphone.current = null
+      setListening(false)
+      setPhase('idle')
+      setError(e instanceof Error ? e.message : 'Microphone access failed.')
     }
   }
   function restart() {
-    agent.stop()
-    speechRequest.current?.abort()
+    live.current = null
+    void agent.stop()
+    setTurns([])
+    voice.current?.close()
+    voice.current = null
+    microphone.current?.stop()
+    microphone.current = null
+    abort.current?.abort()
+    audio.current?.pause()
+    conversation.current = null
     sessionStorage.removeItem(storageKey)
-    setId('')
-    setAudioUrl('')
-    setSpeaking(false)
-    setLiveTurns([])
+    setPhase('idle')
+    setListening(false)
     setDraft('')
     setError('')
-    send.reset()
   }
-  const busy = send.isPending || recording
-  const textBusy = busy || agentActive
-  const inactiveMicLabel = agentEnabled ? 'Start voice session' : 'Record question'
-  const micLabel = agentActive
-    ? 'End voice session'
-    : recording ? 'Finish recording' : inactiveMicLabel
+  const busy = phase === 'thinking' || phase === 'connecting'
   return (
     <>
       <header className="page-heading">
         <div className="eyebrow">VOICE ASSISTANT</div>
         <h1>Ask Sourcera</h1>
-        <p>Explore the reporting behind your news, by text or voice.</p>
+        <p>A conversation, out loud.</p>
       </header>
-      <Card className="chat">
+      <Card className="voice-conversation">
         <div className="section-heading">
           <h2>
             {story
-              ? 'Story discussion'
+              ? 'About this story'
               : briefing
-                ? 'Briefing discussion'
-                : 'Conversation'}
+                ? 'About this briefing'
+                : 'Your news companion'}
           </h2>
-          <Button variant="quiet" disabled={busy} onClick={restart}>
-            <Plus size={16} />
-            New chat
+          <Button variant="quiet" onClick={restart}>
+            <Plus size={16} /> New chat
           </Button>
         </div>
-        {story && (
-          <Link className="text-link" to={'/stories/' + story}>
-            View current story
-          </Link>
-        )}
-        {briefing && (
-          <Link className="text-link" to={'/briefings/' + briefing}>
-            View current briefing
-          </Link>
-        )}
-        {q.isFetching && !q.data && <Loading />}
-        {!q.data?.messages.length && !liveTurns.length && (
-          <div className="assistant-intro">
-            <span className="round-icon">
-              <AudioLines size={25} />
-            </span>
-            <h3>What would you like to hear?</h3>
-            <div className="chips">
-              {(story || briefing
-                ? ['What do other sources say?', 'Give me more details.', 'More news']
-                : [
-                    "Tell me today's news.",
-                    'What happened this week?',
-                    'Tell me about AI.',
-                  ]
-              ).map((t) => (
-                <button disabled={textBusy} key={t} onClick={() => send.mutate(t)}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {q.data?.messages.map((m) => (
-          <ChatMessage
-            key={m.id}
-            message={m}
-            busy={speaking || agentActive}
-            onSpeak={() => speak(m)}
-          />
-        ))}
-        {liveTurns.length > 0 && (
-          <section aria-label="Live voice transcript" aria-live="polite">
-            <h3>Live voice transcript</h3>
-            {liveTurns.map((turn) => (
-              <article key={turn.id} className={'chat-message ' + turn.role}>
-                <div className="chat-speaker">
-                  {turn.role === 'user' ? 'You' : 'Sourcera'}
-                </div>
-                <p>{turn.text}</p>
-              </article>
-            ))}
+        <div className={'voice-orb ' + phase} aria-hidden="true">
+          {busy ? (
+            <LoaderCircle size={38} className="spin" strokeWidth={1} />
+          ) : (
+            <AudioLines size={46} strokeWidth={1} />
+          )}
+        </div>
+        <p className="voice-conversation-status" role="status">
+          {phase === 'connecting'
+            ? 'Connecting voice…'
+            : phase === 'thinking'
+              ? 'Thinking…'
+              : phase === 'speaking'
+                ? 'Speaking'
+                : listening
+                  ? 'Listening · ask a question'
+                  : 'Turn on the mic, or choose what to hear.'}
+        </p>
+        <div className="voice-conversation-controls">
+          <Button
+            type="button"
+            variant={listening ? 'outline' : 'primary'}
+            aria-label={
+              useAgent ? (listening ? 'End voice session' : 'Start voice session') : (listening ? 'Turn microphone off' : 'Turn microphone on')
+            }
+            aria-pressed={listening}
+            disabled={phase === 'connecting' || !health.data}
+            onClick={() => void toggleMicrophone()}
+          >
+            {listening ? <Mic size={17} /> : <MicOff size={17} />}{' '}
+            {listening ? 'Mic on' : 'Start talking'}
+          </Button>
+          <Button
+            type="button"
+            variant="quiet"
+            disabled={busy}
+            onClick={() => void send('More news')}
+          >
+            More news
+          </Button>
+        </div>
+        <details className="voice-text-input">
+          <summary>Type a question</summary>
+          <form
+            className="composer"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (draft.trim() && !busy) void send(draft.trim())
+            }}
+          >
+            <input
+              aria-label="Your question"
+              placeholder="Ask about your news…"
+              maxLength={2000}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <button
+              className="send"
+              aria-label="Send question"
+              disabled={busy || !draft.trim()}
+            >
+              <Send size={17} />
+            </button>
+          </form>
+        </details>
+        {useAgent && <p className="muted">Voice chat sends microphone audio and news context to ElevenLabs.</p>}
+        {turns.length > 0 && (
+          <section aria-label="Conversation transcript" aria-live="polite">
+            {turns.map((turn, index) => <p key={index}>{turn}</p>)}
           </section>
         )}
-        {audioUrl && (
-          <div>
-            <audio
-              key={audioUrl}
-              ref={spoken}
-              src={audioUrl}
-              controls
-              autoPlay
-            />
-            <small className="muted">AI-generated narration</small>
-          </div>
-        )}
-        {send.isPending && <Loading>Finding evidence…</Loading>}
-        <ErrorNote error={send.error || q.error || error || health.error} />
-        <form
-          className="composer"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (draft.trim() && !textBusy) send.mutate(draft.trim())
-          }}
-        >
-          <input
-            aria-label="Your question"
-            placeholder="Ask about your news…"
-            value={draft}
-            maxLength={2000}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <button
-            type="button"
-            className={'icon ' + (recording || agentActive ? 'recording' : '')}
-            disabled={send.isPending || !(agentActive || recording || agentEnabled || localVoiceEnabled)}
-            aria-label={micLabel}
-            onClick={mic}
-          >
-            {recording || agentActive ? <MicOff size={20} /> : <Mic size={20} />}
-          </button>
-          <button
-            type="submit"
-            className="send"
-            disabled={textBusy || !draft.trim()}
-            aria-label="Send question"
-          >
-            <Send size={17} />
-          </button>
-        </form>
-        {recording && (
-          <p role="status" className="muted">
-            Recording… Press the microphone again to send.
-          </p>
-        )}
-        {agentEnabled && (
-          <p role="status" className="muted">
-            {agent.status === 'connecting'
-              ? 'Connecting to ElevenLabs…'
-              : agent.status === 'connected'
-                ? agentSpeaking ? 'Sourcera is speaking…' : 'Listening…'
-                : 'Live voice uses ElevenLabs.'}
-          </p>
-        )}
+        <audio
+          ref={audio}
+          onPlay={() => setPhase('speaking')}
+          onEnded={() => setPhase(listening ? 'listening' : 'idle')}
+        />
+        <ErrorNote error={error || health.error} />
       </Card>
     </>
   )

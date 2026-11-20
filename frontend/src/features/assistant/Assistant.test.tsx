@@ -1,12 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { User } from '../../api/types'
 import { useElevenAgent } from '../voice/useElevenAgent'
 import { Assistant } from './Assistant'
 
 vi.mock('../voice/useElevenAgent')
+
+beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+})
 
 afterEach(() => {
   vi.restoreAllMocks()

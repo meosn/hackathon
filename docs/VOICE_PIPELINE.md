@@ -1,4 +1,4 @@
-# Speech, transcripts and conversations
+# Streamed voice conversations
 
 ## ElevenAgents speech-to-speech
 
@@ -54,6 +54,26 @@ Licensed news exports are excluded from ElevenAgents context by default. Set `EL
 ### Local demo and text chat
 
 The configured conversation provider receives the current story, briefing and topic, listener preferences, recent messages and retrieved evidence. Neural article embeddings support cross-language retrieval. Structured answers cite an allowlisted claim per sentence and pass the database-backed wording/evidence gate. The router resolves follow-up references from recent history. Provider or verification failures return source search with a visible fallback indicator.
+
+### Alternative realtime provider
+
+With `REALTIME_ENABLED=1`, both the listening room and Ask Sourcera use OpenAI Realtime over WebRTC. The default model is `gpt-realtime-2.1` and the default voice is `marin`. `OPENAI_API_KEY` falls back to `LLM_API_KEY`. The authenticated server exchanges the browser SDP for an answer at OpenAI’s `/v1/realtime/calls`. No provider key or ephemeral credential is sent to the browser.
+
+Audio travels directly over WebRTC. Semantic VAD detects complete utterances and handles interruptions, with browser echo cancellation and near-field noise reduction. Questions are understood from their audio without a separate forced-language transcription request. The assistant answers in the language just spoken, including Russian. All replies and More news use audio output only. The interface displays connection/playback status, never generated answer text.
+
+Before answering, the model calls `news_evidence`. Its typed intent goes to the listener-owned conversation endpoint, which retrieves and verifies original claims without another text-model round trip. Source exclusions, current playback context, additional-story context, and no-repeat news selection remain on the server. The model turns the returned evidence into concise spoken answers. These streamed paraphrases follow grounding instructions; they do not pass the separate post-generation sentence verifier used for prepared editions. Source evidence and tool interactions remain in the conversation record.
+
+The microphone switch releases only input tracks. It never cancels a response or pauses playback. Starting narration requests no microphone permission. More news can negotiate a receive-capable connection without a microphone, and microphone input can be attached later. Idle connections close after two minutes with input off. Route changes and sign-out release tracks, peer connections, pending requests and object URLs.
+
+When Realtime is disabled, the local profile keeps the recorded-question and authenticated synthesized-audio path. More news can use this path if Realtime negotiation fails. Replies are still played automatically and their text stays hidden. Streamed voice usage is billed by the provider; the existing recording/TTS ledger does not measure WebRTC audio token usage.
+
+[OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc?api=realtime) · [Semantic VAD](https://developers.openai.com/api/docs/guides/realtime-vad)
+
+## Prepared speech and recorded conversations
+
+The configured conversation provider receives the current story, briefing and topic, listener preferences, recent messages and retrieved evidence. Neural article embeddings support cross-language retrieval. Structured answers cite an allowlisted claim per sentence and pass the database-backed wording/evidence gate. The router resolves follow-up references from recent history. Recorded-answer provider or verification failures recover to verified source wording. Conversation screens play replies aloud and never render their text.
+
+Current-story questions preserve the selected conversation story, including stories added through **More news**. Unsupported conversational rewrites recover to the cited source wording and pass the evidence gate again. Invalid claim identities and invalid stored evidence still block the generated response.
 
 Prepared daily editions contain the three highest-ranked eligible stories when three are available. The `story_limit` request field also supports explicitly bounded custom editions. The listening room offers **More news**, and the voice router recognizes equivalent requests in English, German, Dutch and Russian. Each request selects up to three additional stories, excluding the original briefing and earlier conversation selections.
 

@@ -26,3 +26,10 @@ Login uses JSON email/password. Registration also takes a display name. Schedule
 For ElevenAgents voice sessions, send optional `briefing_id`, `story_id` and `playback_seconds` in the authenticated `POST /agent-session` request. Use the returned `signed_url` to connect over WebSocket and pass the bounded `context` string in the `sourcera_context` dynamic variable. `POST /agent-context` refreshes the authorized context with the same request format. Set `more_news: true` to retrieve other recent news while excluding the specified briefing's stories.
 
 HTTP errors include `error.code`, `error.message` and `detail`. Invalid inputs return 422. The gateway bounds uploaded bytes, rate-limits expensive requests and omits request bodies and access tokens from application logging.
+
+
+## Streamed audio
+
+`POST /conversations/{id}/realtime` accepts `{ "sdp": "<WebRTC offer>" }` and returns `application/sdp`. It requires the conversation owner, `REALTIME_ENABLED=1` and a configured OpenAI key. Provider credentials stay on the server. `GET /health` advertises `realtime_voice`.
+
+`POST /conversations/{id}/realtime-evidence` accepts `{ "question": "…", "decision": { "intent": "EXPLAIN_STORY", "retrieval_query": "standalone English search question" }, "story_id": "optional current briefing story" }`. The supplied playback story must belong to this conversation’s briefing. The response contains verified evidence and a playback action, used internally by the audio model, never rendered as a chat bubble.

@@ -205,7 +205,10 @@ app.add_middleware(
 
 @app.get(prefix + "/health")
 def health():
+    from .briefing.realtime import enabled as realtime_enabled
+
     return {
+        "realtime_voice": conversation_provider() == "local" and realtime_enabled(),
         "status": "ok",
         "service": "sourcera",
         "demo_mode": settings.demo_mode,

@@ -1436,6 +1436,107 @@
         }
       }
     },
+    "/api/v1/conversations/{conversation_id}/realtime": {
+      "post": {
+        "summary": "Realtime Session",
+        "operationId": "realtime_session_api_v1_conversations__conversation_id__realtime_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Offer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversation_id}/realtime-evidence": {
+      "post": {
+        "summary": "Realtime Evidence",
+        "operationId": "realtime_evidence_api_v1_conversations__conversation_id__realtime_evidence_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Turn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sources": {
       "get": {
         "tags": [
@@ -2853,6 +2954,82 @@
         ],
         "title": "CostReport"
       },
+      "Decision": {
+        "properties": {
+          "intent": {
+            "type": "string",
+            "enum": [
+              "GET_LATEST_NEWS",
+              "GET_PERIOD_NEWS",
+              "GET_MORE_NEWS",
+              "FILTER_TOPIC",
+              "SELECT_STORY",
+              "EXPLAIN_STORY",
+              "COMPARE_SOURCES",
+              "FOLLOW_UP",
+              "CHANGE_VOICE",
+              "CHANGE_PREFERENCES",
+              "SKIP_STORY",
+              "STOP_PLAYBACK",
+              "RESUME_PLAYBACK"
+            ],
+            "title": "Intent"
+          },
+          "ordinal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordinal"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Period",
+            "default": "day"
+          },
+          "retrieval_query": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieval Query"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "intent"
+        ],
+        "title": "Decision"
+      },
       "Demo": {
         "properties": {
           "profile": {
@@ -3432,6 +3609,22 @@
           "name"
         ],
         "title": "Name"
+      },
+      "Offer": {
+        "properties": {
+          "sdp": {
+            "type": "string",
+            "maxLength": 65536,
+            "minLength": 20,
+            "title": "Sdp"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sdp"
+        ],
+        "title": "Offer"
       },
       "Page": {
         "properties": {
@@ -4222,6 +4415,38 @@
           "transcription"
         ],
         "title": "TranscribedReply"
+      },
+      "Turn": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/Decision"
+          },
+          "story_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question",
+          "decision"
+        ],
+        "title": "Turn"
       },
       "ValidationError": {
         "properties": {

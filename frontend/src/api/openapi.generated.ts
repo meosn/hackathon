@@ -554,6 +554,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/conversations/{conversation_id}/realtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Realtime Session */
+        post: operations["realtime_session_api_v1_conversations__conversation_id__realtime_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/conversations/{conversation_id}/realtime-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Realtime Evidence */
+        post: operations["realtime_evidence_api_v1_conversations__conversation_id__realtime_evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources": {
         parameters: {
             query?: never;
@@ -1004,6 +1038,26 @@ export interface components {
             /** Pricing Note */
             pricing_note: string;
         };
+        /** Decision */
+        Decision: {
+            /**
+             * Intent
+             * @enum {string}
+             */
+            intent: "GET_LATEST_NEWS" | "GET_PERIOD_NEWS" | "GET_MORE_NEWS" | "FILTER_TOPIC" | "SELECT_STORY" | "EXPLAIN_STORY" | "COMPARE_SOURCES" | "FOLLOW_UP" | "CHANGE_VOICE" | "CHANGE_PREFERENCES" | "SKIP_STORY" | "STOP_PLAYBACK" | "RESUME_PLAYBACK";
+            /** Ordinal */
+            ordinal?: number | null;
+            /** Topic */
+            topic?: string | null;
+            /**
+             * Period
+             * @default day
+             * @enum {string}
+             */
+            period: "day" | "week" | "month";
+            /** Retrieval Query */
+            retrieval_query?: string | null;
+        };
         /** Demo */
         Demo: {
             /**
@@ -1216,6 +1270,11 @@ export interface components {
         Name: {
             /** Name */
             name: string;
+        };
+        /** Offer */
+        Offer: {
+            /** Sdp */
+            sdp: string;
         };
         /** Page */
         Page: {
@@ -1460,6 +1519,14 @@ export interface components {
             /** Transcription */
             transcription: string;
         };
+        /** Turn */
+        Turn: {
+            /** Question */
+            question: string;
+            decision: components["schemas"]["Decision"];
+            /** Story Id */
+            story_id?: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1500,6 +1567,7 @@ export type SchemaBriefingView = components['schemas']['BriefingView'];
 export type SchemaCitation = components['schemas']['Citation'];
 export type SchemaConversationView = components['schemas']['ConversationView'];
 export type SchemaCostReport = components['schemas']['CostReport'];
+export type SchemaDecision = components['schemas']['Decision'];
 export type SchemaDemo = components['schemas']['Demo'];
 export type SchemaDetail = components['schemas']['Detail'];
 export type SchemaDisagreementInfo = components['schemas']['DisagreementInfo'];
@@ -1517,6 +1585,7 @@ export type SchemaMerge = components['schemas']['Merge'];
 export type SchemaMessageInput = components['schemas']['MessageInput'];
 export type SchemaMessageView = components['schemas']['MessageView'];
 export type SchemaName = components['schemas']['Name'];
+export type SchemaOffer = components['schemas']['Offer'];
 export type SchemaPage = components['schemas']['Page'];
 export type SchemaPreferencePatch = components['schemas']['PreferencePatch'];
 export type SchemaPreferenceView = components['schemas']['PreferenceView'];
@@ -1535,6 +1604,7 @@ export type SchemaStoryInfo = components['schemas']['StoryInfo'];
 export type SchemaTopicInfo = components['schemas']['TopicInfo'];
 export type SchemaTopicSelection = components['schemas']['TopicSelection'];
 export type SchemaTranscribedReply = components['schemas']['TranscribedReply'];
+export type SchemaTurn = components['schemas']['Turn'];
 export type SchemaValidationError = components['schemas']['ValidationError'];
 export type SchemaVoiceView = components['schemas']['VoiceView'];
 export type $defs = Record<string, never>;
@@ -2605,6 +2675,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    realtime_session_api_v1_conversations__conversation_id__realtime_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Offer"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    realtime_evidence_api_v1_conversations__conversation_id__realtime_evidence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Turn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageView"];
+                };
             };
             /** @description Validation Error */
             422: {
