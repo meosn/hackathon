@@ -12,7 +12,9 @@ OpenAI trial credits belong to the billed OpenAI organization, not to an individ
 
 ## 2. Configure Sourcera
 
-From the repository root, copy the template only if you have not already configured your local environment:
+**Recommended:** On the machine running Docker Compose, run `python3 scripts/configure_openai.py` and paste your *newly rotated* API key into the hidden prompt. The helper updates the local, ignored `.env`, retains other settings, and never prints the secret. Then proceed to step 3.
+
+**Alternatively, configure manually:** From the repository root, copy the template only if you have not already configured your local environment:
 
 ```bash
 cp .env.example .env
