@@ -193,3 +193,5 @@ def test_both_voice_engines_can_offer_and_perform_research():
             "search",
             "cancel",
         ]
+        assert tool["parameters"]["properties"]["action"]["description"]
+    assert "additionalProperties" not in eleven["tools"][-1]["parameters"]

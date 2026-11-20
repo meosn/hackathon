@@ -40,7 +40,10 @@ DESCRIPTION = (
 PARAMETERS = {
     "type": "object",
     "properties": {
-        "action": {"type": "string", "enum": ["offer", "search", "cancel"]},
+        "action": {
+            "type": "string", "enum": ["offer", "search", "cancel"],
+            "description": "Offer a topic first; search only after agreement, or cancel after refusal.",
+        },
         "query": {
             "type": "string",
             "description": "Standalone topic in the listener's language; required only for offer.",

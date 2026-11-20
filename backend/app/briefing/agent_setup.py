@@ -44,7 +44,8 @@ def configuration():
                         ]
                     ] + [{"type": "client", "name": "research_topic", "description": research.DESCRIPTION,
                           "expects_response": True, "response_timeout_secs": 45,
-                          "parameters": research.PARAMETERS}],
+                          "parameters": {key: value for key, value in research.PARAMETERS.items()
+                                         if key != "additionalProperties"}}],
                 },
             },
         },
