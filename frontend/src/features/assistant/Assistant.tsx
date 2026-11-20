@@ -159,7 +159,7 @@ function VoiceConversation({
     }
   }
   async function send(text: string) {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     setDraft('')
     try {
@@ -180,7 +180,7 @@ function VoiceConversation({
     }
   }
   async function toggleMicrophone() {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     if (useAgent) {
       if (agent.status !== 'disconnected') {

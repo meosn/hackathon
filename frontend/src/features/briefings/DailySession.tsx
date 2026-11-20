@@ -291,7 +291,7 @@ export function DailySession({
     return session
   }
   async function startListening() {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     setVoiceConnecting(true)
     try {
@@ -329,7 +329,7 @@ export function DailySession({
     }
   }
   async function moreNews() {
-    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+    if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     if (useAgent) {
       live.current?.sendUserMessage('Find other recent stories using get_more_sourcera_news.')
