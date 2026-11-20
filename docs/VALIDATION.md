@@ -1,5 +1,19 @@
 # Executed validation
 
+## Hosted Newstex deployment, 20 November 2026
+
+The supplied challenge archive contained 1,740 records. All eight prepared import files completed through RabbitMQ/Celery. Exact deduplication retained 1,736 articles and removed four duplicates. The resulting active corpus contains 1,554 stories, 15,416 source-supported statements and 314 statements flagged as conflicting. Conflict markers describe the pipeline's source comparison results.
+
+The hosted installation uses PostgreSQL/pgvector, Redis, RabbitMQ, Celery workers and Beat, MinIO, FastAPI and a production frontend served by Nginx. Migration preserved 835 existing records and their referenced audio. HTTPS remains configured on the separate Sourcera hostname. The existing qr.me site continued returning HTTP 200.
+
+The final backend suite passed 56 tests. Nine frontend tests, three Chrome browser scenarios and the TypeScript/Vite build passed. Added checks cover Newstex field mapping, private licensed article text, generated-answer history and citation allowlists, unsupported numeric rewrites, safe source-wording recovery, resumable analysis batches, aligned batched speech, three-story daily editions and additional selections without repeated stories.
+
+Live provider checks used GPT-4o mini and ElevenLabs with operator-supplied credentials. A virtual microphone in Chrome submitted a spoken question on the hosted site. Narration paused, Scribe transcribed the question, the API returned an answer with four citations and ElevenLabs speech played. Disabling the microphone released its media tracks. A separate unsupported-question check returned zero citations. Physical microphone acoustics require device testing.
+
+Daily templates in English and German completed with three stories each. The affected existing listener's prepared edition was verified playing in Chrome. Two successive additional-news requests returned three new stories apiece, with no overlap with the daily edition or preceding selection. Licensed full article text remained inaccessible through the article API. Archive dates remain unchanged, and the UI discloses the latest publication timestamp of 19 November 2026.
+
+Token, character and timing observations feed the cost ledger. Published unit prices produce estimates, and calls without sufficient billing information remain visibly unpriced. Historical validation entries below describe earlier configurations.
+
 Validation date is 20 November 2026. The project was built in an isolated directory in the existing hackathon workspace. The application used synthetic input. Original source mirror files were read only.
 
 | Check | Executed command or action | Result |

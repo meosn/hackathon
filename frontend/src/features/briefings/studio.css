@@ -356,13 +356,47 @@
   font-variant-numeric: tabular-nums;
 }
 .compact-timeline input {
-  width: 100%;
-  height: 3px;
-  accent-color: #d9eaa5;
+  flex: 1;
+  width: 0;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
+}
+.compact-timeline input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #41463b;
+}
+.compact-timeline input::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: #f4f5e9;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.compact-timeline input::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #41463b;
+}
+.compact-timeline input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: #f4f5e9;
 }
 .session-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 22px;

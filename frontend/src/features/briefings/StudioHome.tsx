@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { AudioLines, Check, Play } from 'lucide-react'
 import { api, clockTime, niceDate, queryClient, useApi } from '../../api/client'
+import type { Health } from '../../api/client'
 import type { Briefing, Preferences, User } from '../../api/types'
 import { ErrorNote } from '../../components/UI'
 import { DailySession } from './DailySession'
@@ -46,6 +47,7 @@ export function StudioHome({ user }: { user: User }) {
   }, [])
   const prefs = useApi<Preferences>('/users/me/preferences')
   const briefs = useApi<Briefing[]>('/briefings')
+  const health = useApi<Health>('/health')
   const [selectedId, setSelectedId] = useState('')
   const [playRequest, setPlayRequest] = useState(0)
   const [voiceChanged, setVoiceChanged] = useState(false)
@@ -75,7 +77,10 @@ export function StudioHome({ user }: { user: User }) {
   })
   const generate = useMutation({
     mutationFn: (period: 'day' | 'week') =>
-      api<{ briefing_id: string }>('/briefings', 'POST', { period }),
+      api<{ briefing_id: string }>('/briefings', 'POST', {
+        period,
+        ...(period === 'day' ? { story_limit: 3 } : {}),
+      }),
     onSuccess: (r) => {
       selectEpisode(r.briefing_id)
       setVoiceChanged(false)
@@ -161,8 +166,8 @@ export function StudioHome({ user }: { user: User }) {
                   <Play size={18} fill="currentColor" />
                 </span>
               </span>
-              <strong>Daily podcast</strong>
-              <span>Today's prepared edition</span>
+              <strong>{health.data?.news_reference_time ? 'Prepared briefing' : 'Daily podcast'}</strong>
+              <span>{health.data?.news_reference_time ? 'Archive edition' : "Today's prepared edition"}</span>
             </button>
             <button
               className="episode-card"
@@ -215,7 +220,8 @@ export function StudioHome({ user }: { user: User }) {
           {(user.is_demo || user.is_admin) && (
             <Link to="/transparency">Transparency</Link>
           )}
-          {user.is_demo && <span>Synthetic news demo</span>}
+          {health.data?.corpus === 'licensed' && <span>Newstex hackathon archive</span>}
+          {user.is_demo && health.data?.corpus === 'demo' && <span>Synthetic news demo</span>}
         </footer>
       </main>
     </>

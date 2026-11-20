@@ -43,7 +43,11 @@ class RemoteProvider:
             headers["Authorization"] = f"Bearer {key}"
         body = {"model": model, "messages": messages, "stream": False}
         if local:
-            body.update(format=schema.model_json_schema(), options={"temperature": 0})
+            body.update(
+                format=schema.model_json_schema(),
+                options={"temperature": 0, "num_ctx": 8192, "num_predict": 2500},
+                keep_alive="5m",
+            )
         else:
             body["response_format"] = {
                 "type": "json_schema",
@@ -56,7 +60,9 @@ class RemoteProvider:
         input_count = output_count = 0
         try:
             async with httpx.AsyncClient(
-                timeout=httpx.Timeout(45, connect=5)
+                timeout=httpx.Timeout(
+                    float(os.getenv("LLM_TIMEOUT_SECONDS", "180")), connect=5
+                )
             ) as client:
                 response = await client.post(
                     base.rstrip("/") + ("/api/chat" if local else "/chat/completions"),
@@ -80,6 +86,11 @@ class RemoteProvider:
                 seconds=monotonic() - start,
                 reference_id=self.reference_id,
                 measured_usd=0 if local else None,
+                scope=(
+                    "dataset"
+                    if _dataset_reference(self.db, self.reference_id)
+                    else "listener"
+                ),
             )
 
 
@@ -92,3 +103,9 @@ def model_output(db, reference_id, messages, schema):
     return asyncio.run(
         RemoteProvider(db, reference_id, kind).generate_structured(messages, schema)
     )
+
+
+def _dataset_reference(db, reference_id):
+    from app.news.models import IngestionJob, Story
+
+    return bool(db.get(IngestionJob, reference_id) or db.get(Story, reference_id))

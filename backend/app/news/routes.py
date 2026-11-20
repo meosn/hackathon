@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -104,21 +105,27 @@ class TopicInfo(BaseModel):
 
 @router.get("/sources", response_model=list[SourceInfo])
 def sources(db: DB):
+    query = select(Source).order_by(Source.name)
+    if os.getenv("ACTIVE_CORPUS") == "licensed":
+        query = query.where(Source.is_synthetic.is_(False))
     return [
         dict(id=s.id, name=s.name, is_synthetic=s.is_synthetic)
-        for s in db.scalars(select(Source).order_by(Source.name))
+        for s in db.scalars(query)
     ]
 
 
 @router.get("/topics", response_model=list[TopicInfo])
 def topics(db: DB):
-    rows = db.execute(
+    query = (
         select(StoryTopic.name, func.count())
         .join(Story, Story.id == StoryTopic.story_id)
         .where(Story.archived.is_(False))
         .group_by(StoryTopic.name)
         .order_by(StoryTopic.name)
     )
+    if os.getenv("ACTIVE_CORPUS") == "licensed":
+        query = query.where(Story.is_synthetic.is_(False))
+    rows = db.execute(query)
     return [dict(name=name, count=count) for name, count in rows]
 
 
@@ -137,6 +144,8 @@ def stories(
     sort: Literal["recent", "importance", "oldest"] = "recent",
 ):
     stmt = select(Story).where(Story.archived.is_(False))
+    if os.getenv("ACTIVE_CORPUS") == "licensed":
+        stmt = stmt.where(Story.is_synthetic.is_(False))
     if date_from:
         stmt = stmt.where(Story.event_at >= date_from)
     if date_to:
@@ -194,6 +203,19 @@ def detail_or_404(db, story_id):
     result = service.story_detail(db, story_id)
     if not result:
         raise HTTPException(404, "Story not found")
+    if not result["is_synthetic"]:
+        # Licensed stories expose short quotations. Full source text stays private.
+        counts = {}
+        visible = []
+        for fact in result["facts"]:
+            evidence = fact["evidence"]
+            ids = {e["article_id"] for e in evidence}
+            if len(fact["text"]) <= 280 and all(counts.get(aid, 0) < 2 for aid in ids):
+                visible.append(fact)
+                for aid in ids:
+                    counts[aid] = counts.get(aid, 0) + 1
+        result["facts"] = visible
+        result["summary"] = result["summary"][:280]
     return result
 
 
@@ -214,7 +236,8 @@ def article_by_id(db: DB, article_id: str):
         raise HTTPException(404, "Article not found")
     return {
         **service.article_view(article, db.get(Source, article.source_id)),
-        "content": article.content,
+        "content": article.content if article.is_synthetic else "",
+        "full_text_available": article.is_synthetic,
     }
 
 
@@ -231,7 +254,7 @@ def compare(db: DB, story_id: str):
 
 
 class JobInput(BaseModel):
-    kind: Literal["fixture", "dataset", "rss", "source"] = "fixture"
+    kind: Literal["fixture", "dataset", "rss", "crawl", "source"] = "fixture"
     locator: str | None = Field(None, max_length=2000)
 
 

@@ -1,6 +1,7 @@
 """One immutable prepared baseline per listener's local calendar day."""
 
 from zoneinfo import ZoneInfo
+import os
 from sqlalchemy import select
 from app.accounts import User, Schedule, preferences
 from app.db import utcnow
@@ -14,12 +15,20 @@ def ensure_daily(db, user_id, now=None):
 
     prefs = preferences(db, user_id)
     today = (now or utcnow()).astimezone(ZoneInfo(prefs["timezone"])).date()
-    key = f"daily/{user_id}/{today}"
+    edition = os.getenv("NEWS_EDITION_VERSION", "")
+    key = f"daily/{user_id}/{today}/top3" + (f"/{edition}" if edition else "")
     existing = db.scalar(select(Briefing).where(Briefing.schedule_key == key))
     if existing:
         return existing
     item = create_briefing(
-        db, user_id, BriefingRequest(voice_profile_id="professional"), schedule_key=key
+        db,
+        user_id,
+        BriefingRequest(
+            voice_profile_id="professional",
+            period=os.getenv("DAILY_NEWS_PERIOD", "day"),
+            story_limit=3,
+        ),
+        schedule_key=key,
     )
     item = lock_briefing(db, item.id)
     if item.status != "queued":
@@ -41,7 +50,9 @@ def ensure_daily(db, user_id, now=None):
             source = db.scalar(
                 select(Briefing).where(
                     Briefing.user_id == template.id,
-                    Briefing.schedule_key == f"daily/{template.id}/{today}",
+                    Briefing.schedule_key
+                    == f"daily/{template.id}/{today}/top3"
+                    + (f"/{edition}" if edition else ""),
                     Briefing.status == "completed",
                 )
             )

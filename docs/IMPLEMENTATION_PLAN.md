@@ -1,5 +1,7 @@
 # Implementation and acceptance log
 
+The hosted completion now uses the supplied Newstex archive, configured API conversation generation and ElevenLabs speech/recognition. All 1,740 input records completed processing. Daily editions contain three eligible ranked stories, with additional non-repeating selections available by voice and through the player. The seek control resets inherited form padding and defines consistent browser thumb geometry. Current executed results are recorded at the top of VALIDATION.md.
+
 Sourcera is an isolated application in the hackathon workspace. The shared contracts use string UUIDs, UTC timestamps, bearer authentication, HTTP 202 for asynchronous ingestion and generation, and statement-level evidence. The fixture import is explicitly synthetic.
 
 | Phase | Deliverable | Acceptance check |

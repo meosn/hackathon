@@ -181,8 +181,10 @@ def model_name() -> str:
 
 @lru_cache(maxsize=1)
 def transformer(name):
+    import torch
     from sentence_transformers import SentenceTransformer
 
+    torch.set_num_threads(int(os.getenv("EMBEDDING_THREADS", "2")))
     return SentenceTransformer(name, trust_remote_code=False)
 
 

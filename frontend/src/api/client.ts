@@ -79,6 +79,10 @@ export const useApi = <T>(path: string, enabled = true) =>
   })
 export const label = (s: string) =>
   s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
+export type Health = {
+  news_reference_time?: string | null
+  corpus?: string
+}
 export const clockTime = (s: number) => {
   const n = Math.max(0, Math.floor(Number.isFinite(s) ? s : 0))
   return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0')

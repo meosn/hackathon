@@ -1,6 +1,8 @@
 import hashlib
+import base64
 import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -204,6 +206,69 @@ def render_audio(db, segments, voice, reference_id):
         raise
 
 
+def render_aligned(db, parts, config, reference_id):
+    """Synthesize paragraph batches and retain provider character timings."""
+    _, model, voice_id = config
+    chunks = []
+    current, size = [], 0
+    for text, language in parts:
+        if current and (size + len(text) + 2 > 8000 or language != current[0][1]):
+            chunks.append(current)
+            current, size = [], 0
+        current.append((text, language))
+        size += len(text) + 2
+    if current:
+        chunks.append(current)
+    pcm, boundaries = bytearray(), []
+    for chunk in chunks:
+        joined = "\n\n".join(text for text, _ in chunk)
+        start = monotonic()
+        try:
+            response = httpx.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice_id, safe='')}/with-timestamps",
+                params={"output_format": "mp3_44100_128"},
+                timeout=httpx.Timeout(150, connect=5),
+                json={"text": joined, "model_id": model},
+                headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
+            )
+            response.raise_for_status()
+            result = response.json()
+            alignment = result["alignment"]
+            times = alignment["character_start_times_seconds"]
+            if "".join(alignment["characters"]) != joined or len(times) != len(joined):
+                raise ValueError("Speech alignment does not match the verified script")
+            audio = convert_audio(
+                base64.b64decode(result["audio_base64"], validate=True)
+            )
+            duration = len(audio) / (2 * RATE)
+            if not audio or any(
+                not math.isfinite(t) or t < 0 or t > duration for t in times
+            ):
+                raise ValueError("Speech returned invalid timing information")
+            if times != sorted(times):
+                raise ValueError("Speech timings are out of order")
+            offset, position, starts = len(pcm) / (2 * RATE), 0, []
+            for text, _ in chunk:
+                starts.append(times[position])
+                position += len(text) + 2
+            starts[0] = 0
+            for index, cue in enumerate(starts):
+                end = starts[index + 1] if index + 1 < len(starts) else duration + 0.2
+                boundaries.append([offset + cue, offset + end])
+            pcm.extend(audio)
+            pcm.extend(b"\0\0" * (RATE // 5))
+        finally:
+            observe(
+                db,
+                "tts",
+                model,
+                characters=len(joined),
+                seconds=monotonic() - start,
+                reference_id=reference_id,
+            )
+    return pcm, boundaries
+
+
 def _render_audio(db, segments, voice, reference_id, config):
     parts = [(s.text, s.language) for s in segments]
     key = hashlib.sha256(
@@ -217,13 +282,19 @@ def _render_audio(db, segments, voice, reference_id, config):
     existing = db.scalar(select(GeneratedAudio).where(GeneratedAudio.cache_key == key))
     if existing:
         return existing
-    pcm = bytearray()
-    boundaries = []
-    for text, lang in parts:
-        start = len(pcm) / (2 * RATE)
-        pcm.extend(render_segment(db, text, lang, voice, config, reference_id))
-        pcm.extend(b"\0\0" * (RATE // 5))
-        boundaries.append([start, len(pcm) / (2 * RATE)])
+    if (
+        config[0] == "elevenlabs"
+        and len(parts) > 1
+        and os.getenv("ELEVENLABS_BATCH_TTS", "1") == "1"
+    ):
+        pcm, boundaries = render_aligned(db, parts, config, reference_id)
+    else:
+        pcm, boundaries = bytearray(), []
+        for text, lang in parts:
+            start = len(pcm) / (2 * RATE)
+            pcm.extend(render_segment(db, text, lang, voice, config, reference_id))
+            pcm.extend(b"\0\0" * (RATE // 5))
+            boundaries.append([start, len(pcm) / (2 * RATE)])
     content = wav_bytes(pcm)
     digest = hashlib.sha256(content).hexdigest()
     audio = GeneratedAudio(
@@ -274,6 +345,9 @@ def transcribe(db, content, content_type, language, reference_id):
         else (os.getenv("STT_MODEL") or "whisper-1")
     )
     start = monotonic()
+    audio_minutes = 0
+    if float(os.getenv("STT_USD_PER_MINUTE", "0")):
+        audio_minutes = len(convert_audio(content)) / (2 * RATE * 60)
     try:
         if provider == "elevenlabs":
             url = "https://api.elevenlabs.io/v1/speech-to-text"
@@ -301,5 +375,10 @@ def transcribe(db, content, content_type, language, reference_id):
         return result.json()["text"].strip()
     finally:
         observe(
-            db, "stt", model, seconds=monotonic() - start, reference_id=reference_id
+            db,
+            "stt",
+            model,
+            seconds=monotonic() - start,
+            reference_id=reference_id,
+            estimated_usd=audio_minutes * float(os.getenv("STT_USD_PER_MINUTE", "0")),
         )

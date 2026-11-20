@@ -22,6 +22,11 @@ WEIGHTS = {
 DAYS = {"day": 1, "week": 7, "month": 30}
 
 
+def news_now():
+    reference = os.getenv("NEWS_REFERENCE_TIME")
+    return parse_date(reference) if reference else datetime.now(UTC)
+
+
 def parse_date(value):
     result = datetime.fromisoformat(value) if isinstance(value, str) else value
     return (
@@ -40,7 +45,7 @@ def ranked(
     feedback=None,
     now=None,
 ):
-    now = now or datetime.now(UTC)
+    now = now or news_now()
     feedback = feedback or {}
     weights = WEIGHTS | json.loads(os.getenv("RANK_WEIGHTS") or "{}")
     interests = {
@@ -101,8 +106,10 @@ def ranked(
 def recommendations(
     db: Session, user_id: str, *, period="week", topic=None, selected=None
 ):
-    now = datetime.now(UTC)
+    now = news_now()
     query = select(Story).where(Story.archived.is_(False))
+    if os.getenv("ACTIVE_CORPUS") == "licensed":
+        query = query.where(Story.is_synthetic.is_(False))
     if selected:
         query = query.where(Story.id.in_(selected))
     else:

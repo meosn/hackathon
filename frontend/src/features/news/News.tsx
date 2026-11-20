@@ -13,6 +13,7 @@ import {
   ThumbsDown,
 } from 'lucide-react'
 import { api, label, niceDate, useApi, queryClient } from '../../api/client'
+import type { Health } from '../../api/client'
 import type { Story, StoryDetail, StoryPage, Topic } from '../../api/types'
 import {
   Badge,
@@ -71,11 +72,12 @@ export function Explore() {
     [period, setPeriod] = useState('week'),
     [sort, setSort] = useState('recent')
   const topics = useApi<Topic[]>('/topics')
+  const health = useApi<Health>('/health')
   const query = useInfiniteQuery({
-    queryKey: ['stories', search, topic, period, sort],
+    queryKey: ['stories', search, topic, period, sort, health.data?.news_reference_time],
     initialPageParam: '',
     queryFn: ({ pageParam, signal }) => {
-      const now = new Date()
+      const now = health.data?.news_reference_time ? new Date(health.data.news_reference_time) : new Date()
       now.setDate(now.getDate() - ({ day: 1, week: 7, month: 30 }[period] || 7))
       const params = new URLSearchParams({
         date_from: now.toISOString(),

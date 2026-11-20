@@ -17,6 +17,7 @@ from pydantic import (
     Field,
     HttpUrl,
     field_validator,
+    model_validator,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic.json"
@@ -61,6 +62,23 @@ class InputArticle(BaseModel):
         max_length=250,
         validation_alias=AliasChoices("external_id", "id", "article_id"),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def newstex_fields(cls, value):
+        if not isinstance(value, dict) or not isinstance(
+            value.get("publication"), dict
+        ):
+            return value
+        row = dict(value)
+        row["author"] = row.get("author") or row.get("source")
+        row["source"] = row["publication"].get("name")
+        row["content"] = (
+            row.get("text_content") or row.get("html_content") or row.get("excerpt")
+        )
+        row["url"] = row.get("permalink")
+        row["external_id"] = row.get("$id") or row.get("external_id")
+        return row
 
     @field_validator("published_at")
     @classmethod
@@ -222,3 +240,56 @@ def parse_feed(
             external_id=entry.get("id"),
         )
         yield InputArticle.model_validate(row)
+
+
+def validate_crawl(url: str):
+    allowed = {
+        item.strip() for item in os.getenv("CRAWL_URLS", "").split(",") if item.strip()
+    }
+    parsed = urlsplit(url)
+    if (
+        url not in allowed
+        or parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+    ):
+        raise ValueError("Article URL is not configured for crawling")
+
+
+def crawl_records(url: str) -> Iterator[InputArticle]:
+    validate_crawl(url)
+    data = bytearray()
+    with httpx.stream("GET", url, timeout=15, follow_redirects=False) as response:
+        response.raise_for_status()
+        for chunk in response.iter_bytes():
+            data.extend(chunk)
+            if len(data) > MAX_BYTES:
+                raise ValueError("Article exceeds the size limit")
+    soup = BeautifulSoup(bytes(data), "html.parser")
+
+    def meta(name):
+        tag = soup.find("meta", attrs={"property": name}) or soup.find(
+            "meta", attrs={"name": name}
+        )
+        return tag.get("content") if tag else None
+
+    published = meta("article:published_time") or meta("datePublished")
+    if not published:
+        raise ValueError("Article requires an explicit publication timestamp")
+    body = soup.find("article") or soup.find("main")
+    if body is None:
+        raise ValueError("Article has no identifiable main content")
+    yield InputArticle.model_validate(
+        {
+            "title": meta("og:title") or (soup.title.get_text() if soup.title else ""),
+            "content": str(body),
+            "url": url,
+            "published_at": published,
+            "source": meta("og:site_name") or urlsplit(url).hostname,
+            "author": meta("author"),
+            "language": (soup.html.get("lang", "und") if soup.html else "und").split(
+                "-"
+            )[0],
+        }
+    )

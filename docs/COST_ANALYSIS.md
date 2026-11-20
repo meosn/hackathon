@@ -1,5 +1,7 @@
 # Costs and volume projection
 
+For the hosted API configuration, estimates use USD 0.15 per million input tokens and USD 0.60 per million output tokens for GPT-4o mini. ElevenLabs multilingual v2 uses an estimate of USD 80 per million characters, and Scribe v2 uses USD 0.20 per audio hour. These are published-price assumptions checked on 20 November 2026. Account allowances, discounts and invoices can change the amount charged. [OpenAI model pricing](https://developers.openai.com/api/docs/models/gpt-4o-mini), [ElevenLabs API pricing](https://elevenlabs.io/pricing/api).
+
 The figures below come from the fresh-volume Docker acceptance run on 20 November 2026. All inputs were synthetic. The default providers ran locally. The ledger records observed calls, token counters when reported, character counts and wall-clock stage time. No paid vendor was contacted in this run.
 
 | Observed quantity | Value |

@@ -756,10 +756,7 @@ export interface components {
         };
         /** Body_send_recording_api_v1_conversations__conversation_id__audio_post */
         Body_send_recording_api_v1_conversations__conversation_id__audio_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
             /** Story Id */
             story_id?: string | null;
@@ -817,6 +814,8 @@ export interface components {
             voice_profile_id?: string | null;
             /** Selected Story Ids */
             selected_story_ids?: string[];
+            /** Story Limit */
+            story_limit?: number | null;
         };
         /** BriefingView */
         BriefingView: {
@@ -1084,7 +1083,7 @@ export interface components {
              * @default fixture
              * @enum {string}
              */
-            kind: "fixture" | "dataset" | "rss" | "source";
+            kind: "fixture" | "dataset" | "rss" | "crawl" | "source";
             /** Locator */
             locator?: string | null;
         };
@@ -1142,7 +1141,7 @@ export interface components {
             /** Text */
             text: string;
             /** Intent */
-            intent: ("GET_LATEST_NEWS" | "GET_PERIOD_NEWS" | "FILTER_TOPIC" | "SELECT_STORY" | "EXPLAIN_STORY" | "COMPARE_SOURCES" | "FOLLOW_UP" | "CHANGE_VOICE" | "CHANGE_PREFERENCES" | "SKIP_STORY" | "STOP_PLAYBACK" | "RESUME_PLAYBACK") | null;
+            intent: ("GET_LATEST_NEWS" | "GET_PERIOD_NEWS" | "GET_MORE_NEWS" | "FILTER_TOPIC" | "SELECT_STORY" | "EXPLAIN_STORY" | "COMPARE_SOURCES" | "FOLLOW_UP" | "CHANGE_VOICE" | "CHANGE_PREFERENCES" | "SKIP_STORY" | "STOP_PLAYBACK" | "RESUME_PLAYBACK") | null;
             /** Citations */
             citations: components["schemas"]["Citation"][];
             /** Action */
@@ -1388,7 +1387,7 @@ export interface components {
             /** Text */
             text: string;
             /** Intent */
-            intent: ("GET_LATEST_NEWS" | "GET_PERIOD_NEWS" | "FILTER_TOPIC" | "SELECT_STORY" | "EXPLAIN_STORY" | "COMPARE_SOURCES" | "FOLLOW_UP" | "CHANGE_VOICE" | "CHANGE_PREFERENCES" | "SKIP_STORY" | "STOP_PLAYBACK" | "RESUME_PLAYBACK") | null;
+            intent: ("GET_LATEST_NEWS" | "GET_PERIOD_NEWS" | "GET_MORE_NEWS" | "FILTER_TOPIC" | "SELECT_STORY" | "EXPLAIN_STORY" | "COMPARE_SOURCES" | "FOLLOW_UP" | "CHANGE_VOICE" | "CHANGE_PREFERENCES" | "SKIP_STORY" | "STOP_PLAYBACK" | "RESUME_PLAYBACK") | null;
             /** Citations */
             citations: components["schemas"]["Citation"][];
             /** Action */
@@ -1406,6 +1405,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /** VoiceView */
         VoiceView: {

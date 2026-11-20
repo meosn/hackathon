@@ -23,7 +23,7 @@ Use the returned job ID with `GET /api/v1/ingestion/jobs/{job_id}`. The importer
 | published_at | published_at, publication_date, published, date |
 | external_id | external_id, id, article_id |
 
-These mappings describe this adapter's input contract. The original hackathon export was unavailable. Inspect its schema and map fields before importing. Retain the original URLs and real publication times. The demo clock applies exclusively to the synthetic fixture. Use the project cleanup command in the deployment guide before the license expires.
+The original challenge export is supported through its nested `publication.name`, `source` author, `text_content`/`html_content`, `permalink` and `$id` fields. Original publication timestamps are preserved. `scripts/prepare-dataset.py` splits a supplied ZIP into bounded private JSONL files. `NEWS_REFERENCE_TIME` optionally anchors date filters to an explicitly disclosed archive timestamp. Use the project cleanup command in the deployment guide before the license expires.
 
 A normalized row example for a locally authored fixture follows.
 
@@ -34,6 +34,10 @@ A normalized row example for a locally authored fixture follows.
 For operator-approved feeds, set `RSS_FEED_URLS` to comma-separated HTTPS feed URLs and submit `{"kind":"rss","locator":"<configured URL>"}`. Scheduled discovery uses the same import path. HTTPX applies a timeout and download limit, then feedparser reads already-downloaded bytes. Redirects are disabled. Undated or unlinked entries are skipped. Feed body text, an entry link and a publisher label provide provenance. There is no general-purpose URL fetch endpoint. `NEWS_HTML_PARSER=beautifulsoup` removes scripts, styles, templates and markup. Operators with the `crawl` extra may select `scrapling` for HTML parsing. Use `BACKEND_EXTRAS=[ml,crawl]` for a Compose build with both optional providers. [Scrapling parser documentation](https://scrapling.readthedocs.io/en/latest/parsing/main_classes.html)
 
 ## Event construction
+
+For configured models, `CLUSTER_LLM_VERIFY=1` reviews uncertain semantic candidates and proposed lexical matches that have different article text. Each pair must describe the same specific event, action and period. At most two model reviews are attempted per article. `FACT_EXTRACTION_PROVIDER=hybrid` recovers additional exact short source quotations when rule extraction is sparse. Imported articles retain up to twelve quotations of at most 280 characters. Public story views expose at most two quotations per article.
+
+Operator-configured `CRAWL_URLS` can be ingested with `{"kind":"crawl","locator":"<configured HTTPS URL>"}`. The HTML adapter requires publication metadata and an identifiable article/main element. It preserves the original URL and supports the configured HTML-cleaning parser.
 
 1. Store NFC-normalized visible text with collapsed whitespace. Keep the publisher, URL, author, external ID, language, timestamps and SHA-256 digest. Exact normalized-body duplicates increment the job counter and skip all model work. Synthetic and imported provenance have separate deduplication boundaries.
 2. Embed each unique article once. The offline `local_hash` profile projects normalized multilingual lexical features into 384 dimensions. The separate `sentence_transformers` profile loads the configured multilingual encoder and checks its output size. Set `EMBEDDING_PROVIDER=sentence_transformers`, install the `ml` extra and make the model weights available before starting ingestion. The persisted model identifier scopes candidate lookup. [Sentence Transformers encoding reference](https://sbert.net/docs/package_reference/sentence_transformer/model.html)

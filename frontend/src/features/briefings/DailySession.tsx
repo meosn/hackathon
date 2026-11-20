@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Mic, MicOff, Pause, Play, Square } from 'lucide-react'
 import {
@@ -8,7 +8,9 @@ import {
   clockTime,
   queryClient,
   useBriefingAudio,
+  useApi,
 } from '../../api/client'
+import type { Health } from '../../api/client'
 import type { BriefingDetail, Conversation, Message } from '../../api/types'
 import { ErrorNote, SourceCitation } from '../../components/UI'
 import { LiveMicrophone } from './liveMicrophone'
@@ -20,6 +22,7 @@ export function DailySession({
   selectedId?: string
   playRequest?: number
 }) {
+  const health = useApi<Health>('/health')
   const daily = useQuery({
     queryKey: ['daily-edition'],
     queryFn: () => {
@@ -46,6 +49,13 @@ export function DailySession({
         : false,
   })
   const edition = selectedId ? custom.data : daily.data
+  const retry = useMutation({
+    mutationFn: () => api('/briefings/' + edition?.id + '/retry', 'POST'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['daily-edition'] })
+      queryClient.invalidateQueries({ queryKey: ['live-custom', selectedId] })
+    },
+  })
   const audio = useBriefingAudio(
     edition?.status === 'completed' ? edition.id : undefined,
   )
@@ -54,6 +64,7 @@ export function DailySession({
   const [answerPlaying, setAnswerPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [listening, setListening] = useState(false)
+  const [responding, setResponding] = useState(false)
   const [phase, setPhase] = useState('')
   const [error, setError] = useState('')
   const [reply, setReply] = useState<Message | null>(null)
@@ -67,6 +78,7 @@ export function DailySession({
   const answerUrl = useRef('')
   const mounted = useRef(true)
   const editionRef = useRef(edition)
+  const briefingContext = useRef(true)
   editionRef.current = edition
   const bufferedId = audio.data ? edition?.id : undefined
   const lastStarted = useRef(0)
@@ -77,6 +89,7 @@ export function DailySession({
     setTranscript('')
     setPosition(0)
     conversation.current = null
+    briefingContext.current = true
   }, [edition?.id])
   useEffect(() => {
     mounted.current = true
@@ -104,6 +117,7 @@ export function DailySession({
     answer.current?.pause()
     narration.current?.pause()
     setPlaying(false)
+    setResponding(false)
     setPhase('Listening…')
   }
   function stopSession() {
@@ -138,12 +152,16 @@ export function DailySession({
       setError(e instanceof Error ? e.message : 'Microphone access failed.')
     }
   }
-  async function respond(blob: Blob) {
+  async function respond(input: Blob | string) {
     const current = ++turn.current
     controller.current?.abort()
     const abort = (controller.current = new AbortController())
     const valid = () =>
       mounted.current && current === turn.current && !abort.signal.aborted
+    narration.current?.pause()
+    answer.current?.pause()
+    setResponding(true)
+    setError('')
     setPhase('Understanding your question…')
     try {
       const b = editionRef.current
@@ -160,28 +178,27 @@ export function DailySession({
         throw e
       }
       if (!valid()) return
-      const data = new FormData()
-      data.set(
-        'file',
-        blob,
-        'utterance.' + (blob.type.includes('mp4') ? 'm4a' : 'webm'),
-      )
+      const data = typeof input === 'string' ? { text: input } : new FormData()
       const active = b.segments.find(
         (s) =>
           s.story_id &&
           s.start_seconds <= (narration.current?.currentTime || 0) &&
           s.end_seconds > (narration.current?.currentTime || 0),
       )
-      if (active?.story_id) data.set('story_id', active.story_id)
-      const message = await api<Message & { transcription: string }>(
-        '/conversations/' + conv.id + '/audio',
+      if (typeof input !== 'string' && data instanceof FormData) {
+        data.set('file', input, 'utterance.' + (input.type.includes('mp4') ? 'm4a' : 'webm'))
+        if (active?.story_id && briefingContext.current) data.set('story_id', active.story_id)
+      }
+      const message = await api<Message & { transcription?: string }>(
+        '/conversations/' + conv.id + (typeof input === 'string' ? '/messages' : '/audio'),
         'POST',
         data,
         abort.signal,
       )
       if (!valid()) return
       setReply(message)
-      setTranscript(message.transcription)
+      briefingContext.current = false
+      setTranscript(message.transcription || (typeof input === 'string' ? input : ''))
       if (
         ['SKIP_STORY', 'SELECT_STORY'].includes(
           String(message.action?.type || ''),
@@ -224,6 +241,8 @@ export function DailySession({
         setError(e instanceof Error ? e.message : 'Voice response failed')
         setPhase('Listening · retry your question or resume the briefing')
       }
+    } finally {
+      if (valid()) setResponding(false)
     }
   }
   function play() {
@@ -245,7 +264,7 @@ export function DailySession({
   return (
     <section className="listening-hero" aria-label="News player">
       <div className="listening-date">
-        {new Date().toLocaleDateString('en', {
+        {(health.data?.news_reference_time ? new Date(health.data.news_reference_time) : new Date()).toLocaleDateString('en', {
           weekday: 'long',
           month: 'long',
           day: 'numeric',
@@ -256,22 +275,29 @@ export function DailySession({
           ? edition?.period === 'week'
             ? 'This week.'
             : edition?.title || 'Your briefing.'
-          : "Today's news."}
+          : health.data?.news_reference_time ? 'Archive briefing.' : "Today's news."}
       </h1>
       <p className="listening-subtitle">
         {edition?.status === 'completed'
-          ? (edition.period === 'week' ? 'Weekly briefing' : 'Daily briefing') +
+          ? (edition.period === 'week' ? 'Weekly briefing' : edition.items.length + ' top stories') +
             ' · ' +
             clockTime(edition.duration_seconds)
           : edition?.status === 'failed'
             ? 'Your edition needs attention.'
-            : 'Preparing your edition…'}
+            : edition?.status === 'processing'
+              ? 'Writing and checking your briefing…'
+              : edition?.status === 'script_ready' || edition?.status === 'audio_generating'
+                ? 'Creating your audio…'
+                : 'Your edition is queued for preparation…'}
       </p>
       <audio
         ref={narration}
         src={url || undefined}
         preload="auto"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          briefingContext.current = true
+          setPlaying(true)
+        }}
         onPause={() => setPlaying(false)}
         onTimeUpdate={() => setPosition(narration.current?.currentTime || 0)}
         onEnded={() => {
@@ -314,6 +340,7 @@ export function DailySession({
           step={0.1}
           value={position}
           onChange={(e) => {
+            briefingContext.current = true
             if (narration.current)
               narration.current.currentTime = Number(e.target.value)
             setPosition(Number(e.target.value))
@@ -322,6 +349,9 @@ export function DailySession({
         <span>{clockTime(edition?.duration_seconds || 0)}</span>
       </div>
       <div className="session-tools">
+        <button disabled={!url || responding} onClick={() => void respond('More news')}>
+          {responding ? 'Preparing answer…' : 'More news'}
+        </button>
         <button
           disabled={!url}
           className={'microphone-control' + (listening ? ' active' : '')}
@@ -351,8 +381,15 @@ export function DailySession({
           ? 'Microphone active'
           : 'Allow microphone access to ask questions.'}
       </span>
-      {edition?.status === 'failed' && <ErrorNote error={edition.error} />}
-      <ErrorNote error={error || daily.error || custom.error || audio.error} />
+      {edition?.status === 'failed' && (
+        <>
+          <ErrorNote error={edition.error} />
+          <button className="btn outline" disabled={retry.isPending} onClick={() => retry.mutate()}>
+            {retry.isPending ? 'Retrying…' : 'Retry preparation'}
+          </button>
+        </>
+      )}
+      <ErrorNote error={error || daily.error || custom.error || audio.error || retry.error} />
       {reply && (
         <div className="live-response">
           <p className="muted">You · {transcript}</p>

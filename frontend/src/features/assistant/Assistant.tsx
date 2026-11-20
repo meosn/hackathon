@@ -32,6 +32,9 @@ export function ChatMessage({
         )}
       </div>
       <p>{m.text}</p>
+      {m.action?.response_provider === 'source_search' && typeof m.action?.fallback_reason === 'string' && (
+        <small>The AI answer was unavailable. Showing source search results.</small>
+      )}
       {m.citations?.length > 0 && (
         <details>
           <summary>View evidence ({m.citations.length})</summary>
@@ -266,7 +269,7 @@ function ChatSession({
             <h3>What would you like to hear?</h3>
             <div className="chips">
               {(story || briefing
-                ? ['What do other sources say?', 'Give me more details.']
+                ? ['What do other sources say?', 'Give me more details.', 'More news']
                 : [
                     "Tell me today's news.",
                     'What happened this week?',
