@@ -1,6 +1,7 @@
 """Provision the app's private WebSocket agent using a server-side API key."""
 import os
 import httpx
+from . import research
 
 
 def configuration():
@@ -31,8 +32,8 @@ def configuration():
                         "For more headlines call get_more_sourcera_news once and read exactly three stories, "
                         "one short paragraph per story, separated by blank lines. A supplied next bulletin "
                         "already contains the next stories: read it without another lookup. "
-                        "Never announce lookups, internal IDs or sources aloud. If evidence is insufficient, "
-                        "say so briefly and ask a relevant clarifying question."
+                        "Never announce internal IDs or read citations aloud. "
+                        + research.INSTRUCTIONS
                     ),
                     "tools": [
                         {"type": "client", "name": name, "description": description, "expects_response": True,
@@ -41,7 +42,9 @@ def configuration():
                             ("get_sourcera_context", "Get verified evidence and the currently playing story for a follow-up."),
                             ("get_more_sourcera_news", "Get the next three news stories without repeating earlier headlines."),
                         ]
-                    ],
+                    ] + [{"type": "client", "name": "research_topic", "description": research.DESCRIPTION,
+                          "expects_response": True, "response_timeout_secs": 45,
+                          "parameters": research.PARAMETERS}],
                 },
             },
         },

@@ -10,7 +10,7 @@ import {
   useApi,
 } from '../../api/client'
 import type { Health } from '../../api/client'
-import type { BriefingDetail, Conversation, Message } from '../../api/types'
+import type { BriefingDetail, Conversation, Message, ResearchResult } from '../../api/types'
 import { ErrorNote } from '../../components/UI'
 import { LiveMicrophone } from './liveMicrophone'
 import {
@@ -78,6 +78,7 @@ export function DailySession({
   const [error, setError] = useState('')
   const [voiceConnecting, setVoiceConnecting] = useState(false)
   const [hasAnswer, setHasAnswer] = useState(false)
+  const [research, setResearch] = useState<ResearchResult>()
   const narration = useRef<HTMLAudioElement>(null)
   const answer = useRef<HTMLAudioElement>(null)
   const microphone = useRef<LiveMicrophone | null>(null)
@@ -98,6 +99,7 @@ export function DailySession({
   useEffect(() => {
     stopSession()
     setHasAnswer(false)
+    setResearch(undefined)
     setPosition(0)
     conversation.current = null
     briefingContext.current = true
@@ -249,6 +251,10 @@ export function DailySession({
         },
         story: currentStory,
         action: applyAction,
+        research: (result) => {
+          setHasAnswer(true)
+          setResearch(result)
+        },
         finished: () => {
           if (resumeAfterAnswer.current) {
             resumeAfterAnswer.current = false
@@ -432,6 +438,7 @@ export function DailySession({
     }
   }
   const audible = playing || answerPlaying
+  const researchSources = research?.status === 'completed' ? research.sources || [] : []
   return (
     <section className="listening-hero" aria-label="News player">
       <div className="listening-date">
@@ -590,6 +597,14 @@ export function DailySession({
           ? 'Microphone active'
           : 'Listen freely. Turn the mic on to join in.'}
       </span>
+      {researchSources.length > 0 && (
+        <details className="research-sources">
+          <summary>Web search sources · {researchSources.length}</summary>
+          {researchSources.map(source => (
+            <p key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></p>
+          ))}
+        </details>
+      )}
       {edition?.status === 'failed' && (
         <>
           <ErrorNote error={edition.error} />

@@ -79,13 +79,13 @@ def costs(db):
     result["processed_records"] = result["articles"] + result["duplicates"]
     hourly = max(0.0, float(os.getenv("COMPUTE_USD_PER_HOUR", "0.04")))
     # Embedding time is inside analysis; script verification includes the model wait.
-    timed = ("ingestion", "analysis", "verification", "tts", "stt")
+    timed = ("ingestion", "analysis", "verification", "tts", "stt", "web_research")
     completed = select(Briefing.id).where(Briefing.status == "completed")
     unknown = case(
         (
             (CostEvent.measured_usd.is_(None))
             & (CostEvent.estimated_usd == 0)
-            & ModelUsage.stage.in_(("tts", "stt", "llm")),
+            & ModelUsage.stage.in_(("tts", "stt", "llm", "web_research")),
             1,
         ),
         else_=0,

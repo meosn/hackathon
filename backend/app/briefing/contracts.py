@@ -87,6 +87,25 @@ class MessageInput(Strict):
     text: str = Field(min_length=1, max_length=2000)
 
 
+class ResearchRequest(Strict):
+    action: Literal["offer", "search", "cancel"]
+    query: str | None = Field(default=None, min_length=1, max_length=1000)
+
+
+class ResearchSource(BaseModel):
+    title: str
+    url: str
+
+
+class ResearchResult(BaseModel):
+    status: Literal["offered", "completed", "cancelled", "unavailable"]
+    query: str
+    answer: str
+    sources: list[ResearchSource] = Field(default_factory=list)
+    checked_at: str | None = None
+    outside_briefing: bool = True
+
+
 Intent = Literal[
     "GET_LATEST_NEWS",
     "GET_PERIOD_NEWS",

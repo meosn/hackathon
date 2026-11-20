@@ -1760,6 +1760,60 @@
         }
       }
     },
+    "/api/v1/conversations/{conversation_id}/research": {
+      "post": {
+        "summary": "Research Topic",
+        "operationId": "research_topic_api_v1_conversations__conversation_id__research_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Conversation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/conversations/{conversation_id}/realtime-evidence": {
       "post": {
         "summary": "Realtime Evidence",
@@ -4460,6 +4514,108 @@
           "name"
         ],
         "title": "Register"
+      },
+      "ResearchRequest": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "offer",
+              "search",
+              "cancel"
+            ],
+            "title": "Action"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "ResearchRequest"
+      },
+      "ResearchResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "offered",
+              "completed",
+              "cancelled",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "outside_briefing": {
+            "type": "boolean",
+            "title": "Outside Briefing",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "query",
+          "answer"
+        ],
+        "title": "ResearchResult"
+      },
+      "ResearchSource": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "url"
+        ],
+        "title": "ResearchSource"
       },
       "ScheduleInput": {
         "properties": {

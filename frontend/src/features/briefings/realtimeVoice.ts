@@ -1,5 +1,5 @@
 import { api, request } from '../../api/client'
-import type { Message } from '../../api/types'
+import type { Message, ResearchResult } from '../../api/types'
 import { ElevenSpeech } from './elevenSpeech'
 
 export type VoicePhase =
@@ -17,6 +17,7 @@ export type VoiceCallbacks = {
   action: (message: Message) => void
   finished: () => void
   failed: (message: string) => void
+  research?: (result: ResearchResult) => void
 }
 
 /** Resume from a direct click, including browsers that gate delayed media playback. */
@@ -418,11 +419,11 @@ export class RealtimeVoice {
         break
       case 'response.function_call_arguments.done':
         if (
-          event.name === 'news_evidence' &&
+          ['news_evidence', 'research_topic'].includes(event.name) &&
           !this.toolCalls.has(event.call_id)
         ) {
           this.toolCalls.add(event.call_id)
-          void this.evidence(event.call_id, event.arguments)
+          void this.evidence(event.call_id, event.arguments, event.name === 'research_topic')
         }
         break
       case 'output_audio_buffer.started':
@@ -475,10 +476,21 @@ export class RealtimeVoice {
     }
   }
 
-  private async evidence(callId: string, argumentsJson: string) {
+  private async evidence(callId: string, argumentsJson: string, research = false) {
     const sequence = this.sequence
     try {
       const args = JSON.parse(argumentsJson)
+      if (research) {
+        const result = await api<ResearchResult>(`/conversations/${this.conversationId}/research`, 'POST',
+          { action: args.action, ...(args.query ? { query: args.query } : {}) }, this.abort.signal)
+        this.send({ type: 'conversation.item.create', item: {
+          type: 'function_call_output', call_id: callId, output: JSON.stringify(result),
+        } })
+        if (this.closed || sequence !== this.sequence) return
+        this.callbacks.research?.(result)
+        this.createResponse()
+        return
+      }
       const result = await api<Message & { context?: unknown }>(
         `/conversations/${this.conversationId}/realtime-evidence`,
         'POST',

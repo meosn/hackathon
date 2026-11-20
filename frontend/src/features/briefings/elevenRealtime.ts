@@ -1,5 +1,5 @@
 import { api } from '../../api/client'
-import type { Message } from '../../api/types'
+import type { Message, ResearchResult } from '../../api/types'
 import { ElevenSpeech } from './elevenSpeech'
 import type { VoiceCallbacks } from './realtimeVoice'
 
@@ -128,10 +128,18 @@ export class ElevenRealtime {
     this.player.setStoryOrder((result.action?.story_ids as string[]) || [])
     return result
   }
-  private async tool(call: { tool_name: string; tool_call_id: string }) {
+  private async tool(call: { tool_name: string; tool_call_id: string; parameters?: { action?: string; query?: string } }) {
     try {
       let result: unknown
-      if (call.tool_name === 'get_more_sourcera_news') result = await this.evidence()
+      if (call.tool_name === 'research_topic') {
+        const params = call.parameters || {}
+        const research = await api<ResearchResult>(`/conversations/${this.conversationId}/research`, 'POST',
+          { action: params.action, ...(params.query ? { query: params.query } : {}) }, this.abort.signal)
+        if (this.closed) return
+        this.callbacks.research?.(research)
+        result = research
+      }
+      else if (call.tool_name === 'get_more_sourcera_news') result = await this.evidence()
       else if (call.tool_name === 'get_sourcera_context') result = await api('/agent-context', 'POST',
         { conversation_id: this.conversationId, story_id: this.callbacks.story() || this.player.currentStory }, this.abort.signal)
       else throw Error('Unknown news tool')

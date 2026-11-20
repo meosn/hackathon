@@ -26,7 +26,7 @@ from app.config import settings
 from app.db import SessionLocal, get_db
 from app.messaging import emit
 from app.news.service import story_detail
-from . import agent, characters, conversation_speech, custom_voice, realtime, service, voice
+from . import agent, characters, conversation_speech, custom_voice, realtime, research, service, voice
 from .accounting import account_attempts
 from . import contracts
 from .contracts import BriefingRequest, MessageInput, StartConversation
@@ -605,6 +605,18 @@ def realtime_session(
             "X-Speech-Output": ("elevenlabs" if speech_stream else "openai"),
         },
     )
+
+
+@router.post("/conversations/{conversation_id}/research", response_model=contracts.ResearchResult)
+def research_topic(
+    conversation_id: str,
+    data: contracts.ResearchRequest,
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
+    conv = owned(db, Conversation, conversation_id, user.id, lock=True)
+    with account_attempts(db):
+        return research.handle(db, conv, data)
 
 
 @router.post(

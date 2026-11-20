@@ -101,6 +101,7 @@ function setup() {
     action: vi.fn(),
     finished: vi.fn(),
     failed: vi.fn(),
+    research: vi.fn(),
   }
   const voice = new RealtimeVoice('conversation', callbacks)
   const event = (data: Record<string, unknown>) =>
@@ -209,6 +210,23 @@ it('warms the verified prefix silently without changing playback or conversation
   expect(callbacks.interrupt).not.toHaveBeenCalled()
   expect(callbacks.failed).not.toHaveBeenCalled()
   expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+  voice.close()
+})
+
+it('returns external research to the native audio model and keeps it separate from briefing evidence', async () => {
+  const { voice, event, sent, callbacks } = setup()
+  await voice.connect()
+  const result = { status: 'completed', query: 'Mars moons', answer: 'Mars has two moons.',
+    sources: [{ title: 'NASA', url: 'https://science.nasa.gov/mars/' }] }
+  vi.mocked(api).mockResolvedValueOnce(result)
+  event({ type: 'response.function_call_arguments.done', name: 'research_topic', call_id: 'research',
+    arguments: JSON.stringify({ action: 'search' }) })
+  await vi.waitFor(() => expect(callbacks.research).toHaveBeenCalledWith(result))
+  expect(api).toHaveBeenLastCalledWith('/conversations/conversation/research', 'POST', { action: 'search' }, expect.any(AbortSignal))
+  expect(sent.find(e => e.item?.call_id === 'research')?.item).toMatchObject({
+    type: 'function_call_output', output: JSON.stringify(result),
+  })
+  expect(callbacks.action).not.toHaveBeenCalled()
   voice.close()
 })
 

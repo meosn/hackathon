@@ -662,6 +662,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/conversations/{conversation_id}/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Research Topic */
+        post: operations["research_topic_api_v1_conversations__conversation_id__research_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/conversations/{conversation_id}/realtime-evidence": {
         parameters: {
             query?: never;
@@ -1545,6 +1562,44 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** ResearchRequest */
+        ResearchRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "offer" | "search" | "cancel";
+            /** Query */
+            query?: string | null;
+        };
+        /** ResearchResult */
+        ResearchResult: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "offered" | "completed" | "cancelled" | "unavailable";
+            /** Query */
+            query: string;
+            /** Answer */
+            answer: string;
+            /** Sources */
+            sources?: components["schemas"]["ResearchSource"][];
+            /** Checked At */
+            checked_at?: string | null;
+            /**
+             * Outside Briefing
+             * @default true
+             */
+            outside_briefing: boolean;
+        };
+        /** ResearchSource */
+        ResearchSource: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+        };
         /** ScheduleInput */
         ScheduleInput: {
             /** Time */
@@ -1831,6 +1886,9 @@ export type SchemaPreferenceView = components['schemas']['PreferenceView'];
 export type SchemaQueued = components['schemas']['Queued'];
 export type SchemaRealtimeEvidence = components['schemas']['RealtimeEvidence'];
 export type SchemaRegister = components['schemas']['Register'];
+export type SchemaResearchRequest = components['schemas']['ResearchRequest'];
+export type SchemaResearchResult = components['schemas']['ResearchResult'];
+export type SchemaResearchSource = components['schemas']['ResearchSource'];
 export type SchemaScheduleInput = components['schemas']['ScheduleInput'];
 export type SchemaSchedulePatch = components['schemas']['SchedulePatch'];
 export type SchemaScheduleView = components['schemas']['ScheduleView'];
@@ -3161,6 +3219,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    research_topic_api_v1_conversations__conversation_id__research_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchResult"];
+                };
             };
             /** @description Validation Error */
             422: {

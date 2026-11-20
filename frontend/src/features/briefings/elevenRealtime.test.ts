@@ -45,7 +45,7 @@ function setup() {
   const context = { audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) }, resume: vi.fn().mockResolvedValue(undefined),
     createMediaStreamSource: vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() })), destination: {} }
   const callbacks = { phase: vi.fn(), interrupt: vi.fn(), microphone: vi.fn(), story: () => undefined,
-    action: vi.fn(), finished: vi.fn(), failed: vi.fn() }
+    action: vi.fn(), finished: vi.fn(), failed: vi.fn(), research: vi.fn() }
   vi.mocked(api).mockImplementation(async path => path === '/agent-session'
     ? { signed_url: 'wss://api.elevenlabs.io/v1/convai/conversation?conversation_signature=one-use', context: 'Verified evidence', voice_id: 'saved-character', persona: 'Energetic speaker', language: 'en' }
     : { text: 'Three verified next stories.', action: { type: 'GET_MORE_NEWS', story_ids: ['a', 'b', 'c'] } })
@@ -112,5 +112,29 @@ it('discards late interrupted audio and refreshes only its own conversation cont
   expect(callbacks.phase).toHaveBeenLastCalledWith('blocked')
   await voice.resumeOutput()
   expect(output.resume).toHaveBeenCalledOnce()
+  voice.close()
+})
+
+it('routes research consent and results through the authenticated conversation without changing stories', async () => {
+  const { voice, callbacks, connect } = setup(), socket = await connect()
+  const offered = { status: 'offered', query: 'Mars moons', answer: 'Offer to look it up.', sources: [] }
+  vi.mocked(api).mockResolvedValueOnce(offered)
+  socket.receive({ type: 'client_tool_call', client_tool_call: {
+    tool_name: 'research_topic', tool_call_id: 'offer',
+    parameters: { action: 'offer', query: 'Mars moons', conversation_id: 'someone-else' },
+  } })
+  await vi.waitFor(() => expect(callbacks.research).toHaveBeenCalledWith(offered))
+  expect(api).toHaveBeenLastCalledWith('/conversations/conversation/research', 'POST',
+    { action: 'offer', query: 'Mars moons' }, expect.any(AbortSignal))
+  expect(socket.sent.at(-1)).toMatchObject({ type: 'client_tool_result', tool_call_id: 'offer', is_error: false })
+  expect(callbacks.action).not.toHaveBeenCalled()
+  const completed = { ...offered, status: 'completed', answer: 'Mars has two moons.', sources: [{ title: 'NASA', url: 'https://science.nasa.gov/mars/' }] }
+  vi.mocked(api).mockResolvedValueOnce(completed)
+  socket.receive({ type: 'client_tool_call', client_tool_call: {
+    tool_name: 'research_topic', tool_call_id: 'search', parameters: { action: 'search' },
+  } })
+  await vi.waitFor(() => expect(callbacks.research).toHaveBeenCalledWith(completed))
+  expect(api).toHaveBeenLastCalledWith('/conversations/conversation/research', 'POST', { action: 'search' }, expect.any(AbortSignal))
+  expect(output.setStoryOrder).not.toHaveBeenCalled()
   voice.close()
 })

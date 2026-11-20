@@ -705,3 +705,14 @@ html {
   color: #18200f;
 }
 .voice-engine-options button:disabled { opacity: .45; cursor: default; }
+
+.research-sources {
+  max-width: 620px;
+  margin: 18px auto 0;
+  text-align: left;
+  color: var(--muted, #9ba88c);
+  font-size: 13px;
+}
+.research-sources summary { cursor: pointer; text-align: center; }
+.research-sources p { margin: 10px 0; overflow-wrap: anywhere; }
+.research-sources a { color: inherit; text-underline-offset: 3px; }
