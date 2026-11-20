@@ -7,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     ForeignKey,
+    LargeBinary,
     String,
     UniqueConstraint,
     delete,
@@ -24,6 +25,11 @@ class User(Record):
     password_hash: Mapped[str]
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    custom_voice_id: Mapped[str | None] = mapped_column(String(128))
+    custom_voice_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    custom_voice_sample: Mapped[bytes | None] = mapped_column(
+        LargeBinary, deferred=True
+    )
 
 
 class VoiceProfile(Record):

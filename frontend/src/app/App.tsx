@@ -1,7 +1,7 @@
-import { useSyncExternalStore } from 'react'
-import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { Routes, Route, Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Info, LogOut, Settings2 } from 'lucide-react'
-import { getToken, setToken, useApi } from '../api/client'
+import { api, getToken, setToken, useApi } from '../api/client'
 import type { User } from '../api/types'
 import type { Health } from '../api/client'
 import { Brand, ErrorNote, Loading } from '../components/UI'
@@ -22,13 +22,41 @@ const subscribe = (callback: () => void) => {
   window.addEventListener('sourcera-session', callback)
   return () => window.removeEventListener('sourcera-session', callback)
 }
+function ListenerEntry() {
+  const health = useApi<Health>('/health')
+  const [failed, setFailed] = useState(false)
+  const demo = health.data?.demo_mode === true
+  useEffect(() => {
+    if (!demo) return
+    const controller = new AbortController()
+    api<{ access_token: string }>('/auth/demo', 'POST', { profile: 'tech' }, controller.signal)
+      .then(({ access_token }) => {
+        if (!controller.signal.aborted && !getToken()) setToken(access_token)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFailed(true)
+      })
+    return () => controller.abort()
+  }, [demo])
+  if (failed || (!health.isPending && !demo)) return <Auth demoMode={demo} />
+  return (
+    <main className="splash">
+      <Loading>Opening listening room…</Loading>
+    </main>
+  )
+}
 export function App() {
   const token = useSyncExternalStore(subscribe, getToken)
   const user = useApi<User>('/auth/me', !!token)
-  const health = useApi<Health>('/health', !!token)
+  const health = useApi<Health>('/health')
   const location = useLocation()
+  const navigate = useNavigate()
   const setActive = usePlayer((state) => state.setActive)
-  if (!token) return <Auth />
+  if (!token) {
+    if (location.pathname !== '/login') return <ListenerEntry />
+    if (health.isPending) return <main className="splash"><Loading /></main>
+    return <Auth demoMode={health.data?.demo_mode === true} />
+  }
   if (user.isPending && !user.data)
     return (
       <main className="splash">
@@ -43,12 +71,13 @@ export function App() {
         <button className="btn outline" onClick={() => user.refetch()}>
           Retry
         </button>
-        <button className="btn quiet" onClick={() => setToken(null)}>
+        <button className="btn quiet" onClick={() => { navigate('/login'); setToken(null) }}>
           Switch listener
         </button>
       </main>
     )
   const me = user.data
+  if (location.pathname === '/login') return <Navigate to="/" replace />
   const home = location.pathname === '/'
   const settings = location.pathname === '/settings'
   return (
@@ -71,6 +100,7 @@ export function App() {
             aria-label="Switch listener"
             onClick={() => {
               setActive(null)
+              navigate('/login')
               setToken(null)
             }}
           >

@@ -2,6 +2,12 @@
 
 ## ElevenAgents speech-to-speech
 
+### Custom live voice
+
+Select **Add voice** in the listening room, then **Upload audio** in the audio settings. Sourcera checks permission and validates the decoded duration of the sample (30–60 seconds and up to 10 MiB). A configured ElevenLabs agent and a personal account allow creation of the live voice. In demo mode or before the provider is configured, the decoded sample is saved to the current listener's profile. **Create custom voice from saved audio** becomes available once that profile can use ElevenLabs. After successful creation Sourcera clears the pending sample and retains the provider voice ID. A saved **Custom** card selects that voice for the next live conversation.
+
+Enable **Voice ID** overrides in the selected ElevenLabs agent's Security settings. The server key needs permission to create voices as well as start signed conversations. The clone and agent must be accessible in the same ElevenLabs workspace. An agent session started with Custom uses the clone throughout its WebSocket conversation. [Instant Voice Cloning API](https://elevenlabs.io/docs/api-reference/voices/ivc/create) · [ElevenAgents overrides](https://elevenlabs.io/docs/eleven-agents/customization/personalization/overrides)
+
 `CONVERSATION_PROVIDER=elevenagents` selects live voice for the listening room and Ask Sourcera. The application backend supplies the current news context and authorizes session creation. ElevenLabs handles streaming speech, dialogue and synthesis through its SDK. News ingestion, evidence verification for published episodes and prepared episode audio continue in Sourcera. Text chat still uses the existing application endpoints.
 
 ```mermaid

@@ -4,18 +4,17 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Cpu, ChartNoAxesCombined, Headphones, Radio } from 'lucide-react'
+import { Cpu, ChartNoAxesCombined, Headphones } from 'lucide-react'
 import { api, setToken } from '../../api/client'
 import { Brand, Button, ErrorNote, Tabs } from '../../components/UI'
-import { SignalArt } from '../../components/SignalArt'
 const credentials = z.object({
   name: z.string().trim().max(100).optional(),
   email: z.string().email(),
   password: z.string().min(1),
 })
 type Credentials = z.infer<typeof credentials>
-export function Auth() {
-  const [tab, setTab] = useState('demo')
+export function Auth({ demoMode = true }: { demoMode?: boolean }) {
+  const [tab, setTab] = useState(demoMode ? 'demo' : 'login')
   const {
     register,
     handleSubmit,
@@ -26,11 +25,9 @@ export function Auth() {
   const sign = useMutation({
     mutationFn: ({ path, data }: { path: string; data: unknown }) =>
       api<{ access_token: string }>('/auth/' + path, 'POST', data),
-    onSuccess: (r, v) => {
+    onSuccess: (r) => {
       setToken(r.access_token)
-      navigate(v.path === 'register' ? '/settings?welcome=1' : '/', {
-        replace: true,
-      })
+      navigate('/', { replace: true })
     },
   })
   function submit(data: Credentials) {
@@ -51,35 +48,17 @@ export function Auth() {
     })
   }
   return (
-    <main className="auth-shell">
-      <section className="auth-sleeve">
-        <Brand />
-        <div className="auth-art">
-          <SignalArt />
-        </div>
-        <div className="edition-line">
-          <Radio size={16} /> AUDIO NEWS
-        </div>
-        <h1>
-          The listening
-          <br />
-          <em>room.</em>
-        </h1>
-        <p>Your own news briefing, with the sources behind every story.</p>
-        <div className="sleeve-footer">
-          <Headphones size={17} /> Personalized audio briefings
-        </div>
-      </section>
+    <main className="listener-access">
       <section className="auth-form">
         <div className="auth-body">
-          <div className="eyebrow">LISTENER ACCESS</div>
-          <h2>
+          <Brand />
+          <h1>
             {tab === 'demo'
               ? 'Choose a listener'
               : tab === 'register'
                 ? 'Create your profile'
-                : 'Welcome back'}
-          </h2>
+                : 'Sign in'}
+          </h1>
           <Tabs
             value={tab}
             onChange={(id) => {
@@ -87,7 +66,7 @@ export function Auth() {
               sign.reset()
             }}
             options={[
-              { id: 'demo', name: 'Demo profiles' },
+              ...(demoMode ? [{ id: 'demo', name: 'Demo profiles' }] : []),
               { id: 'login', name: 'Sign in' },
               { id: 'register', name: 'Register' },
             ]}

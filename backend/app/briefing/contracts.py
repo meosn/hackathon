@@ -54,6 +54,19 @@ class AgentContext(BaseModel):
 
 class AgentSession(AgentContext):
     signed_url: str
+    voice_id: str | None = None
+
+
+class CustomVoice(Strict):
+    saved: bool
+    active: bool
+    can_upload: bool
+    can_create: bool
+    sample_uploaded: bool
+
+
+class SelectCustomVoice(Strict):
+    active: bool
 
 
 class MessageInput(Strict):

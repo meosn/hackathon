@@ -411,6 +411,93 @@ def test_realtime_session_is_private_and_evidence_uses_no_text_model(api, monkey
     )
 
 
+def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeypatch):
+    import io
+    import wave
+
+    from app.briefing import custom_voice
+
+    def listener(name):
+        result = api.post(
+            V1 + "/auth/register",
+            json={
+                "email": f"{name}@example.org",
+                "name": name,
+                "password": "test-password",
+            },
+        )
+        assert result.status_code == 201
+        return {"Authorization": "Bearer " + result.json()["access_token"]}
+
+    def sample(seconds):
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav:
+            wav.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
+            wav.writeframes(bytes(seconds * 8000 * 2))
+        return {"file": ("sample.wav", buffer.getvalue(), "audio/wav")}
+
+    monkeypatch.setenv("CONVERSATION_PROVIDER", "elevenagents")
+    monkeypatch.setenv("ELEVENLABS_AGENT_ID", "agent_test")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    owner, other = listener("owner"), listener("other")
+    created = []
+
+    def clone(key, audio):
+        assert key == "test-key"
+        assert audio.startswith(b"RIFF")
+        created.append(True)
+        return "owner-voice-id"
+
+    monkeypatch.setattr(custom_voice, "clone_voice", clone)
+    monkeypatch.setattr(
+        agent, "signed_session_url", lambda *_: "wss://example.org/signed"
+    )
+    path = V1 + "/users/me/custom-voice"
+    assert (
+        api.post(
+            path, headers=owner, data={"consent": "false"}, files=sample(30)
+        ).status_code
+        == 422
+    )
+    for seconds in (29, 61):
+        assert (
+            api.post(
+                path, headers=owner, data={"consent": "true"}, files=sample(seconds)
+            ).status_code
+            == 422
+        )
+    assert created == []
+    monkeypatch.setenv("CONVERSATION_PROVIDER", "local")
+    result = api.post(path, headers=owner, data={"consent": "true"}, files=sample(30))
+    assert result.status_code == 201, result.text
+    assert result.json()["sample_uploaded"] is True
+    assert result.json()["saved"] is False
+    assert result.json()["can_create"] is False
+    assert api.get(path, headers=other).json()["sample_uploaded"] is False
+    assert created == []
+    monkeypatch.setenv("CONVERSATION_PROVIDER", "elevenagents")
+    assert api.post(path + "/create", headers=other).status_code == 404
+    result = api.post(path + "/create", headers=owner)
+    assert result.status_code == 200
+    assert result.json()["active"] is True
+    assert result.json()["sample_uploaded"] is False
+    assert api.get(path, headers=other).json()["saved"] is False
+    assert (
+        api.post(V1 + "/agent-session", headers=other, json={}).json()["voice_id"]
+        is None
+    )
+    assert (
+        api.post(V1 + "/agent-session", headers=owner, json={}).json()["voice_id"]
+        == "owner-voice-id"
+    )
+    assert api.patch(path, headers=owner, json={"active": False}).json()["saved"]
+    assert (
+        api.post(V1 + "/agent-session", headers=owner, json={}).json()["voice_id"]
+        is None
+    )
+    assert created == [True]
+
+
 def test_streamed_speech_token_is_private_and_uses_the_selected_voice(api, monkeypatch):
     import json
     import httpx

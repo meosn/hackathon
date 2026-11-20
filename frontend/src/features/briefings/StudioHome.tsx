@@ -1,30 +1,31 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { AudioLines, Check, Play } from 'lucide-react'
+import { AudioLines, Check, Play, Plus } from 'lucide-react'
 import { api, clockTime, niceDate, queryClient, useApi } from '../../api/client'
 import type { Health } from '../../api/client'
 import type { Briefing, Preferences, User } from '../../api/types'
+import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import { ErrorNote } from '../../components/UI'
+import { customVoicePath, setCustomVoice, type CustomVoiceState } from '../voice/CustomVoice'
 import { DailySession } from './DailySession'
 import './studio.css'
 
 const hosts = [
-  { id: 'professional', name: 'The Anchor', look: 'anchor' },
-  { id: 'casual', name: 'Street Signal', look: 'street' },
-  { id: 'jarvis', name: 'Studio Assistant', look: 'assistant' },
+  { id: 'professional', name: 'The Anchor' },
+  { id: 'casual', name: 'Street Signal' },
+  { id: 'jarvis', name: 'Studio Assistant' },
+  { id: 'energetic', name: 'Energetic Commentator' },
 ]
-function Portrait({ look }: { look: string }) {
-  return (
-    <div className={'host-portrait abstract-voice ' + look} aria-hidden="true">
-      <AudioLines size={42} strokeWidth={1} />
-    </div>
-  )
-}
 export function StudioHome({ user }: { user: User }) {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [])
+  const custom = useApi<CustomVoiceState>(customVoicePath)
+  const selectCustom = useMutation({
+    mutationFn: setCustomVoice,
+    onSuccess: (data) => queryClient.setQueryData([customVoicePath], data),
+  })
   const prefs = useApi<Preferences>('/users/me/preferences')
   const briefs = useApi<Briefing[]>('/briefings')
   const health = useApi<Health>('/health')
@@ -99,14 +100,19 @@ export function StudioHome({ user }: { user: User }) {
               <button
                 type="button"
                 key={host.id}
-                aria-pressed={prefs.data?.voice_profile_id === host.id}
+                aria-pressed={!custom.data?.active && prefs.data?.voice_profile_id === host.id}
                 className="music-host"
-                disabled={save.isPending || !prefs.data}
-                onClick={() => save.mutate(host.id)}
+                disabled={save.isPending || selectCustom.isPending || !prefs.data}
+                onClick={async () => {
+                  if (custom.data?.active) {
+                    try { await selectCustom.mutateAsync(false) } catch { return }
+                  }
+                  save.mutate(host.id)
+                }}
               >
                 <span className="portrait-wrap">
-                  <Portrait look={host.look} />
-                  {prefs.data?.voice_profile_id === host.id && (
+                  <SpeakerAvatar id={host.id} />
+                  {!custom.data?.active && prefs.data?.voice_profile_id === host.id && (
                     <span className="voice-check">
                       <Check size={13} />
                     </span>
@@ -115,9 +121,26 @@ export function StudioHome({ user }: { user: User }) {
                 <span>{host.name}</span>
               </button>
             ))}
+            {custom.data?.saved && (
+              <button type="button" className="music-host" aria-pressed={custom.data.active}
+                disabled={selectCustom.isPending || save.isPending}
+                onClick={() => { setVoiceChanged(false); selectCustom.mutate(true) }}>
+                <span className="portrait-wrap">
+                  <span className="speaker-avatar custom-voice-icon" aria-hidden="true">C</span>
+                  {custom.data.active && <span className="voice-check"><Check size={13} /></span>}
+                </span>
+                <span>Custom</span>
+              </button>
+            )}
+            <Link to="/settings?section=audio#custom-voice" className="music-host">
+              <span className="portrait-wrap">
+                <span className="speaker-avatar custom-voice-icon" aria-hidden="true"><Plus size={28} /></span>
+              </span>
+              <span>Add voice</span>
+            </Link>
           </div>
           <div className="voice-apply" role="status">
-            {voiceChanged ? (
+            {custom.data?.active ? 'Custom voice selected for live chat.' : voiceChanged ? (
               <>
                 <span>New replies use this voice.</span>
                 <button
@@ -131,7 +154,7 @@ export function StudioHome({ user }: { user: User }) {
               'Saving voice…'
             ) : null}
           </div>
-          <ErrorNote error={save.error || prefs.error || generate.error} />
+          <ErrorNote error={save.error || prefs.error || generate.error || selectCustom.error} />
         </section>
         <section className="music-library" aria-label="Podcast library">
           <div className="music-section-heading">
