@@ -508,8 +508,8 @@ function SettingsForm({
                       </label>
                     </div>
                     <p className="preference-hint">
-                      For custom and weekly editions. Your daily starts with the
-                      top 3 stories.
+                      Applies to daily, custom and weekly editions. Longer daily
+                      briefings add detail to the same top 3 stories.
                     </p>
                   </section>
                 </>

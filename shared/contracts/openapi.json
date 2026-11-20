@@ -2923,6 +2923,22 @@
       },
       "BriefingDetail": {
         "properties": {
+          "target_duration_seconds": {
+            "type": "integer",
+            "title": "Target Duration Seconds",
+            "default": 0
+          },
+          "duration_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Note"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -3118,6 +3134,22 @@
       },
       "BriefingView": {
         "properties": {
+          "target_duration_seconds": {
+            "type": "integer",
+            "title": "Target Duration Seconds",
+            "default": 0
+          },
+          "duration_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Note"
+          },
           "id": {
             "type": "string",
             "title": "Id"

@@ -1,6 +1,8 @@
-"""One immutable prepared baseline per listener's local calendar day."""
+"""One prepared baseline per local calendar day and content preference snapshot."""
 
 import os
+import hashlib
+import json
 from sqlalchemy import select
 from app.accounts import User, Schedule, preferences
 from app.db import utcnow
@@ -10,13 +12,34 @@ from .models import Briefing, BriefingItem, BriefingSegment
 from .service import create_briefing, lock_briefing
 
 
+def daily_key(user_id, prefs, today):
+    settings = {
+        key: prefs[key]
+        for key in (
+            "language",
+            "duration_minutes",
+            "depth",
+            "interests",
+            "preferred_sources",
+            "excluded_sources",
+        )
+    }
+    settings["period"] = os.getenv("DAILY_NEWS_PERIOD", "day")
+    fingerprint = hashlib.sha256(
+        json.dumps(settings, sort_keys=True).encode()
+    ).hexdigest()[:16]
+    edition = os.getenv("NEWS_EDITION_VERSION", "")
+    return f"daily/{user_id}/{today}/top3/length-v2-{fingerprint}" + (
+        f"/{edition}" if edition else ""
+    )
+
+
 def ensure_daily(db, user_id, now=None):
     from app.jobs import queue_record
 
     prefs = preferences(db, user_id)
     today = (now or utcnow()).astimezone(resolve_timezone(prefs["timezone"])).date()
-    edition = os.getenv("NEWS_EDITION_VERSION", "")
-    key = f"daily/{user_id}/{today}/top3" + (f"/{edition}" if edition else "")
+    key = daily_key(user_id, prefs, today)
     existing = db.scalar(select(Briefing).where(Briefing.schedule_key == key))
     if existing:
         return existing
@@ -50,9 +73,7 @@ def ensure_daily(db, user_id, now=None):
             source = db.scalar(
                 select(Briefing).where(
                     Briefing.user_id == template.id,
-                    Briefing.schedule_key
-                    == f"daily/{template.id}/{today}/top3"
-                    + (f"/{edition}" if edition else ""),
+                    Briefing.schedule_key == daily_key(template.id, tp, today),
                     Briefing.status == "completed",
                 )
             )

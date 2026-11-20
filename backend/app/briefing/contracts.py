@@ -170,6 +170,8 @@ class Item(BaseModel):
 
 
 class BriefingView(BaseModel):
+    target_duration_seconds: int = 0
+    duration_note: str | None = None
     id: str
     title: str
     created_at: datetime

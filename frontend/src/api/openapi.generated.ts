@@ -1033,6 +1033,13 @@ export interface components {
         };
         /** BriefingDetail */
         BriefingDetail: {
+            /**
+             * Target Duration Seconds
+             * @default 0
+             */
+            target_duration_seconds: number;
+            /** Duration Note */
+            duration_note?: string | null;
             /** Id */
             id: string;
             /** Title */
@@ -1089,6 +1096,13 @@ export interface components {
         };
         /** BriefingView */
         BriefingView: {
+            /**
+             * Target Duration Seconds
+             * @default 0
+             */
+            target_duration_seconds: number;
+            /** Duration Note */
+            duration_note?: string | null;
             /** Id */
             id: string;
             /** Title */

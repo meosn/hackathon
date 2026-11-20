@@ -10,7 +10,7 @@ import {
   useApi,
 } from '../../api/client'
 import type { Health } from '../../api/client'
-import type { BriefingDetail, Conversation, Message, ResearchResult } from '../../api/types'
+import type { BriefingDetail, Conversation, Message, Preferences, ResearchResult } from '../../api/types'
 import { ErrorNote } from '../../components/UI'
 import { LiveMicrophone } from './liveMicrophone'
 import {
@@ -31,12 +31,15 @@ export function DailySession({
 }) {
   const health = useApi<Health>('/health')
   const choice = useVoiceChoice()
+  const preferences = useApi<Preferences>('/users/me/preferences')
+  const prefs = preferences.data
+  const dailyKey = ['daily-edition', JSON.stringify(prefs && [prefs.language, prefs.duration_minutes,
+    prefs.depth, prefs.interests, prefs.preferred_sources, prefs.excluded_sources, prefs.timezone])]
   const daily = useQuery({
-    queryKey: ['daily-edition'],
+    queryKey: dailyKey,
+    enabled: !!prefs,
     queryFn: () => {
-      const previous = queryClient.getQueryData<BriefingDetail>([
-        'daily-edition',
-      ])
+      const previous = queryClient.getQueryData<BriefingDetail>(dailyKey)
       return previous && !['completed', 'failed'].includes(previous.status)
         ? api<BriefingDetail>('/briefings/' + previous.id)
         : api<BriefingDetail>('/briefings/daily', 'POST')
@@ -605,6 +608,7 @@ export function DailySession({
           ? 'Microphone active'
           : 'Listen freely. Turn the mic on to join in.'}
       </span>
+      {edition?.duration_note && <p className="preference-hint">{edition.duration_note}</p>}
       {researchSources.length > 0 && (
         <details className="research-sources">
           <summary>Web search sources · {researchSources.length}</summary>
