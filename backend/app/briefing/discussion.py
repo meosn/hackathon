@@ -76,6 +76,11 @@ def classify(db, cid, text):
             index = max(1, int(match[1]))
         if index:
             return Decision(intent="SELECT_STORY", ordinal=index)
+    if re.search(
+        r"\b(this story|that story|the story|dieser meldung|diese nachricht|dit bericht|deze gebeurtenis|этой новости|этой истории|эту новость|эту историю)\b",
+        query,
+    ):
+        return Decision(intent="EXPLAIN_STORY")
     if re.search(r"\b(week|month|woche|maand|monat)\b", query):
         return Decision(
             intent="GET_PERIOD_NEWS",
@@ -377,6 +382,7 @@ def generated_answer(db, conv, story, question, prefs, intent):
         if line.story_id != story["id"] or line.claim_id not in evidence:
             raise ValueError("The answer cited evidence outside its context")
         fact, cites = evidence[line.claim_id]
+        answer_text = line.text
         if not verify_segment(
             db,
             line.text,
@@ -385,10 +391,20 @@ def generated_answer(db, conv, story, question, prefs, intent):
             allow_conflict=intent == "COMPARE_SOURCES",
             reference_id=conv.id,
         ):
-            raise ValueError(
-                "The generated answer was not supported by its cited claim"
-            )
-        parts.append(line.text)
+            if not verify_segment(
+                db,
+                fact["text"],
+                [fact["id"]],
+                [c["article_id"] for c in cites],
+                allow_conflict=intent == "COMPARE_SOURCES",
+                reference_id=conv.id,
+            ):
+                raise ValueError("The cited source evidence is no longer valid")
+            answer_text = fact["text"]
+            if intent == "COMPARE_SOURCES":
+                names = " / ".join(dict.fromkeys(c["source"] for c in cites))
+                answer_text = f"{names}: {answer_text}"
+        parts.append(answer_text)
         citations.extend(c for c in cites if c not in citations)
     if parts:
         return " ".join(parts), citations
@@ -481,50 +497,37 @@ def respond(db, conv, text):
         conv.topic = decision.topic if intent == "FILTER_TOPIC" else None
         conv.briefing_id = None
         action["period"] = decision.period
-    elif conv.briefing_id:
-        last_more = next(
+    else:
+        last_digest = next(
             (
                 message
                 for message in db.scalars(
                     select(ConversationMessage)
                     .where(
                         ConversationMessage.conversation_id == conv.id,
-                        ConversationMessage.intent == "GET_MORE_NEWS",
+                        ConversationMessage.intent.in_(
+                            news_intents | {"GET_MORE_NEWS"}
+                        ),
                     )
                     .order_by(
                         ConversationMessage.created_at.desc(),
                         ConversationMessage.id.desc(),
                     )
                 )
-                if message.action.get("story_ids")
+                if message.intent != "GET_MORE_NEWS" or message.action.get("story_ids")
             ),
             None,
         )
-        choices = (
-            last_more.action["story_ids"]
-            if last_more and last_more.action.get("story_ids")
-            else list(
+        if last_digest:
+            choices = last_digest.action.get("story_ids")
+        elif conv.briefing_id:
+            choices = list(
                 db.scalars(
                     select(BriefingItem.story_id)
                     .where(BriefingItem.briefing_id == conv.briefing_id)
                     .order_by(BriefingItem.position)
                 )
             )
-        )
-    else:
-        last_digest = db.scalar(
-            select(ConversationMessage)
-            .where(
-                ConversationMessage.conversation_id == conv.id,
-                ConversationMessage.intent.in_(news_intents),
-            )
-            .order_by(
-                ConversationMessage.created_at.desc(), ConversationMessage.id.desc()
-            )
-            .limit(1)
-        )
-        if last_digest:
-            choices = last_digest.action.get("story_ids")
     if choices is None:
         period = decision.period if intent in news_intents else "month"
         choices = [

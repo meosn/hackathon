@@ -2,6 +2,8 @@
 
 The configured conversation provider receives the current story, briefing and topic, listener preferences, recent messages and retrieved evidence. Neural article embeddings support cross-language retrieval. Structured answers cite an allowlisted claim per sentence and pass the database-backed wording/evidence gate. The router resolves follow-up references from recent history. Provider or verification failures return source search with a visible fallback indicator.
 
+Current-story questions preserve the selected conversation story, including stories added through **More news**. Unsupported conversational rewrites recover to the cited source wording and pass the evidence gate again. Invalid claim identities and invalid stored evidence still block the generated response.
+
 Prepared daily editions contain the three highest-ranked eligible stories when three are available. The `story_limit` request field also supports explicitly bounded custom editions. The listening room offers **More news**, and the voice router recognizes equivalent requests in English, German, Dutch and Russian. Each request selects up to three additional stories, excluding the original briefing and earlier conversation selections.
 
 ElevenLabs narration batches verified paragraphs through the timestamped speech endpoint. Original character alignment determines transcript boundaries, and audio frame counts determine the final duration. Batches stay within 8,000 characters. The local renderer retains segment-by-segment synthesis. Unsupported generated rewrites are replaced with their approved source wording before the final evidence gate. Invalid claim IDs, assignments or source evidence still block publication.
