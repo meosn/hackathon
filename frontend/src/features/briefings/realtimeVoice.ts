@@ -17,6 +17,14 @@ type Callbacks = {
   failed: (message: string) => void
 }
 
+/** Resume from a direct click, including browsers that gate delayed media playback. */
+export function unlockVoiceAudio(previous: AudioContext | null) {
+  const context =
+    previous?.state !== 'closed' && previous ? previous : new AudioContext()
+  void context.resume().catch(() => {})
+  return context
+}
+
 /** One duplex audio transport. Input tracks can be released without touching output. */
 export class RealtimeVoice {
   private peer: RTCPeerConnection | null = null
@@ -24,6 +32,7 @@ export class RealtimeVoice {
   private sender: RTCRtpSender | null = null
   private stream: MediaStream | null = null
   private output: HTMLAudioElement
+  private outputSource: MediaStreamAudioSourceNode | null = null
   private connecting: Promise<void> | null = null
   private abort = new AbortController()
   private closed = false
@@ -40,6 +49,7 @@ export class RealtimeVoice {
   constructor(
     private conversationId: string,
     private callbacks: Callbacks,
+    private outputContext?: AudioContext,
   ) {
     this.output = new Audio()
     this.output.autoplay = true
@@ -65,7 +75,15 @@ export class RealtimeVoice {
     const peer = (this.peer = new RTCPeerConnection())
     this.sender = peer.addTransceiver('audio', { direction: 'sendrecv' }).sender
     peer.ontrack = (event) => {
-      this.output.srcObject = event.streams[0] || new MediaStream([event.track])
+      const stream = event.streams[0] || new MediaStream([event.track])
+      this.output.srcObject = stream
+      if (this.outputContext?.state === 'running') {
+        this.outputSource?.disconnect()
+        this.outputSource = this.outputContext.createMediaStreamSource(stream)
+        this.outputSource.connect(this.outputContext.destination)
+        // Keep the media element running while Web Audio provides the audible path.
+        this.output.muted = true
+      }
       void this.output
         .play()
         .catch(() => this.callbacks.failed('Tap Play to enable spoken audio.'))
@@ -369,6 +387,8 @@ export class RealtimeVoice {
     this.stream = null
     this.channel?.close()
     this.peer?.close()
+    this.outputSource?.disconnect()
+    this.outputSource = null
     this.output.pause()
     this.output.srcObject = null
     this.callbacks.microphone(false)

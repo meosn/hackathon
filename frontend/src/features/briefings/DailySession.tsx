@@ -13,7 +13,11 @@ import type { Health } from '../../api/client'
 import type { BriefingDetail, Conversation, Message } from '../../api/types'
 import { ErrorNote } from '../../components/UI'
 import { LiveMicrophone } from './liveMicrophone'
-import { RealtimeVoice, type VoicePhase } from './realtimeVoice'
+import {
+  RealtimeVoice,
+  unlockVoiceAudio,
+  type VoicePhase,
+} from './realtimeVoice'
 
 export function DailySession({
   selectedId = '',
@@ -73,6 +77,7 @@ export function DailySession({
   const answer = useRef<HTMLAudioElement>(null)
   const microphone = useRef<LiveMicrophone | null>(null)
   const realtime = useRef<RealtimeVoice | null>(null)
+  const voiceOutput = useRef<AudioContext | null>(null)
   const resumeAfterAnswer = useRef(false)
   const conversation = useRef<Promise<Conversation> | null>(null)
   const turn = useRef(0)
@@ -98,6 +103,7 @@ export function DailySession({
       mounted.current = false
       microphone.current?.stop()
       realtime.current?.close()
+      void voiceOutput.current?.close()
       controller.current?.abort()
       if (answerUrl.current) URL.revokeObjectURL(answerUrl.current)
     }
@@ -195,46 +201,51 @@ export function DailySession({
     const conv = await ensureConversation()
     if (!mounted.current) throw new DOMException('Aborted', 'AbortError')
     realtime.current?.close()
-    const voice = new RealtimeVoice(conv.id, {
-      phase: (value: VoicePhase) => {
-        if (!mounted.current) return
-        setVoiceConnecting(value === 'connecting')
-        setResponding(value === 'thinking')
-        setAnswerPlaying(value === 'speaking')
-        setPhase(
-          value === 'connecting'
-            ? 'Connecting voice…'
-            : value === 'thinking'
-              ? 'Thinking…'
-              : value === 'speaking'
-                ? 'Speaking'
-                : '',
-        )
+    const voice = new RealtimeVoice(
+      conv.id,
+      {
+        phase: (value: VoicePhase) => {
+          if (!mounted.current) return
+          setVoiceConnecting(value === 'connecting')
+          setResponding(value === 'thinking')
+          setAnswerPlaying(value === 'speaking')
+          setPhase(
+            value === 'connecting'
+              ? 'Connecting voice…'
+              : value === 'thinking'
+                ? 'Thinking…'
+                : value === 'speaking'
+                  ? 'Speaking'
+                  : '',
+          )
+        },
+        interrupt: pauseLocalAudio,
+        microphone: (value) => {
+          if (mounted.current) setListening(value)
+        },
+        story: currentStory,
+        action: applyAction,
+        finished: () => {
+          if (resumeAfterAnswer.current) {
+            resumeAfterAnswer.current = false
+            void narration.current?.play().catch((e) => setError(e.message))
+          }
+        },
+        failed: (message) => {
+          if (mounted.current) {
+            setError(message)
+            setResponding(false)
+            setVoiceConnecting(false)
+          }
+        },
       },
-      interrupt: pauseLocalAudio,
-      microphone: (value) => {
-        if (mounted.current) setListening(value)
-      },
-      story: currentStory,
-      action: applyAction,
-      finished: () => {
-        if (resumeAfterAnswer.current) {
-          resumeAfterAnswer.current = false
-          void narration.current?.play().catch((e) => setError(e.message))
-        }
-      },
-      failed: (message) => {
-        if (mounted.current) {
-          setError(message)
-          setResponding(false)
-          setVoiceConnecting(false)
-        }
-      },
-    })
+      voiceOutput.current || undefined,
+    )
     realtime.current = voice
     return voice
   }
   async function startListening() {
+    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     setVoiceConnecting(true)
     try {
@@ -268,6 +279,7 @@ export function DailySession({
     }
   }
   async function moreNews() {
+    voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     if (health.data?.realtime_voice) {
       try {
