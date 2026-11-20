@@ -1,7 +1,9 @@
 """Exercise authenticated HTTP and WS with a real local worker and isolated storage."""
 
+import json
 import time
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -10,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app import jobs
 from app.accounts import seed_voices
-from app.briefing import routes
+from app.briefing import agent, routes
 from app.config import settings
 from app.db import get_db, load_models
 from app.main import app
@@ -38,6 +40,7 @@ def api(tmp_path, monkeypatch):
         "AUDIO_DIR": str(tmp_path / "audio"),
         "TTS_PROVIDER": "local",
         "STT_PROVIDER": "mock",
+        "CONVERSATION_PROVIDER": "local",
         "LLM_PROVIDER": "mock",
         "EMBEDDING_PROVIDER": "local_hash",
     }.items():
@@ -54,7 +57,7 @@ def api(tmp_path, monkeypatch):
     app.dependency_overrides[get_db] = dependency
     try:
         # Local tasks run in the actual background executor. The production scheduler is independent.
-        yield TestClient(app)
+        yield TestClient(app, client=(tmp_path.name, 50000))
     finally:
         del app.dependency_overrides[get_db]
         local_engine.dispose()
@@ -167,6 +170,96 @@ def test_private_http_player_conversation_and_recovery(api):
     )
     assert api.post(retry_path + "/retry", headers=headers).status_code == 202
     assert wait_for_edition(api, retry_path, headers)["status"] == "completed"
+
+
+def test_elevenagents_owns_context_and_issues_only_a_signed_url(api, monkeypatch):
+    def profile(name):
+        token = api.post(V1 + "/auth/demo", json={"profile": name}).json()[
+            "access_token"
+        ]
+        return {"Authorization": "Bearer " + token}
+
+    owner, other = profile("tech"), profile("finance")
+    briefing = api.post(
+        V1 + "/briefings", headers=owner, json={"period": "week", "story_limit": 1}
+    ).json()["briefing_id"]
+    detail = wait_for_edition(api, f"{V1}/briefings/{briefing}", owner)
+    segment = next(segment for segment in detail["segments"] if segment["citations"])
+    scope = {
+        "briefing_id": briefing,
+        "playback_seconds": segment["start_seconds"],
+    }
+    endpoint = V1 + "/agent-session"
+    assert api.post(endpoint, headers=owner, json=scope).status_code == 503
+    monkeypatch.setenv("CONVERSATION_PROVIDER", "elevenagents")
+    monkeypatch.delenv("ELEVENLABS_AGENT_ID", raising=False)
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    assert api.get(V1 + "/health").json()["conversation_provider"] == "elevenagents"
+    assert api.post(endpoint, headers=owner, json=scope).status_code == 503
+    monkeypatch.setenv("ELEVENLABS_AGENT_ID", "agent_test")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    signed = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=agent_test&conversation_signature=token"
+    requested = []
+
+    def request(url, *, params, headers, **kwargs):
+        requested.append(url)
+        assert params == {"agent_id": "agent_test"}
+        assert headers == {"xi-api-key": "test-key"}
+        return httpx.Response(
+            200, json={"signed_url": signed}, request=httpx.Request("GET", url)
+        )
+
+    monkeypatch.setattr(agent.httpx, "get", request)
+    assert api.post(endpoint, json=scope).status_code == 401
+    assert api.post(endpoint, headers=other, json=scope).status_code == 404
+    assert (
+        api.post(
+            endpoint, headers=owner, json={**scope, "story_id": "unrelated"}
+        ).status_code
+        == 422
+    )
+    assert requested == []
+    result = api.post(endpoint, headers=owner, json=scope)
+    assert result.status_code == 200
+    assert result.headers["cache-control"] == "private, no-store"
+    assert result.json()["signed_url"] == signed and "test-key" not in result.text
+    context = json.loads(result.json()["context"])
+    assert context["focus_position"] == segment["position"]
+    entry = next(
+        entry
+        for entry in context["entries"]
+        if entry["position"] == segment["position"]
+    )
+    assert entry["text"] == segment["text"]
+    assert entry["sources"][0]["url"] == segment["citations"][0]["url"]
+    assert entry["sources"][0]["excerpt"] == segment["citations"][0]["excerpt"][:450]
+    refresh = api.post(V1 + "/agent-context", headers=owner, json=scope)
+    assert refresh.json() == {"context": result.json()["context"]}
+    extra = api.post(
+        V1 + "/agent-context", headers=owner, json={**scope, "more_news": True}
+    )
+    extra_context = json.loads(extra.json()["context"])
+    assert extra_context["scope"] == "more_news"
+    assert not {entry["title"] for entry in extra_context["entries"]} & {
+        item["title"] for item in detail["items"]
+    }
+    assert len(requested) == 1
+
+    conv = api.post(
+        V1 + "/conversations", headers=owner, json={"briefing_id": briefing}
+    ).json()
+    legacy = api.post(
+        f"{V1}/conversations/{conv['id']}/audio",
+        headers=owner,
+        files={"file": ("test.wav", b"test", "audio/wav")},
+    )
+    assert legacy.status_code == 409
+    monkeypatch.setenv("ACTIVE_CORPUS", "licensed")
+    assert api.post(endpoint, headers=owner, json=scope).status_code == 503
+    monkeypatch.setenv("ELEVENLABS_ALLOW_LICENSED_CONTEXT", "1")
+    signed = signed.replace("api.elevenlabs.io", "other.example")
+    blocked = api.post(endpoint, headers=owner, json=scope)
+    assert blocked.status_code == 502 and "other.example" not in blocked.text
 
 
 def test_daily_is_prepared_once_and_playback_never_regenerates(api):

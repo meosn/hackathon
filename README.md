@@ -32,39 +32,47 @@ Open [localhost:5173](http://localhost:5173) and select **Technology enthusiast*
 
 The example environment uses local speech and deterministic AI adapters, so the demo can run without external accounts. Host ports and credentials are configurable in `.env`.
 
-## ElevenLabs speech and voice questions
+## ElevenAgents voice conversations
+
+Enable a private ElevenLabs agent for live voice conversations by setting these values in `.env`:
+
+```dotenv
+CONVERSATION_PROVIDER=elevenagents
+ELEVENLABS_AGENT_ID=your_agent_id
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+```
+
+Configure the agent's prompt, voice and language using the [ElevenAgents setup guide](docs/VOICE_PIPELINE.md#elevenagents-speech-to-speech). Rebuild and apply the settings with `./scripts/compose.sh up --build -d`. **Voice chat** opens a signed WebSocket to ElevenLabs. Sourcera provides the current episode, playhead and source evidence, or the selected story in Ask Sourcera. ElevenLabs processes the microphone stream and speaks the answer in the same session. The prepared briefing remains available for playback, and text questions remain available in Ask Sourcera.
+
+The checkout defaults to `CONVERSATION_PROVIDER=local` for the offline demo. The prepared narration voice has its own setting and remains independent of the voice selected in the ElevenAgents dashboard.
+
+### Prepared narration and text answers
 
 Set `LLM_PROVIDER=api`, `LLM_MODEL` and `LLM_API_KEY` to enable generated conversation answers and rewritten narration. `LLM_BASE_URL` supports compatible APIs. `LLM_PROVIDER=ollama` selects a reachable Ollama service. Conversation generation receives the current story, preferences, recent messages and retrieved claims. Each answer sentence cites one stored claim and passes source checks. Failed generation returns source search results with an explicit fallback indicator.
 
 `EMBEDDING_PROVIDER=sentence_transformers` and `BACKEND_EXTRAS=[ml,crawl]` enable multilingual neural embeddings and Scrapling. Models are cached in a private Compose volume. Optional `CLUSTER_LLM_VERIFY=1` reviews uncertain semantic event matches. `FACT_EXTRACTION_PROVIDER=hybrid` recovers short exact evidence quotations when cheap extraction finds fewer than three claims.
 
-For hosted narration and speech recognition, edit these entries in your local `.env`:
+For hosted narration, edit these entries in your local `.env`:
 
 ```dotenv
 TTS_PROVIDER=elevenlabs
-STT_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=your_elevenlabs_api_key
 ELEVENLABS_VOICE_ID=your_permitted_voice_id
 ELEVENLABS_MODEL=eleven_multilingual_v2
-ELEVENLABS_STT_MODEL=scribe_v2
 TTS_LOCAL_FALLBACK=0
 ```
 
-Use a voice available to your ElevenLabs account. `ELEVENLABS_VOICE_MAP` can map the application styles `professional`, `energetic`, `casual`, `jarvis` and `cyberpunk` to different permitted voice IDs. Hosted synthesis and recognition consume the account's API allowance. Apply configuration changes with:
+Use a voice available to your ElevenLabs account. `ELEVENLABS_VOICE_MAP` can map the application styles `professional`, `energetic`, `casual`, `jarvis` and `cyberpunk` to different permitted voice IDs. Hosted synthesis consumes the account's API allowance. Apply configuration changes with:
 
 ```bash
 ./scripts/compose.sh up -d
 ```
 
-The microphone starts after Play and browser permission. It stays active while narration and answers play. Detected speech pauses playback and cancels stale responses. End the session or disable the microphone to release capture. Use localhost or HTTPS and a supported browser. Headphones help isolate the user's speech from speaker output.
-
-Recognition, retrieval and synthesis run as asynchronous turns while microphone capture continues. In a recorded live check, a spoken answer was ready about 3.1 seconds after question submission. Provider and network latency varies.
-
 ## Daily editions and personalization
 
 A listener's baseline edition is prepared once per local calendar day with the **Professional news** voice. New listeners receive a default 06:00 preparation schedule in their profile time zone when they have no schedule. Existing schedules can be edited or disabled.
 
-Daily editions select three highest-ranked eligible stories. Choose **More news**, or ask for more news by voice, to hear additional stories without repeating the original selection. Follow-up questions can request more detail about a story. Dated archives display their reference date in the listening room.
+Daily editions select the three highest-ranked eligible stories. Choose **More news** to hear additional stories without repeating the original selection. Follow-up questions can request more detail about a story. Dated archives display their reference date in the listening room.
 
 The recording is downloaded before Play is enabled. Pressing Play uses the buffered audio. Selecting another voice saves the preference; **Create with this voice** generates a separate edition. Prepared weekly editions play from their cover. A missing weekly edition is presented as a creation action.
 
@@ -132,7 +140,7 @@ To add another RSS or Atom source, append its direct HTTPS feed URL to the comma
 | API and data | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, PostgreSQL and pgvector |
 | Background processing | Separate ingestion, analysis, briefing and voice workers using Celery, RabbitMQ and Celery Beat |
 | Cache and storage | Redis and MinIO, with authenticated audio retrieval through the API |
-| AI and voice | Structured model adapters, deterministic evidence gates, ElevenLabs, local eSpeak NG and configurable STT |
+| AI and voice | ElevenAgents conversational WebSocket SDK, structured model adapters, evidence gates and separate episode narration |
 | Operations | Health checks, transactional event outbox, delivery receipts, bounded retries and usage accounting |
 
 ```text

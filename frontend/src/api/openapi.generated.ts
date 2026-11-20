@@ -367,6 +367,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Agent Session */
+        post: operations["agent_session_api_v1_agent_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Agent Context */
+        post: operations["agent_context_api_v1_agent_context_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/briefings/{briefing_id}/audio": {
         parameters: {
             query?: never;
@@ -728,6 +762,35 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentContext */
+        AgentContext: {
+            /** Context */
+            context: string;
+        };
+        /** AgentContextRequest */
+        AgentContextRequest: {
+            /** Briefing Id */
+            briefing_id?: string | null;
+            /** Story Id */
+            story_id?: string | null;
+            /**
+             * Playback Seconds
+             * @default 0
+             */
+            playback_seconds: number;
+            /**
+             * More News
+             * @default false
+             */
+            more_news: boolean;
+        };
+        /** AgentSession */
+        AgentSession: {
+            /** Context */
+            context: string;
+            /** Signed Url */
+            signed_url: string;
+        };
         /** ArticleInfo */
         ArticleInfo: {
             /** Id */
@@ -1426,6 +1489,9 @@ export interface components {
     headers: never;
     pathItems: never;
 }
+export type SchemaAgentContext = components['schemas']['AgentContext'];
+export type SchemaAgentContextRequest = components['schemas']['AgentContextRequest'];
+export type SchemaAgentSession = components['schemas']['AgentSession'];
 export type SchemaArticleInfo = components['schemas']['ArticleInfo'];
 export type SchemaBodySendRecordingApiV1ConversationsConversationIdAudioPost = components['schemas']['Body_send_recording_api_v1_conversations__conversation_id__audio_post'];
 export type SchemaBriefingDetail = components['schemas']['BriefingDetail'];
@@ -2185,6 +2251,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Citation"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_session_api_v1_agent_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AgentContextRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSession"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_context_api_v1_agent_context_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AgentContextRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentContext"];
                 };
             };
             /** @description Validation Error */

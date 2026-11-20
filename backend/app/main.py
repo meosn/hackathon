@@ -15,6 +15,7 @@ from .config import settings
 from .db import SessionLocal, load_models
 from .account_routes import router as accounts
 from .news.routes import router as news
+from .briefing.agent import conversation_provider
 from .briefing.routes import router as briefings
 
 
@@ -210,6 +211,7 @@ def health():
         "demo_mode": settings.demo_mode,
         "news_reference_time": os.getenv("NEWS_REFERENCE_TIME"),
         "corpus": os.getenv("ACTIVE_CORPUS", "demo" if settings.demo_mode else "live"),
+        "conversation_provider": conversation_provider(),
     }
 
 

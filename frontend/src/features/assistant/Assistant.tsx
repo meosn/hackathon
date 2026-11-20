@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AudioLines, Mic, MicOff, Plus, Send, Volume2 } from 'lucide-react'
-import { api, request, queryClient } from '../../api/client'
+import { api, request, queryClient, useApi, type Health } from '../../api/client'
 import type { Conversation, Message, User } from '../../api/types'
 import {
   Button,
@@ -11,6 +11,10 @@ import {
   Loading,
   SourceCitation,
 } from '../../components/UI'
+import { useElevenAgent } from '../voice/useElevenAgent'
+
+type LiveTurn = { id: string; role: 'assistant' | 'user'; text: string }
+
 export function ChatMessage({
   message: m,
   onSpeak,
@@ -71,17 +75,19 @@ export function ChatMessage({
 }
 export function Assistant({ user }: { user: User }) {
   const [params] = useSearchParams()
+  const story = params.get('story')
+  const briefing = params.get('briefing')
   const key =
     'sourcera.conversation.' +
     user.id +
     '.' +
-    (params.get('story') || params.get('briefing') || 'general')
+    (story && briefing ? story + '.' + briefing : story || briefing || 'general')
   return (
     <ChatSession
       key={key}
       storageKey={key}
-      story={params.get('story')}
-      briefing={params.get('briefing')}
+      story={story}
+      briefing={briefing}
     />
   )
 }
@@ -100,10 +106,18 @@ function ChatSession({
     [recording, setRecording] = useState(false),
     [audioUrl, setAudioUrl] = useState(''),
     [speaking, setSpeaking] = useState(false)
+  const [liveTurns, setLiveTurns] = useState<LiveTurn[]>([])
+  const [agentSpeaking, setAgentSpeaking] = useState(false)
   const recorder = useRef<MediaRecorder | null>(null),
     stream = useRef<MediaStream | null>(null),
     alive = useRef(true),
     spoken = useRef<HTMLAudioElement>(null)
+  const speechRequest = useRef<AbortController | null>(null)
+  const health = useApi<Health>('/health')
+  const agentEnabled = health.data?.conversation_provider === 'elevenagents'
+  const agent = useElevenAgent(agentEnabled)
+  const localVoiceEnabled = health.data?.conversation_provider === 'local'
+  const agentActive = agent.status !== 'disconnected'
   const q = useQuery({
     queryKey: ['conversation', id],
     enabled: !!id,
@@ -151,6 +165,7 @@ function ChatSession({
     alive.current = true
     return () => {
       alive.current = false
+      speechRequest.current?.abort()
       if (recorder.current?.state === 'recording') {
         recorder.current.onstop = null
         recorder.current.stop()
@@ -166,10 +181,45 @@ function ChatSession({
   )
   async function mic() {
     setError('')
+    if (agentActive) {
+      agent.stop()
+      return
+    }
+    if (agentEnabled) {
+      speechRequest.current?.abort()
+      setSpeaking(false)
+      spoken.current?.pause()
+      setAudioUrl('')
+      setLiveTurns([])
+      setAgentSpeaking(false)
+      await agent.start(
+        {
+          briefing_id: briefing || undefined,
+          story_id: story || undefined,
+        },
+        {
+          onMessage: ({ message, role, event_id }) => {
+            if (!message.trim()) return
+            setLiveTurns((turns) => [
+              ...turns.slice(-49),
+              {
+                id: role + '-' + event_id,
+                role: role === 'user' ? 'user' : 'assistant',
+                text: message,
+              },
+            ])
+          },
+          onModeChange: ({ mode }) => setAgentSpeaking(mode === 'speaking'),
+          onError: setError,
+        }
+      )
+      return
+    }
     if (recorder.current?.state === 'recording') {
       recorder.current.stop()
       return
     }
+    if (!localVoiceEnabled) return
     try {
       if (
         !navigator.mediaDevices?.getUserMedia ||
@@ -206,29 +256,44 @@ function ChatSession({
   async function speak(m: Message) {
     setError('')
     setSpeaking(true)
+    const controller = new AbortController()
+    speechRequest.current = controller
     try {
       const r = await request(
-        '/conversations/' + id + '/messages/' + m.id + '/audio'
+        '/conversations/' + id + '/messages/' + m.id + '/audio',
+        'GET',
+        undefined,
+        controller.signal
       )
       const blob = await r.blob()
-      if (alive.current) {
+      if (alive.current && !controller.signal.aborted) {
         setAudioUrl(URL.createObjectURL(blob))
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Audio unavailable.')
+      if (!controller.signal.aborted)
+        setError(e instanceof Error ? e.message : 'Audio unavailable.')
     } finally {
-      if (alive.current) setSpeaking(false)
+      if (alive.current && !controller.signal.aborted) setSpeaking(false)
     }
   }
   function restart() {
+    agent.stop()
+    speechRequest.current?.abort()
     sessionStorage.removeItem(storageKey)
     setId('')
     setAudioUrl('')
+    setSpeaking(false)
+    setLiveTurns([])
     setDraft('')
     setError('')
     send.reset()
   }
   const busy = send.isPending || recording
+  const textBusy = busy || agentActive
+  const inactiveMicLabel = agentEnabled ? 'Start voice session' : 'Record question'
+  const micLabel = agentActive
+    ? 'End voice session'
+    : recording ? 'Finish recording' : inactiveMicLabel
   return (
     <>
       <header className="page-heading">
@@ -261,7 +326,7 @@ function ChatSession({
           </Link>
         )}
         {q.isFetching && !q.data && <Loading />}
-        {!q.data?.messages.length && (
+        {!q.data?.messages.length && !liveTurns.length && (
           <div className="assistant-intro">
             <span className="round-icon">
               <AudioLines size={25} />
@@ -276,7 +341,7 @@ function ChatSession({
                     'Tell me about AI.',
                   ]
               ).map((t) => (
-                <button disabled={busy} key={t} onClick={() => send.mutate(t)}>
+                <button disabled={textBusy} key={t} onClick={() => send.mutate(t)}>
                   {t}
                 </button>
               ))}
@@ -287,10 +352,23 @@ function ChatSession({
           <ChatMessage
             key={m.id}
             message={m}
-            busy={speaking}
+            busy={speaking || agentActive}
             onSpeak={() => speak(m)}
           />
         ))}
+        {liveTurns.length > 0 && (
+          <section aria-label="Live voice transcript" aria-live="polite">
+            <h3>Live voice transcript</h3>
+            {liveTurns.map((turn) => (
+              <article key={turn.id} className={'chat-message ' + turn.role}>
+                <div className="chat-speaker">
+                  {turn.role === 'user' ? 'You' : 'Sourcera'}
+                </div>
+                <p>{turn.text}</p>
+              </article>
+            ))}
+          </section>
+        )}
         {audioUrl && (
           <div>
             <audio
@@ -304,12 +382,12 @@ function ChatSession({
           </div>
         )}
         {send.isPending && <Loading>Finding evidence…</Loading>}
-        <ErrorNote error={send.error || q.error || error} />
+        <ErrorNote error={send.error || q.error || error || health.error} />
         <form
           className="composer"
           onSubmit={(e) => {
             e.preventDefault()
-            if (draft.trim() && !busy) send.mutate(draft.trim())
+            if (draft.trim() && !textBusy) send.mutate(draft.trim())
           }}
         >
           <input
@@ -321,17 +399,17 @@ function ChatSession({
           />
           <button
             type="button"
-            className={'icon ' + (recording ? 'recording' : '')}
-            disabled={send.isPending}
-            aria-label={recording ? 'Finish recording' : 'Record question'}
+            className={'icon ' + (recording || agentActive ? 'recording' : '')}
+            disabled={send.isPending || !(agentActive || recording || agentEnabled || localVoiceEnabled)}
+            aria-label={micLabel}
             onClick={mic}
           >
-            {recording ? <MicOff size={20} /> : <Mic size={20} />}
+            {recording || agentActive ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
           <button
             type="submit"
             className="send"
-            disabled={busy || !draft.trim()}
+            disabled={textBusy || !draft.trim()}
             aria-label="Send question"
           >
             <Send size={17} />
@@ -340,6 +418,15 @@ function ChatSession({
         {recording && (
           <p role="status" className="muted">
             Recording… Press the microphone again to send.
+          </p>
+        )}
+        {agentEnabled && (
+          <p role="status" className="muted">
+            {agent.status === 'connecting'
+              ? 'Connecting to ElevenLabs…'
+              : agent.status === 'connected'
+                ? agentSpeaking ? 'Sourcera is speaking…' : 'Listening…'
+                : 'Live voice uses ElevenLabs.'}
           </p>
         )}
       </Card>

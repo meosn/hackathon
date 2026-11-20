@@ -13,6 +13,7 @@ import {
 import type { Health } from '../../api/client'
 import type { BriefingDetail, Conversation, Message } from '../../api/types'
 import { ErrorNote, SourceCitation } from '../../components/UI'
+import { useElevenAgent, type AgentConversation } from '../voice/useElevenAgent'
 import { LiveMicrophone } from './liveMicrophone'
 
 export function DailySession({
@@ -23,6 +24,9 @@ export function DailySession({
   playRequest?: number
 }) {
   const health = useApi<Health>('/health')
+  const useAgent = health.data?.conversation_provider === 'elevenagents'
+  const useLocalConversation = health.data?.conversation_provider === 'local'
+  const agent = useElevenAgent(useAgent)
   const daily = useQuery({
     queryKey: ['daily-edition'],
     queryFn: () => {
@@ -68,10 +72,12 @@ export function DailySession({
   const [phase, setPhase] = useState('')
   const [error, setError] = useState('')
   const [reply, setReply] = useState<Message | null>(null)
+  const [agentReply, setAgentReply] = useState('')
   const [transcript, setTranscript] = useState('')
   const narration = useRef<HTMLAudioElement>(null)
   const answer = useRef<HTMLAudioElement>(null)
   const microphone = useRef<LiveMicrophone | null>(null)
+  const agentConversation = useRef<AgentConversation | null>(null)
   const conversation = useRef<Promise<Conversation> | null>(null)
   const turn = useRef(0)
   const controller = useRef<AbortController | null>(null)
@@ -86,6 +92,7 @@ export function DailySession({
   useEffect(() => {
     stopSession()
     setReply(null)
+    setAgentReply('')
     setTranscript('')
     setPosition(0)
     conversation.current = null
@@ -124,8 +131,76 @@ export function DailySession({
     cancelTurn()
     microphone.current?.stop()
     microphone.current = null
+    agentConversation.current = null
+    void agent.stop()
     setListening(false)
     setPhase('')
+  }
+  function resumeBriefing() {
+    stopSession()
+    setError('')
+    void narration.current?.play().catch((e) => setError(e.message))
+  }
+  async function startAgent() {
+    const briefingId = edition?.id
+    if (!briefingId || agent.status !== 'disconnected') return
+    cancelTurn()
+    setError('')
+    setTranscript('')
+    setAgentReply('')
+    setPhase('Connecting to ElevenLabs…')
+    const result = await agent.start(
+      () => ({
+        briefing_id: briefingId,
+        playback_seconds: narration.current?.currentTime || 0,
+      }),
+      {
+        clientTools: {
+          resume_sourcera_briefing: () => {
+            // Let the SDK send the tool result before closing the socket.
+            const activeConversation = agentConversation.current
+            window.setTimeout(() => {
+              if (
+                mounted.current &&
+                editionRef.current?.id === briefingId &&
+                activeConversation &&
+                activeConversation === agentConversation.current
+              )
+                resumeBriefing()
+            }, 0)
+            return 'Resuming the prepared audio at the current position.'
+          },
+        },
+        onMessage: ({ role, message }) => {
+          if (!message.trim()) return
+          if (role === 'user') {
+            setTranscript(message)
+            setAgentReply('')
+            setPhase('Understanding your question…')
+          } else {
+            setAgentReply(message)
+          }
+        },
+        onModeChange: ({ mode }) =>
+          setPhase(
+            mode === 'speaking' ? 'Answering · you can interrupt' : 'Listening…',
+          ),
+        onDisconnect: () => {
+          agentConversation.current = null
+          setPhase('Voice chat ended.')
+        },
+        onError: (message) => {
+          setError(message)
+          setPhase('Voice chat unavailable.')
+        },
+      },
+    )
+    if (result) {
+      agentConversation.current = result
+      setPhase((current) =>
+        current === 'Connecting to ElevenLabs…' ? 'Listening…' : current,
+      )
+    }
   }
   async function startListening() {
     if (microphone.current) return
@@ -258,9 +333,11 @@ export function DailySession({
     controller.current?.abort()
     turn.current++
     void narration.current?.play().catch((e) => setError(e.message))
-    void startListening()
+    if (useLocalConversation) void startListening()
   }
-  const audible = playing || answerPlaying
+  const agentActive = useAgent && agent.status !== 'disconnected'
+  const micActive = useAgent ? agent.status === 'connected' : listening
+  const audible = playing || (!useAgent && answerPlaying)
   return (
     <section className="listening-hero" aria-label="News player">
       <div className="listening-date">
@@ -317,7 +394,7 @@ export function DailySession({
       <button
         className={'main-play' + (audible ? ' playing' : '')}
         disabled={!url || bufferedId !== edition?.id}
-        onClick={play}
+        onClick={agentActive ? resumeBriefing : play}
         aria-label={audible ? 'Pause daily briefing' : 'Play daily briefing'}
       >
         {audible ? (
@@ -327,7 +404,9 @@ export function DailySession({
         )}
       </button>
       <p role="status" className="session-status">
-        {phase || 'Ask questions while you listen.'}
+        {phase || (
+          useAgent ? 'Open voice chat to ask about this briefing.' : 'Ask questions while you listen.'
+        )}
       </p>
       <div className="compact-timeline">
         <span>{clockTime(position)}</span>
@@ -341,31 +420,66 @@ export function DailySession({
           value={position}
           onChange={(e) => {
             briefingContext.current = true
-            if (narration.current)
-              narration.current.currentTime = Number(e.target.value)
-            setPosition(Number(e.target.value))
+            const seconds = Number(e.target.value)
+            const activeStory = (time: number) =>
+              edition?.segments.find(
+                (segment) => segment.start_seconds <= time && time < segment.end_seconds,
+              )?.story_id
+            const switchedStory =
+              activeStory(narration.current?.currentTime || 0) !== activeStory(seconds)
+            if (narration.current) narration.current.currentTime = seconds
+            setPosition(seconds)
+            if (switchedStory) {
+              agentConversation.current?.sendContextualUpdate(
+                'The listener moved the briefing playhead. Call get_sourcera_context for the current story and playback position.',
+                { contextId: 'sourcera-playback' },
+              )
+            }
           }}
         />
         <span>{clockTime(edition?.duration_seconds || 0)}</span>
       </div>
       <div className="session-tools">
-        <button disabled={!url || responding} onClick={() => void respond('More news')}>
-          {responding ? 'Preparing answer…' : 'More news'}
-        </button>
+        {useAgent ? (
+          <button
+            disabled={!micActive}
+            onClick={() => {
+              setTranscript('More news')
+              setAgentReply('')
+              setPhase('Preparing an answer…')
+              agentConversation.current?.sendUserMessage(
+                'Tell me about other recent news outside this briefing. Use get_more_sourcera_news to retrieve the available sources.',
+              )
+            }}
+          >
+            More news
+          </button>
+        ) : (
+          <button
+            disabled={!url || !useLocalConversation || responding}
+            onClick={() => void respond('More news')}
+          >
+            {responding ? 'Preparing answer…' : 'More news'}
+          </button>
+        )}
         <button
-          disabled={!url}
-          className={'microphone-control' + (listening ? ' active' : '')}
-          onClick={() => (listening ? stopSession() : void startListening())}
-          aria-label={listening ? 'Turn microphone off' : 'Turn microphone on'}
-          aria-pressed={listening}
+          disabled={!url || (!useAgent && !useLocalConversation)}
+          className={'microphone-control' + (micActive ? ' active' : '')}
+          onClick={() => {
+            if (micActive || agentActive) stopSession()
+            else if (useAgent) void startAgent()
+            else void startListening()
+          }}
+          aria-label={micActive || agentActive ? 'Turn microphone off' : 'Turn microphone on'}
+          aria-pressed={micActive || agentActive}
         >
-          {listening ? <Mic size={15} /> : <MicOff size={15} />}{' '}
-          {listening ? 'Listening' : 'Voice chat'}
+          {micActive ? <Mic size={15} /> : <MicOff size={15} />}{' '}
+          {micActive ? 'Listening' : agentActive ? 'Connecting…' : 'Voice chat'}
         </button>
         {edition?.status === 'completed' && (
           <Link to={'/briefings/' + edition.id}>Transcript & sources</Link>
         )}
-        {listening && (
+        {(micActive || agentActive) && (
           <button
             className="session-end"
             onClick={stopSession}
@@ -374,10 +488,17 @@ export function DailySession({
             <Square size={12} /> End
           </button>
         )}
+        {agentActive && (
+          <button onClick={resumeBriefing}>Resume briefing</button>
+        )}
       </div>
       <span className="listening-disclosure">
         AI narration ·{' '}
-        {listening
+        {useAgent
+          ? micActive
+            ? 'Microphone active · conversation by ElevenLabs'
+            : 'Voice chat sends microphone audio and briefing context to ElevenLabs.'
+          : listening
           ? 'Microphone active'
           : 'Allow microphone access to ask questions.'}
       </span>
@@ -389,8 +510,16 @@ export function DailySession({
           </button>
         </>
       )}
-      <ErrorNote error={error || daily.error || custom.error || audio.error || retry.error} />
-      {reply && (
+      <ErrorNote
+        error={error || daily.error || custom.error || audio.error || retry.error || health.error}
+      />
+      {useAgent && (transcript || agentReply) && (
+        <div className="live-response" aria-live="polite">
+          {transcript && <p className="muted">You · {transcript}</p>}
+          {agentReply && <p>{agentReply}</p>}
+        </div>
+      )}
+      {!useAgent && reply && (
         <div className="live-response">
           <p className="muted">You · {transcript}</p>
           <p>{reply.text}</p>

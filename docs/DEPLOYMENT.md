@@ -28,6 +28,9 @@ The Compose environment file is ignored by Git. Configuration is read at process
 | DATASET_DIR, DATASET_FILES | Mounted private directory and allowlisted input filenames |
 | RSS_FEED_URLS, RSS_INTERVAL_MINUTES | Authorized HTTPS feed URLs and their polling interval |
 | NEWS_SOURCES | Comma-separated live source IDs (bloomberg, dw, bbc, forex-factory), using the same polling interval |
+| CONVERSATION_PROVIDER | `local` for the offline demo or `elevenagents` for signed voice WebSockets |
+| ELEVENLABS_AGENT_ID, ELEVENLABS_API_KEY | Private ElevenAgents agent and its server-side API credential |
+| ELEVENLABS_ALLOW_LICENSED_CONTEXT | Set to `1` only when authorized to send licensed records to the agent |
 | NEWS_HTML_PARSER | beautifulsoup by default, or scrapling with the crawl extra |
 | EMBEDDING_PROVIDER, EMBEDDING_MODEL, CLUSTER_SIMILARITY | local_hash or sentence_transformers, 384-dimensional semantic model and candidate similarity threshold |
 | BACKEND_EXTRAS | Optional build extras, for example [ml,crawl]. The ML extra can materially increase image size |

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { Check, Clock3, Save } from 'lucide-react'
-import { api, label, queryClient, useApi } from '../../api/client'
+import { api, label, queryClient, useApi, type Health } from '../../api/client'
 import type {
   Preferences,
   Schedule,
@@ -61,6 +61,7 @@ export function SchedulePicker({
   )
 }
 export function Settings() {
+  const health = useApi<Health>('/health')
   const p = useApi<Preferences>('/users/me/preferences'),
     s = useApi<Schedule[]>('/schedules'),
     src = useApi<Source[]>('/sources'),
@@ -85,6 +86,7 @@ export function Settings() {
       topics={t.data}
       voices={v.data}
       engines={models.data}
+      elevenAgents={health.data?.conversation_provider === 'elevenagents'}
     />
   )
 }
@@ -95,6 +97,7 @@ function SettingsForm({
   topics,
   voices,
   engines,
+  elevenAgents,
 }: {
   base: Preferences
   schedule?: Schedule
@@ -102,6 +105,7 @@ function SettingsForm({
   topics: Topic[]
   voices: Voice[]
   engines: Engine[]
+  elevenAgents: boolean
 }) {
   const [prefs, setPrefs] = useState(base),
     [time, setTime] = useState(schedule?.time.slice(0, 5) || '08:00'),
@@ -277,9 +281,9 @@ function SettingsForm({
           </div>
         </Card>
         <Card>
-          <h2>Discussion model</h2>
+          <h2>{elevenAgents ? 'Text discussion model' : 'Discussion model'}</h2>
           <Dropdown
-            label="Assistant model"
+            label={elevenAgents ? 'Text assistant model' : 'Assistant model'}
             value={prefs.discussion_model}
             onChange={(v) => patch('discussion_model', v)}
           >
@@ -292,6 +296,9 @@ function SettingsForm({
           <p className="muted">
             {engines.find((m) => m.id === prefs.discussion_model)?.description}
           </p>
+          {elevenAgents && (
+            <p className="muted">Live chat uses the voice and model configured in ElevenLabs.</p>
+          )}
         </Card>
         <Card>
           <h2>Daily schedule</h2>
