@@ -98,7 +98,7 @@ def session_config(language, titles, context=None):
         "type": "realtime",
         "model": os.getenv("REALTIME_MODEL") or "gpt-realtime-2.1",
         "output_modalities": ["audio"],
-        "max_output_tokens": 650,
+        "max_output_tokens": 2048,
         "audio": {
             "input": {
                 "noise_reduction": {"type": "near_field"},

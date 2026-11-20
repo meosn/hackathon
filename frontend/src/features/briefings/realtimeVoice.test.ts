@@ -158,3 +158,30 @@ it('supplies current playback context before a direct spoken answer without an e
   expect(callbacks.phase).toHaveBeenLastCalledWith('speaking')
   voice.close()
 })
+
+it('warms the verified prefix silently without changing playback or conversation state', async () => {
+  const { voice, event, sent, callbacks } = setup()
+  await voice.connect()
+  callbacks.phase.mockClear()
+  voice.warmup()
+  voice.warmup()
+  const warmups = sent.filter(
+    (e) => e.response?.metadata?.purpose === 'cache_warmup',
+  )
+  expect(warmups).toHaveLength(1)
+  expect(warmups[0].response.conversation).toBe('none')
+  expect(warmups[0].response.output_modalities).toEqual(['text'])
+  event({
+    type: 'response.created',
+    response: { metadata: { purpose: 'cache_warmup' } },
+  })
+  event({
+    type: 'response.done',
+    response: { status: 'incomplete', metadata: { purpose: 'cache_warmup' } },
+  })
+  expect(callbacks.phase).not.toHaveBeenCalled()
+  expect(callbacks.interrupt).not.toHaveBeenCalled()
+  expect(callbacks.failed).not.toHaveBeenCalled()
+  expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+  voice.close()
+})

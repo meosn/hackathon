@@ -269,7 +269,10 @@ export function DailySession({
     pauseLocalAudio()
     setHasAnswer(true)
     const session = await agent.start(
-      () => ({ briefing_id: briefingId, playback_seconds: narration.current?.currentTime || 0 }),
+      () => ({
+        briefing_id: briefingId,
+        playback_seconds: narration.current?.currentTime || 0,
+      }),
       {
         onModeChange: ({ mode }) => setAnswerPlaying(mode === 'speaking'),
         onDisconnect: stopAgent,
@@ -336,7 +339,9 @@ export function DailySession({
     if (!useAgent) voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     if (useAgent) {
-      live.current?.sendUserMessage('Find other recent stories using get_more_sourcera_news.')
+      live.current?.sendUserMessage(
+        'Find other recent stories using get_more_sourcera_news.',
+      )
       return
     }
     if (health.data?.realtime_voice) {
@@ -461,7 +466,10 @@ export function DailySession({
     if (health.data?.realtime_voice) {
       voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
       void realtimeConnection()
-        .then((voice) => voice.connect())
+        .then(async (voice) => {
+          await voice.connect()
+          voice.warmup()
+        })
         .catch(() => {
           // A failed warm-up must not interrupt the prepared briefing.
           if (realtime.current?.disposed) realtime.current = null
@@ -580,7 +588,13 @@ export function DailySession({
       </div>
       <div className="session-tools">
         <button
-          disabled={!url || !health.data || responding || voiceConnecting || (useAgent && !listening)}
+          disabled={
+            !url ||
+            !health.data ||
+            responding ||
+            voiceConnecting ||
+            (useAgent && !listening)
+          }
           onClick={() => void moreNews()}
         >
           More news
@@ -615,7 +629,9 @@ export function DailySession({
         AI narration ·{' '}
         {listening
           ? 'Microphone active'
-          : useAgent ? 'Voice chat sends microphone audio and briefing context to ElevenLabs.' : 'Listen freely. Turn the mic on to join in.'}
+          : useAgent
+            ? 'Voice chat sends microphone audio and briefing context to ElevenLabs.'
+            : 'Listen freely. Turn the mic on to join in.'}
       </span>
       {edition?.status === 'failed' && (
         <>

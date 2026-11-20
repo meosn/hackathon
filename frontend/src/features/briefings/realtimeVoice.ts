@@ -46,6 +46,7 @@ export class RealtimeVoice {
   private turnStory: string | undefined
   private idleTimer: ReturnType<typeof setTimeout> | undefined
   private toolCalls = new Set<string>()
+  private warmed = false
 
   constructor(
     private conversationId: string,
@@ -158,6 +159,36 @@ export class RealtimeVoice {
       this.callbacks.phase(this.micWanted ? 'listening' : 'idle')
       this.armIdleTimer()
     }
+  }
+
+  warmup() {
+    if (!this.ready || this.warmed || this.micWanted || this.responseActive)
+      return
+    this.warmed = true
+    // Prime the verified prefix during narration. This detached, silent response is
+    // never added to the conversation, rendered, or awaited by a listener's turn.
+    this.send({
+      type: 'response.create',
+      response: {
+        conversation: 'none',
+        output_modalities: ['text'],
+        tool_choice: 'none',
+        max_output_tokens: 1,
+        metadata: { purpose: 'cache_warmup' },
+        input: [
+          {
+            type: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: 'Readiness check only. Return one full stop.',
+              },
+            ],
+          },
+        ],
+      },
+    })
   }
 
   async setMicrophone(enabled: boolean) {
@@ -278,7 +309,8 @@ export class RealtimeVoice {
   }
 
   private handle(event: Record<string, any>) {
-    if (this.closed) return
+    if (this.closed || event.response?.metadata?.purpose === 'cache_warmup')
+      return
     switch (event.type) {
       case 'input_audio_buffer.speech_started':
         this.sequence++

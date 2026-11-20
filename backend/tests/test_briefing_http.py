@@ -372,6 +372,7 @@ def test_realtime_session_is_private_and_evidence_uses_no_text_model(api, monkey
     assert "private-test-key" not in result.text
     config = json.loads(requests[0][1]["files"]["session"][1])
     assert config["output_modalities"] == ["audio"]
+    assert config["max_output_tokens"] >= 2000
     assert config["audio"]["input"]["turn_detection"]["type"] == "server_vad"
     assert config["audio"]["input"]["turn_detection"]["silence_duration_ms"] == 450
 
