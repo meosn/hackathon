@@ -263,25 +263,40 @@ def recover():
         publish(id)
 
 
-def discover_rss(db, now):
+def discover_news(db, now):
+    from .news.adapters import SOURCE_IDS, config_list, validate_feed
     from .news.service import create_job
     from .news.models import IngestionJob
 
-    for url in filter(
-        None, (s.strip() for s in os.getenv("RSS_FEED_URLS", "").split(","))
-    ):
-        interval = max(1, int(os.getenv("RSS_INTERVAL_MINUTES", "60")))
+    configured = []
+    for source_id in config_list("NEWS_SOURCES"):
+        if source_id in SOURCE_IDS:
+            configured.append(("source", source_id))
+        else:
+            log.warning("Unknown NEWS_SOURCES entry: %s", source_id)
+    for url in config_list("RSS_FEED_URLS"):
+        try:
+            validate_feed(url)
+        except ValueError:
+            log.warning("Ignoring an invalid RSS_FEED_URLS entry")
+        else:
+            configured.append(("rss", url))
+
+    if not configured:
+        return
+    interval = max(1, int(os.getenv("RSS_INTERVAL_MINUTES", "60")))
+    for kind, locator in configured:
         recent = db.scalar(
             select(IngestionJob.id)
             .where(
-                IngestionJob.kind == "rss",
-                IngestionJob.locator == url,
+                IngestionJob.kind == kind,
+                IngestionJob.locator == locator,
                 IngestionJob.created_at > now - timedelta(minutes=interval),
             )
             .limit(1)
         )
         if not recent:
-            job = create_job(db, kind="rss", locator=url)
+            job = create_job(db, kind=kind, locator=locator)
             queue_record(db, "ingestion", job.id)
     db.commit()
 
@@ -306,7 +321,7 @@ def tick():
                 seed_templates(db)
                 db.commit()
         discover(db, utcnow())
-        discover_rss(db, utcnow())
+        discover_news(db, utcnow())
     recover()
     if settings.job_mode == "celery":
         from .messaging import relay

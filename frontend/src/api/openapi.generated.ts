@@ -1084,7 +1084,7 @@ export interface components {
              * @default fixture
              * @enum {string}
              */
-            kind: "fixture" | "dataset" | "rss";
+            kind: "fixture" | "dataset" | "rss" | "source";
             /** Locator */
             locator?: string | null;
         };

@@ -231,7 +231,7 @@ def compare(db: DB, story_id: str):
 
 
 class JobInput(BaseModel):
-    kind: Literal["fixture", "dataset", "rss"] = "fixture"
+    kind: Literal["fixture", "dataset", "rss", "source"] = "fixture"
     locator: str | None = Field(None, max_length=2000)
 
 

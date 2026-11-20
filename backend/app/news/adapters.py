@@ -21,6 +21,12 @@ from pydantic import (
 
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic.json"
 MAX_BYTES = 15 * 1024 * 1024
+RSS_SOURCES = {
+    "bloomberg": ("Bloomberg", "https://www.bloomberg.com/feeds/markets/news.rss"),
+    "dw": ("DW", "https://rss.dw.com/rdf/rss-en-all"),
+    "bbc": ("BBC News", "https://feeds.bbci.co.uk/news/business/rss.xml"),
+}
+SOURCE_IDS = (*RSS_SOURCES, "forex-factory")
 
 
 class InputArticle(BaseModel):
@@ -135,15 +141,34 @@ def file_records(path: Path) -> Iterator[InputArticle]:
             raise ValueError("Supported file formats are JSON, JSONL and NDJSON")
 
 
+def config_list(name: str) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            item.strip() for item in os.environ.get(name, "").split(",") if item.strip()
+        )
+    )
+
+
+def validate_source(source_id: str):
+    if source_id not in SOURCE_IDS or source_id not in config_list("NEWS_SOURCES"):
+        raise ValueError("News source is not enabled for ingestion")
+
+
+def source_records(source_id: str) -> Iterator[InputArticle]:
+    validate_source(source_id)
+    if source_id == "forex-factory":
+        from .forex_factory import FOREX_URL, parse_news_page
+
+        yield from parse_news_page(download(FOREX_URL))
+    else:
+        publisher, url = RSS_SOURCES[source_id]
+        yield from parse_feed(download(url), url, publisher=publisher, language="en")
+
+
 def validate_feed(url: str):
-    allowed = {
-        item.strip()
-        for item in os.environ.get("RSS_FEED_URLS", "").split(",")
-        if item.strip()
-    }
     parsed = urlsplit(url)
     if (
-        url not in allowed
+        url not in config_list("RSS_FEED_URLS")
         or parsed.scheme != "https"
         or not parsed.hostname
         or parsed.username
@@ -152,22 +177,33 @@ def validate_feed(url: str):
         raise ValueError("Feed URL is not configured for ingestion")
 
 
-def feed_records(url: str) -> Iterator[InputArticle]:
-    import feedparser
-
-    validate_feed(url)
+def download(url: str) -> bytes:
     data = bytearray()
     with httpx.stream("GET", url, timeout=12, follow_redirects=False) as response:
         response.raise_for_status()
         for chunk in response.iter_bytes():
             data.extend(chunk)
             if len(data) > MAX_BYTES:
-                raise ValueError("Feed exceeds the size limit")
-    feed = feedparser.parse(bytes(data))
+                raise ValueError("News response exceeds the size limit")
+    return bytes(data)
+
+
+def feed_records(url: str) -> Iterator[InputArticle]:
+    validate_feed(url)
+    yield from parse_feed(download(url), url)
+
+
+def parse_feed(
+    data: bytes, url: str, *, publisher: str | None = None, language: str = "und"
+) -> Iterator[InputArticle]:
+    import feedparser
+
+    feed = feedparser.parse(data, response_headers={"content-location": url})
     if feed.bozo and not feed.entries:
         raise ValueError("Feed could not be parsed")
     for entry in feed.entries:
-        if not entry.get("published_parsed") or not entry.get("link"):
+        published = entry.get("published_parsed") or entry.get("updated_parsed")
+        if not published or not entry.get("link"):
             continue
         body = (
             entry.content[0].value if entry.get("content") else entry.get("summary", "")
@@ -176,13 +212,13 @@ def feed_records(url: str) -> Iterator[InputArticle]:
             continue
         lang = entry.get("language") or feed.feed.get("language")
         row = dict(
-            source=feed.feed.get("title") or urlsplit(url).hostname,
+            source=publisher or feed.feed.get("title") or urlsplit(url).hostname,
             title=entry.title,
             content=body,
             url=entry.link,
             author=entry.get("author"),
-            published_at=datetime(*entry.published_parsed[:6], tzinfo=UTC),
-            language=(lang or "und").lower().split("-")[0],
+            published_at=datetime(*published[:6], tzinfo=UTC),
+            language=(lang or language).lower().split("-")[0],
             external_id=entry.get("id"),
         )
         yield InputArticle.model_validate(row)

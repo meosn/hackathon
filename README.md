@@ -95,6 +95,25 @@ The hackathon dataset remains subject to its authorized usage period. At expiry,
 
 Original exports and separately held backups require cleanup under the applicable agreement.
 
+### Live sources
+
+Set `NEWS_SOURCES=bloomberg,dw,bbc,forex-factory` in `.env` to enable all four sources, or list just the ones you want. Run `./scripts/compose.sh up --build -d` to build and start the updated services. The worker imports them every `RSS_INTERVAL_MINUTES` (60 by default). Bloomberg Markets, DW English and BBC Business use RSS. Forex Factory reads Latest Stories and Hot Stories from its public news page, using the card excerpt when available and the headline otherwise. Its timestamps without a zone are treated as UTC. If the site refuses the request, the import job follows the worker's regular retry policy.
+
+To request an immediate import for an enabled source:
+
+```bash
+./scripts/compose.sh exec api python -m app.cli ingest-source bbc
+```
+
+If the Forex Factory request is blocked, save the news page as HTML from a browser that can open it. Import the snapshot with the date, time and UTC offset displayed by Forex Factory at capture so both absolute and relative dates are interpreted correctly:
+
+```bash
+./scripts/compose.sh exec -T api python -m app.cli ingest-forex-html \
+  --captured-at 2026-11-20T21:58:00+02:00 < forex-factory.html
+```
+
+To add another RSS or Atom source, append its direct HTTPS feed URL to the comma-separated `RSS_FEED_URLS` setting. Import jobs run independently per source and feed through the existing article, clustering and evidence pipeline.
+
 ## Architecture
 
 | Area | Implementation |

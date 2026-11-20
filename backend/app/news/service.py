@@ -15,6 +15,9 @@ from app.news.adapters import (
     feed_records,
     file_records,
     fixture_records,
+    source_records,
+    validate_feed,
+    validate_source,
 )
 from app.news.models import (
     Article,
@@ -53,12 +56,12 @@ def _pipeline_lock(db: Session):
 
 def create_job(db, kind="fixture", locator=None):
     from app.messaging import emit
-    from app.news.adapters import validate_feed
-
     if kind == "dataset":
         dataset_path(locator or "")
     elif kind == "rss":
         validate_feed(locator or "")
+    elif kind == "source":
+        validate_source(locator or "")
     elif kind != "fixture" or locator:
         raise ValueError("Unknown ingestion input")
     job = IngestionJob(kind=kind, locator=locator, status="queued")
@@ -139,6 +142,8 @@ def run_ingestion(db, job_id):
         rows = fixture_records(utc(job.created_at))
     elif job.kind == "dataset":
         rows = file_records(dataset_path(job.locator))
+    elif job.kind == "source":
+        rows = source_records(job.locator)
     else:
         rows = feed_records(job.locator)
     _normalize(db, job, rows)
@@ -407,6 +412,17 @@ def ingest_file(db, path):
     db.add(job)
     db.flush()
     _normalize(db, job, file_records(Path(path)))
+    return run_analysis(db, job.id)
+
+
+def import_forex_snapshot(db, html: bytes, captured_at: datetime):
+    from app.news.forex_factory import parse_news_page
+
+    if captured_at.utcoffset() is None:
+        raise ValueError("Capture time requires the time zone displayed by Forex Factory")
+    rows = parse_news_page(html, now=captured_at, page_timezone=captured_at.tzinfo)
+    job = create_job(db, kind="source", locator="forex-factory")
+    _normalize(db, job, rows)
     return run_analysis(db, job.id)
 
 

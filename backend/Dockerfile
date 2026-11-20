@@ -5,7 +5,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg espeak-n
 ARG BACKEND_EXTRAS=""
 COPY pyproject.toml .
 COPY app/__init__.py app/__init__.py
-RUN pip install --no-cache-dir ".${BACKEND_EXTRAS}"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 60 ".${BACKEND_EXTRAS}"
 COPY app app
 COPY alembic alembic
 COPY alembic.ini .

@@ -3031,7 +3031,8 @@
             "enum": [
               "fixture",
               "dataset",
-              "rss"
+              "rss",
+              "source"
             ],
             "title": "Kind",
             "default": "fixture"

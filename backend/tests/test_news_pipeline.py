@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -12,11 +12,13 @@ from fastapi.testclient import TestClient
 from app.auth import admin_user, current_user
 from app.db import Base, get_db, load_models
 from app.news import adapters, analysis, service
+from app.news.forex_factory import parse_news_page
 from app.news.models import (
     Article,
     ArticleEmbedding,
     ClaimEvidence,
     IngestionJob,
+    Source,
     Story,
 )
 from app.news.routes import router
@@ -80,6 +82,68 @@ def test_ingest_cluster_score_and_trace(db):
                 article = db.get(Article, e["article_id"])
                 assert article.content[e["start"] : e["end"]] == e["excerpt"]
                 assert article.url == e["url"]
+
+
+def test_live_sources_are_queued_independently_and_ingested(db, monkeypatch):
+    from app.jobs import discover_news
+
+    monkeypatch.setenv("NEWS_SOURCES", "bbc,dw,bloomberg,forex-factory,bbc")
+    monkeypatch.setenv("RSS_FEED_URLS", "https://example.org/feed.xml")
+    rss = b"""<rss version="2.0"><channel><title>Feed name</title><item>
+        <title>Markets open</title><description>Stocks rose by 2 percent.</description>
+        <link>https://example.org/story</link><pubDate>Fri, 20 Nov 2026 12:00:00 GMT</pubDate>
+        </item></channel></rss>"""
+    monkeypatch.setattr(adapters, "download", lambda url: rss)
+    now = datetime.now(UTC)
+    discover_news(db, now)
+    discover_news(db, now + timedelta(seconds=1))
+    queued = db.scalars(select(IngestionJob)).all()
+    assert len(queued) == 5
+    jobs = {(job.kind, job.locator): job for job in queued}
+    assert set(jobs) == {
+        ("source", "bloomberg"),
+        ("source", "dw"),
+        ("source", "bbc"),
+        ("source", "forex-factory"),
+        ("rss", "https://example.org/feed.xml"),
+    }
+    bbc = jobs["source", "bbc"]
+    service.run_ingestion(db, bbc.id)
+    article = db.scalars(select(Article)).one()
+    assert (bbc.received, article.language, article.is_synthetic) == (1, "en", False)
+    assert db.get(Source, article.source_id).name == "BBC News"
+    with pytest.raises(ValueError, match="not enabled"):
+        service.create_job(db, kind="source", locator="https://example.org/feed.xml")
+
+
+def test_forex_factory_reads_latest_and_hot_stories():
+    html = b"""
+      <article class="hot-story">
+        <a class="hot-story__title" href="/news/1">Rates update</a>
+        <div class="hot-story__details"><span title="">1 hr 30 min ago</span></div>
+      </article>
+      <article class="news-block__item">
+        <div class="news-block__title"><a href="/news/1">Rates update</a></div>
+        <div class="news-block__details"><span title="Nov 20, 2026, 10:30am"></span></div>
+        <div class="news-block__body">
+          <div class="news-block__details">From centralbank.example</div>
+          The bank held rates at 4 percent.
+        </div>
+      </article>
+      <article class="hot-story">
+        <a class="hot-story__title" href="/news/2">Markets update</a>
+        <div class="hot-story__details"><span title="">20 min ago</span></div>
+        <div class="hot-story__preview">Trading volumes rose.</div>
+      </article>
+    """
+    page_zone = timezone(timedelta(hours=2))
+    now = datetime(2026, 11, 20, 12, tzinfo=page_zone)
+    latest, hot = parse_news_page(html, now=now, page_timezone=page_zone)
+    assert str(latest.url) == "https://www.forexfactory.com/news/1"
+    assert latest.published_at == now - timedelta(minutes=90)
+    assert latest.content == "The bank held rates at 4 percent."
+    assert hot.published_at == now - timedelta(minutes=20)
+    assert hot.content == "Trading volumes rose."
 
 
 def test_conflicting_claims_and_citation_tampering(db):
