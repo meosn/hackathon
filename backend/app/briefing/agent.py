@@ -128,6 +128,7 @@ def story_facts(db, story_ids, language, excluded, max_facts):
         )
         facts = [
             {
+                    "story_id": story_id,
                 "title": story["title"][:400],
                 "published_at": story["event_at"],
                 "text": fact["text"],
@@ -174,6 +175,7 @@ def episode_context(db, briefing, data, excluded):
         if sources:
             rows.append(
                 {
+                    "story_id": segment.story_id,
                     "title": titles[segment.story_id][:400],
                     "position": segment.position,
                     "start_seconds": segment.start_seconds,
@@ -207,11 +209,19 @@ def episode_context(db, briefing, data, excluded):
 
 def context_for(db, user_id: str, data: AgentContextRequest) -> str:
     if data.conversation_id:
-        from .models import Conversation
+        from .models import Conversation, ConversationMessage
         conv = db.scalar(select(Conversation).where(Conversation.id == data.conversation_id, Conversation.user_id == user_id))
         if not conv:
             raise HTTPException(404, "Conversation not found")
-        data = data.model_copy(update={"briefing_id": conv.briefing_id, "story_id": data.story_id or conv.story_id})
+        initial = set(db.scalars(select(BriefingItem.story_id).where(BriefingItem.briefing_id == conv.briefing_id))) if conv.briefing_id else set()
+        allowed = initial | ({conv.story_id} if conv.story_id else set())
+        for action in db.scalars(select(ConversationMessage.action).where(ConversationMessage.conversation_id == conv.id, ConversationMessage.role == "assistant")):
+            allowed.update((action or {}).get("story_ids", []))
+        current = data.story_id or conv.story_id
+        if current and current not in allowed:
+            raise HTTPException(422, "Story is outside this conversation")
+        # Additional stories belong to the conversation, beyond its original episode.
+        data = data.model_copy(update={"briefing_id": conv.briefing_id if not current or current in initial else None, "story_id": current})
     prefs = preferences(db, user_id)
     excluded = set(prefs["excluded_sources"])
     language = prefs["language"]

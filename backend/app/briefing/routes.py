@@ -564,8 +564,6 @@ def realtime_session(
     user=Depends(current_user),
 ):
     conv = owned(db, Conversation, conversation_id, user.id)
-    if agent.conversation_provider() == "elevenagents":
-        raise HTTPException(409, "Start an ElevenAgents voice session instead")
     titles = (
         list(
             db.scalars(
@@ -605,8 +603,6 @@ def realtime_evidence(
     user=Depends(current_user),
 ):
     conv = owned(db, Conversation, conversation_id, user.id, lock=True)
-    if agent.conversation_provider() == "elevenagents":
-        raise HTTPException(409, "Use the ElevenAgents context endpoint instead")
     if data.story_id:
         membership = db.scalar(
             select(BriefingItem.id).where(

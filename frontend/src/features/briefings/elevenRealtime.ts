@@ -23,6 +23,7 @@ export class ElevenRealtime {
   private inputRate = 16000
   private outputRate = 16000
   private lastEvent = -1
+  private speakingInput = false
   private interruptedThrough = -1
   private idleTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -105,13 +106,16 @@ export class ElevenRealtime {
         this.callbacks.phase(this.micWanted ? 'listening' : 'idle')
         break
       case 'vad_score':
-        if (this.micWanted && event.vad_score_event.vad_score > .5) {
+        if (this.micWanted && !this.speakingInput && event.vad_score_event.vad_score > .5) {
+          this.speakingInput = true
+          this.playbackContext()
+          this.interruptedThrough = Math.max(this.interruptedThrough, this.lastEvent)
           this.player.cancel()
           this.callbacks.interrupt()
           this.callbacks.phase('listening')
         }
         break
-      case 'user_transcript': this.callbacks.phase('thinking'); break
+      case 'user_transcript': this.speakingInput = false; this.callbacks.phase('thinking'); break
       case 'client_tool_call': void this.tool(event.client_tool_call); break
       case 'error': this.fail('ElevenLabs could not answer. Please try again.'); break
     }
@@ -150,7 +154,12 @@ export class ElevenRealtime {
     this.interrupt()
     this.callbacks.interrupt()
     this.callbacks.phase('thinking')
+    this.playbackContext()
     this.send({ type: 'user_message', text })
+  }
+  private playbackContext() {
+    const story = this.callbacks.story() || this.player.currentStory
+    if (story) this.send({ type: 'contextual_update', text: 'Playback context data only: current_story_id=' + story + '. Resolve this story / it / why against this story in the verified evidence.' })
   }
   async setMicrophone(enabled: boolean) {
     const version = ++this.micVersion

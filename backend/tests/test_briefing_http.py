@@ -608,3 +608,27 @@ def test_voice_engines_and_database_characters_are_private_per_listener(api, mon
     assert exchanged[0]['output_modalities'] == ['audio']
     assert exchanged[0]['audio']['output']['voice'] == 'ash'
     assert 'West Coast' in exchanged[0]['instructions']
+
+
+def test_agent_can_resume_additional_news_after_switching_provider(api, monkeypatch):
+    token = api.post(V1 + '/auth/demo', json={'profile': 'tech'}).json()['access_token']
+    headers = {'Authorization': 'Bearer ' + token}
+    bid = api.post(V1 + '/briefings', headers=headers, json={'period': 'week', 'story_limit': 1}).json()['briefing_id']
+    edition = wait_for_edition(api, f'{V1}/briefings/{bid}', headers)
+    conv = api.post(V1 + '/conversations', headers=headers, json={'briefing_id': bid}).json()['id']
+    more = api.post(f'{V1}/conversations/{conv}/realtime-evidence', headers=headers,
+                    json={'question': 'More news', 'decision': {'intent': 'GET_MORE_NEWS'}})
+    assert more.status_code == 200
+    current = more.json()['story_id']
+    assert current not in {item['story_id'] for item in edition['items']}
+    monkeypatch.setenv('ELEVENLABS_API_KEY', 'test-key')
+    monkeypatch.setenv('ELEVENLABS_AGENT_ID', 'agent-test')
+    monkeypatch.setenv('CONVERSATION_PROVIDER', 'elevenagents')
+    monkeypatch.setattr(agent, 'signed_session_url', lambda *_: 'wss://api.elevenlabs.io/signed')
+    result = api.post(V1 + '/agent-session', headers=headers, json={'conversation_id': conv})
+    assert result.status_code == 200, result.text
+    context = json.loads(result.json()['context'])
+    assert context['scope'] == 'story'
+    assert {entry['story_id'] for entry in context['entries']} == {current}
+    assert api.post(V1 + '/agent-context', headers=headers,
+                    json={'conversation_id': conv, 'story_id': 'unrelated'}).status_code == 422
