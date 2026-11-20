@@ -16,28 +16,8 @@ const hosts = [
 ]
 function Portrait({ look }: { look: string }) {
   return (
-    <div className={'host-portrait ' + look} aria-hidden="true">
-      <div className="portrait-orbit" />
-      <div className="portrait-orbit second" />
-      {look === 'assistant' ? (
-        <div className="ai-face">
-          <span />
-          <span />
-          <i />
-        </div>
-      ) : (
-        <div className="human-portrait">
-          <div className="portrait-body" />
-          <div className="portrait-neck" />
-          <div className="portrait-head">
-            <div className="portrait-hair" />
-            <span className="portrait-eye left" />
-            <span className="portrait-eye right" />
-            <i className="portrait-mouth" />
-          </div>
-          <div className="portrait-collar" />
-        </div>
-      )}
+    <div className={'host-portrait abstract-voice ' + look} aria-hidden="true">
+      <AudioLines size={42} strokeWidth={1} />
     </div>
   )
 }
@@ -112,7 +92,7 @@ export function StudioHome({ user }: { user: User }) {
         <section className="music-voices" aria-label="Choose your voice">
           <div className="music-section-heading">
             <h2>Your voice</h2>
-            <Link to="/settings">All voices</Link>
+            <Link to="/settings?section=audio">Change voice</Link>
           </div>
           <div className="music-hosts">
             {hosts.map((host) => (
@@ -166,8 +146,16 @@ export function StudioHome({ user }: { user: User }) {
                   <Play size={18} fill="currentColor" />
                 </span>
               </span>
-              <strong>{health.data?.news_reference_time ? 'Prepared briefing' : 'Daily podcast'}</strong>
-              <span>{health.data?.news_reference_time ? 'Archive edition' : "Today's prepared edition"}</span>
+              <strong>
+                {health.data?.news_reference_time
+                  ? 'Prepared briefing'
+                  : 'Daily podcast'}
+              </strong>
+              <span>
+                {health.data?.news_reference_time
+                  ? 'Archive edition'
+                  : "Today's prepared edition"}
+              </span>
             </button>
             <button
               className="episode-card"
@@ -220,8 +208,12 @@ export function StudioHome({ user }: { user: User }) {
           {(user.is_demo || user.is_admin) && (
             <Link to="/transparency">Transparency</Link>
           )}
-          {health.data?.corpus === 'licensed' && <span>Newstex hackathon archive</span>}
-          {user.is_demo && health.data?.corpus === 'demo' && <span>Synthetic news demo</span>}
+          {health.data?.corpus === 'licensed' && (
+            <span>Newstex hackathon archive</span>
+          )}
+          {user.is_demo && health.data?.corpus === 'demo' && (
+            <span>Synthetic news demo</span>
+          )}
         </footer>
       </main>
     </>

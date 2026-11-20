@@ -69,6 +69,8 @@ test('two listeners can generate and hear a source-grounded synthetic edition', 
     .getByRole('button', { name: 'Pause daily briefing', exact: true })
     .click()
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await page.getByRole('tab', { name: /Voice & language/ }).click()
+  await page.getByText('Fine-tune your assistant', { exact: true }).click()
   await page
     .getByRole('combobox', { name: 'Assistant model', exact: true })
     .selectOption('grounded')
@@ -154,9 +156,11 @@ test('arbitrary listener can complete onboarding and schedule a briefing on mobi
   await expect(
     page.getByRole('heading', { name: 'Tune your briefing' }),
   ).toBeVisible()
+  await page.getByRole('button', { name: 'Add your own topic' }).click()
   await page.getByPlaceholder('Enter a topic').fill('low carbon science')
   await page.getByRole('button', { name: 'Add', exact: true }).click()
-  await page.getByLabel('Daily briefing', { exact: true }).check()
+  await page.getByRole('tab', { name: /Daily routine/ }).click()
+  await page.getByLabel('Daily briefing', { exact: false }).check()
   await page.getByLabel('Delivery time', { exact: true }).fill('10:20')
   await page.getByRole('button', { name: 'Finish setup' }).click()
   await expect(
@@ -174,6 +178,7 @@ test('arbitrary listener can complete onboarding and schedule a briefing on mobi
   await expect(
     page.getByRole('button', { name: 'Low carbon science' }),
   ).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('tab', { name: /Daily routine/ }).click()
   await expect(page.getByLabel('Delivery time', { exact: true })).toHaveValue(
     '10:20',
   )
@@ -252,4 +257,62 @@ test('voice clicks and settings navigation keep the shell and prepared audio sta
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(
     originalTimeOrigin,
   )
+})
+
+test('preferences stay focused with many sources and preserve edits between sections', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await login(page, 'Technology enthusiast')
+  const sources = Array.from({ length: 31 }, (_, i) => ({
+    id: 'publication-' + i,
+    name: `Publication ${String(i + 1).padStart(2, '0')}`,
+    is_synthetic: false,
+  }))
+  await page.route('**/api/v1/sources', (route) =>
+    route.fulfill({ json: sources }),
+  )
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await page.getByRole('tab', { name: /Sources/ }).click()
+  await expect(page.locator('.preference-source')).toHaveCount(7)
+  await expect(page.getByText('1–7 of 31 sources')).toBeVisible()
+  await page.getByRole('button', { name: 'Next sources' }).click()
+  await expect(page.getByText('8–14 of 31 sources')).toBeVisible()
+  await page
+    .getByRole('searchbox', { name: 'Search sources' })
+    .fill('Publication 30')
+  await expect(page.locator('.preference-source')).toHaveCount(1)
+  await page.getByLabel('Publication 30 preference').selectOption('prefer')
+  await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: /Voice & language/ }).click()
+  await page.getByRole('button', { name: 'DE German', exact: true }).click()
+  await page.getByRole('tab', { name: /Sources/ }).click()
+  await expect(page.getByLabel('Publication 30 preference')).toHaveValue(
+    'prefer',
+  )
+  await page.getByRole('button', { name: 'Preferred', exact: true }).click()
+  await expect(page.locator('.preference-source')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Discard', exact: true }).click()
+  await expect(page.getByText('No matching publications')).toBeVisible()
+  await page.getByRole('button', { name: 'Show all sources' }).click()
+  await expect(page.locator('.preference-source')).toHaveCount(7)
+  await page
+    .getByRole('searchbox', { name: 'Search sources' })
+    .fill('nothing-matches')
+  await expect(page.getByText('No matching publications')).toBeVisible()
+  await page.setViewportSize({ width: 360, height: 780 })
+  await page.getByRole('tab', { name: /Daily routine/ }).click()
+  await expect(
+    page.getByRole('heading', { name: 'A moment for the world.' }),
+  ).toBeVisible()
+  await page.getByRole('tab', { name: /Daily routine/ }).press('ArrowRight')
+  await expect(page.getByRole('tab', { name: /Sources/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+  ).toBe(false)
 })

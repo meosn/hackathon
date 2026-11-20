@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom'
-import { LogOut, Settings2 } from 'lucide-react'
+import { Info, LogOut, Settings2 } from 'lucide-react'
 import { getToken, setToken, useApi } from '../api/client'
 import type { User } from '../api/types'
 import type { Health } from '../api/client'
@@ -50,6 +50,7 @@ export function App() {
     )
   const me = user.data
   const home = location.pathname === '/'
+  const settings = location.pathname === '/settings'
   return (
     <div className="music-home">
       <a className="skip" href="#main">
@@ -78,26 +79,42 @@ export function App() {
         </div>
       </header>
       {health.data?.news_reference_time && (
-        <p className="corpus-notice" role="status">
-          Hackathon archive · news through {new Date(health.data.news_reference_time).toLocaleDateString()}.
-          {' '}Short source excerpts and AI-generated narration.
-        </p>
+        <details className="corpus-notice">
+          <summary>
+            <span className="archive-dot" /> Archive edition{' '}
+            <span className="archive-date">
+              ·{' '}
+              {new Date(health.data.news_reference_time).toLocaleDateString(
+                'en',
+                { day: 'numeric', month: 'short', year: 'numeric' },
+              )}
+            </span>
+            <Info size={12} />
+          </summary>
+          <p>
+            Hackathon archive · Short source excerpts and AI-generated
+            narration. News through{' '}
+            {new Date(health.data.news_reference_time).toLocaleDateString()}.
+          </p>
+        </details>
       )}
       {home ? (
         <StudioHome user={me} />
       ) : (
         <main id="main" className="authenticated-content">
-          <nav className="secondary-navigation" aria-label="Main navigation">
-            <NavLink to="/" end>
-              Listening room
-            </NavLink>
-            <NavLink to="/explore">Explore stories</NavLink>
-            <NavLink to="/briefings">Briefing history</NavLink>
-            <NavLink to="/assistant">Ask Sourcera</NavLink>
-            {(me.is_admin || me.is_demo) && (
-              <NavLink to="/transparency">Transparency</NavLink>
-            )}
-          </nav>
+          {!settings && (
+            <nav className="secondary-navigation" aria-label="Main navigation">
+              <NavLink to="/" end>
+                Listening room
+              </NavLink>
+              <NavLink to="/explore">Explore stories</NavLink>
+              <NavLink to="/briefings">Briefing history</NavLink>
+              <NavLink to="/assistant">Ask Sourcera</NavLink>
+              {(me.is_admin || me.is_demo) && (
+                <NavLink to="/transparency">Transparency</NavLink>
+              )}
+            </nav>
+          )}
           <Routes>
             <Route path="/explore" element={<Explore />} />
             <Route path="/stories/:id" element={<StoryView />} />
