@@ -60,12 +60,10 @@ function setup() {
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: {
-      getUserMedia: vi
-        .fn()
-        .mockResolvedValue({
-          getTracks: () => [{ stop }],
-          getAudioTracks: () => [{ stop }],
-        }),
+      getUserMedia: vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+        getAudioTracks: () => [{ stop }],
+      }),
     },
   })
   vi.mocked(request).mockResolvedValue(new Response('answer-sdp'))
@@ -102,40 +100,61 @@ it('releases input while a streamed spoken answer continues and never sends canc
   voice.close()
 })
 
-it('requests more news without microphone permission and speaks the grounded tool result', async () => {
+it('fetches more news directly without a model tool round trip or microphone permission', async () => {
   const { voice, event, sent, callbacks } = setup()
   vi.mocked(api).mockResolvedValue({
     text: 'Verified next three stories.',
     action: { type: 'GET_MORE_NEWS' },
     story_id: 'next-story',
+    context: {
+      stories: [
+        { story_id: 'next-story', evidence: ['More verified context'] },
+      ],
+    },
   })
   await voice.moreNews()
   expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
-  event({ type: 'response.created' })
-  event({
-    type: 'response.function_call_arguments.done',
-    call_id: 'call-1',
-    name: 'news_evidence',
-    arguments: JSON.stringify({
-      question: 'More news',
-      decision: { intent: 'GET_MORE_NEWS' },
-    }),
-  })
-  await vi.waitFor(() => expect(api).toHaveBeenCalledOnce())
-  await vi.waitFor(() => expect(callbacks.action).toHaveBeenCalledOnce())
+  expect(api).toHaveBeenCalledExactlyOnceWith(
+    '/conversations/conversation/realtime-evidence',
+    'POST',
+    { question: 'More news', decision: { intent: 'GET_MORE_NEWS' } },
+    expect.any(AbortSignal),
+  )
+  expect(callbacks.action).toHaveBeenCalledOnce()
+  expect(
+    sent.some((e) =>
+      e.item?.content?.[0]?.text?.includes('Verified next three stories.'),
+    ),
+  ).toBe(true)
+  expect(
+    sent.some((e) =>
+      e.item?.content?.[0]?.text?.includes('More verified context'),
+    ),
+  ).toBe(true)
+  expect(
+    sent.filter((e) => e.type === 'response.create').at(-1)?.response
+      .tool_choice,
+  ).toBe('none')
+  event({ type: 'output_audio_buffer.started' })
+  expect(callbacks.phase).toHaveBeenLastCalledWith('speaking')
+  voice.close()
+})
+
+it('supplies current playback context before a direct spoken answer without an evidence request', async () => {
+  const { voice, event, sent, callbacks } = setup()
+  await voice.setMicrophone(true)
+  event({ type: 'input_audio_buffer.speech_started' })
   expect(
     sent.some(
       (e) =>
-        e.item?.type === 'function_call_output' &&
-        JSON.parse(e.item.output).evidence === 'Verified next three stories.',
+        e.item?.role === 'system' &&
+        e.item.content[0].text.includes('playing-story'),
     ),
   ).toBe(true)
-  const before = sent.filter((e) => e.type === 'response.create').length
-  event({ type: 'response.done', response: { status: 'completed' } })
-  expect(sent.filter((e) => e.type === 'response.create')).toHaveLength(
-    before + 1,
-  )
+  event({ type: 'input_audio_buffer.speech_stopped' })
+  event({ type: 'response.created' })
   event({ type: 'output_audio_buffer.started' })
+  expect(api).not.toHaveBeenCalled()
   expect(callbacks.phase).toHaveBeenLastCalledWith('speaking')
   voice.close()
 })

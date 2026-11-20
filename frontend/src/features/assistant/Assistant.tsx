@@ -85,7 +85,7 @@ function VoiceConversation({
     }
   }
   async function connection() {
-    if (voice.current?.ready) return voice.current
+    if (voice.current && !voice.current.disposed) return voice.current
     const id = await ensure()
     if (!alive.current) throw new DOMException('Aborted', 'AbortError')
     voice.current?.close()

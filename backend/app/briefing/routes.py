@@ -454,7 +454,8 @@ def realtime_session(
         if conv.briefing_id
         else []
     )
-    sdp = realtime.negotiate(data.sdp, conv.language, titles, user.id)
+    context = realtime.evidence_context(db, conv)
+    sdp = realtime.negotiate(data.sdp, conv.language, titles, user.id, context)
     return Response(
         sdp, media_type="application/sdp", headers={"Cache-Control": "no-store"}
     )
@@ -462,7 +463,7 @@ def realtime_session(
 
 @router.post(
     "/conversations/{conversation_id}/realtime-evidence",
-    response_model=contracts.MessageView,
+    response_model=contracts.RealtimeEvidence,
 )
 def realtime_evidence(
     conversation_id: str,
@@ -484,6 +485,12 @@ def realtime_evidence(
             raise HTTPException(422, "Story is outside this briefing")
         conv.story_id = data.story_id
     with account_attempts(db):
-        return message_view(
-            respond(db, conv, data.question, decision=data.decision, extractive=True)
+        message = respond(
+            db, conv, data.question, decision=data.decision, extractive=True
         )
+        story_ids = message.action.get("story_ids") or (
+            [message.story_id] if message.story_id else []
+        )
+        return message_view(message) | {
+            "context": realtime.evidence_context(db, conv, story_ids)
+        }

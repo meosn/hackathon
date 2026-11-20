@@ -172,3 +172,7 @@ class ConversationView(BaseModel):
     topic: str | None
     language: str
     messages: list[MessageView]
+
+
+class RealtimeEvidence(MessageView):
+    context: dict

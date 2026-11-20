@@ -1335,6 +1335,39 @@ export interface components {
              */
             status: "queued";
         };
+        /** RealtimeEvidence */
+        RealtimeEvidence: {
+            /** Id */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Story Id */
+            story_id: string | null;
+            /** Briefing Id */
+            briefing_id: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "assistant" | "user";
+            /** Text */
+            text: string;
+            /** Intent */
+            intent: ("GET_LATEST_NEWS" | "GET_PERIOD_NEWS" | "GET_MORE_NEWS" | "FILTER_TOPIC" | "SELECT_STORY" | "EXPLAIN_STORY" | "COMPARE_SOURCES" | "FOLLOW_UP" | "CHANGE_VOICE" | "CHANGE_PREFERENCES" | "SKIP_STORY" | "STOP_PLAYBACK" | "RESUME_PLAYBACK") | null;
+            /** Citations */
+            citations: components["schemas"]["Citation"][];
+            /** Action */
+            action: {
+                [key: string]: unknown;
+            };
+            /** Context */
+            context: {
+                [key: string]: unknown;
+            };
+        };
         /** Register */
         Register: {
             /**
@@ -1590,6 +1623,7 @@ export type SchemaPage = components['schemas']['Page'];
 export type SchemaPreferencePatch = components['schemas']['PreferencePatch'];
 export type SchemaPreferenceView = components['schemas']['PreferenceView'];
 export type SchemaQueued = components['schemas']['Queued'];
+export type SchemaRealtimeEvidence = components['schemas']['RealtimeEvidence'];
 export type SchemaRegister = components['schemas']['Register'];
 export type SchemaScheduleInput = components['schemas']['ScheduleInput'];
 export type SchemaSchedulePatch = components['schemas']['SchedulePatch'];
@@ -2741,7 +2775,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MessageView"];
+                    "application/json": components["schemas"]["RealtimeEvidence"];
                 };
             };
             /** @description Validation Error */

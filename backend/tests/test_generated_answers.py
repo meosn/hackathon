@@ -314,3 +314,29 @@ def test_realtime_evidence_does_not_wait_for_another_text_model(session, monkeyp
     assert message.citations
     assert message.action["response_provider"] == "realtime_evidence"
     assert message.story_id == sid
+
+
+def test_realtime_preloads_only_verified_allowed_context(session):
+    from app.briefing import realtime
+    from app.briefing.ranking import recommendations
+    from app.accounts import set_preferences
+
+    user = listener(session, "realtime-preload", "en", ["technology"])
+    sid = recommendations(session, user.id, period="week")[0]["id"]
+    conv = Conversation(user_id=user.id, story_id=sid, language="en")
+    session.add(conv)
+    session.commit()
+    context = realtime.evidence_context(session, conv)
+    assert context["current_story_id"] == sid
+    assert len(context["stories"]) == 1
+    facts = context["stories"][0]["evidence"]
+    assert 1 <= len(facts) <= 6
+    assert sum(len(f["text"]) for f in facts) <= 3600
+    story = story_detail(session, sid)
+    assert all(
+        f["claim_id"]
+        in {row["id"] for row in story["facts"] if row["status"] == "supported"}
+        for f in facts
+    )
+    set_preferences(session, user.id, {"excluded_sources": story["source_ids"]})
+    assert realtime.evidence_context(session, conv)["stories"] == []

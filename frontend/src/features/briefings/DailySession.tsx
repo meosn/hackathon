@@ -211,7 +211,7 @@ export function DailySession({
       message.action?.type === 'SKIP_STORY'
   }
   async function realtimeConnection() {
-    if (realtime.current?.ready) return realtime.current
+    if (realtime.current && !realtime.current.disposed) return realtime.current
     const conv = await ensureConversation()
     if (!mounted.current) throw new DOMException('Aborted', 'AbortError')
     realtime.current?.close()
@@ -223,6 +223,10 @@ export function DailySession({
           setVoiceConnecting(value === 'connecting')
           setResponding(value === 'thinking')
           setAnswerPlaying(value === 'speaking')
+          if (value === 'speaking') {
+            setHasAnswer(true)
+            briefingContext.current = false
+          }
           setPhase(
             value === 'connecting'
               ? 'Connecting voice…'
@@ -340,11 +344,15 @@ export function DailySession({
         const voice = await realtimeConnection()
         await voice.moreNews()
         return
-      } catch {
-        realtime.current?.close()
-        realtime.current = null
-        setListening(false)
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : 'Voice connection failed. Please try again.',
+        )
         setVoiceConnecting(false)
+        setResponding(false)
+        return
       }
     }
     await respond('More news')
@@ -450,6 +458,15 @@ export function DailySession({
     setResponding(false)
     setPhase('')
     void narration.current?.play().catch((e) => setError(e.message))
+    if (health.data?.realtime_voice) {
+      voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
+      void realtimeConnection()
+        .then((voice) => voice.connect())
+        .catch(() => {
+          // A failed warm-up must not interrupt the prepared briefing.
+          if (realtime.current?.disposed) realtime.current = null
+        })
+    }
   }
   const audible = playing || answerPlaying
   return (

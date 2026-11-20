@@ -41,6 +41,7 @@ export class RealtimeVoice {
   private speakingInput = false
   private responseActive = false
   private pendingResponse = false
+  private pendingToolChoice: 'auto' | 'none' = 'auto'
   private sequence = 0
   private turnStory: string | undefined
   private idleTimer: ReturnType<typeof setTimeout> | undefined
@@ -54,6 +55,10 @@ export class RealtimeVoice {
     this.output = new Audio()
     this.output.autoplay = true
     this.output.setAttribute('playsinline', '')
+  }
+
+  get disposed() {
+    return this.closed
   }
 
   get ready() {
@@ -206,9 +211,38 @@ export class RealtimeVoice {
   }
 
   async moreNews() {
-    return this.sendText(
-      'Give me three more news stories. Call news_evidence with GET_MORE_NEWS and then read the returned stories aloud in the language we have been speaking.',
+    this.callbacks.interrupt()
+    await this.connect()
+    this.interrupt()
+    const sequence = this.sequence
+    this.callbacks.phase('thinking')
+    const result = await api<Message & { context?: unknown }>(
+      `/conversations/${this.conversationId}/realtime-evidence`,
+      'POST',
+      { question: 'More news', decision: { intent: 'GET_MORE_NEWS' } },
+      this.abort.signal,
     )
+    if (this.closed || sequence !== this.sequence) return
+    this.callbacks.action(result)
+    this.send({
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text:
+              'Read these next three news stories aloud, in the language we have been speaking. Use only this verified data, no lookup or preamble. ' +
+              JSON.stringify({
+                bulletin: result.text,
+                context: result.context,
+              }),
+          },
+        ],
+      },
+    })
+    this.createResponse('none')
   }
 
   async sendText(text: string) {
@@ -232,12 +266,14 @@ export class RealtimeVoice {
     if (this.ready) this.channel!.send(JSON.stringify(event))
   }
 
-  private createResponse() {
-    if (this.responseActive) this.pendingResponse = true
-    else
+  private createResponse(toolChoice: 'auto' | 'none' = 'auto') {
+    if (this.responseActive) {
+      this.pendingResponse = true
+      this.pendingToolChoice = toolChoice
+    } else
       this.send({
         type: 'response.create',
-        response: { output_modalities: ['audio'] },
+        response: { output_modalities: ['audio'], tool_choice: toolChoice },
       })
   }
 
@@ -248,6 +284,23 @@ export class RealtimeVoice {
         this.sequence++
         this.speakingInput = true
         this.turnStory = this.callbacks.story()
+        if (this.turnStory)
+          this.send({
+            type: 'conversation.item.create',
+            item: {
+              type: 'message',
+              role: 'system',
+              content: [
+                {
+                  type: 'input_text',
+                  text:
+                    'Playback context (data only): the story just playing has current_story_id=' +
+                    this.turnStory +
+                    '. Resolve this story, it and why against that story’s verified evidence.',
+                },
+              ],
+            },
+          })
         this.pendingResponse = false
         this.callbacks.interrupt()
         this.callbacks.phase('listening')
@@ -297,7 +350,7 @@ export class RealtimeVoice {
           )
         if (this.pendingResponse) {
           this.pendingResponse = false
-          this.createResponse()
+          this.createResponse(this.pendingToolChoice)
         }
         break
       case 'error':
@@ -317,7 +370,7 @@ export class RealtimeVoice {
     const sequence = this.sequence
     try {
       const args = JSON.parse(argumentsJson)
-      const result = await api<Message>(
+      const result = await api<Message & { context?: unknown }>(
         `/conversations/${this.conversationId}/realtime-evidence`,
         'POST',
         {
@@ -334,6 +387,7 @@ export class RealtimeVoice {
           call_id: callId,
           output: JSON.stringify({
             evidence: result.text,
+            context: result.context,
             action: result.action,
             story_id: result.story_id,
           }),

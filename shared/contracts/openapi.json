@@ -1519,7 +1519,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageView"
+                  "$ref": "#/components/schemas/RealtimeEvidence"
                 }
               }
             }
@@ -3870,6 +3870,110 @@
           "status"
         ],
         "title": "Queued"
+      },
+      "RealtimeEvidence": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "story_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Id"
+          },
+          "briefing_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Briefing Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "assistant",
+              "user"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "GET_LATEST_NEWS",
+                  "GET_PERIOD_NEWS",
+                  "GET_MORE_NEWS",
+                  "FILTER_TOPIC",
+                  "SELECT_STORY",
+                  "EXPLAIN_STORY",
+                  "COMPARE_SOURCES",
+                  "FOLLOW_UP",
+                  "CHANGE_VOICE",
+                  "CHANGE_PREFERENCES",
+                  "SKIP_STORY",
+                  "STOP_PLAYBACK",
+                  "RESUME_PLAYBACK"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "action": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Action"
+          },
+          "context": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created_at",
+          "story_id",
+          "briefing_id",
+          "role",
+          "text",
+          "intent",
+          "citations",
+          "action",
+          "context"
+        ],
+        "title": "RealtimeEvidence"
       },
       "Register": {
         "properties": {

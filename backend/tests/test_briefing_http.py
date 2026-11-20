@@ -372,7 +372,8 @@ def test_realtime_session_is_private_and_evidence_uses_no_text_model(api, monkey
     assert "private-test-key" not in result.text
     config = json.loads(requests[0][1]["files"]["session"][1])
     assert config["output_modalities"] == ["audio"]
-    assert config["audio"]["input"]["turn_detection"]["type"] == "semantic_vad"
+    assert config["audio"]["input"]["turn_detection"]["type"] == "server_vad"
+    assert config["audio"]["input"]["turn_detection"]["silence_duration_ms"] == 450
 
     def unexpected(*args, **kwargs):
         raise AssertionError("Evidence must not invoke a text model")
