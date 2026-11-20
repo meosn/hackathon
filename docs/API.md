@@ -33,3 +33,6 @@ HTTP errors include `error.code`, `error.message` and `detail`. Invalid inputs r
 `POST /conversations/{id}/realtime` accepts `{ "sdp": "<WebRTC offer>" }` and returns `application/sdp`. It requires the conversation owner, `REALTIME_ENABLED=1` and a configured OpenAI key. Provider credentials stay on the server. `GET /health` advertises `realtime_voice`.
 
 `POST /conversations/{id}/realtime-evidence` accepts `{ "question": "…", "decision": { "intent": "EXPLAIN_STORY", "retrieval_query": "standalone English search question" }, "story_id": "optional current briefing story" }`. The supplied playback story must belong to this conversation’s briefing. The response contains verified evidence and a playback action, used internally by the audio model, never rendered as a chat bubble.
+
+
+`POST /conversations/{id}/speech-session` authorizes the owner’s live ElevenLabs synthesis channel. With `REALTIME_SPEECH_PROVIDER=elevenlabs`, it returns a single-use TTS WebSocket token, the selected mapped voice ID, model and sample rate. The response is `private, no-store`. The permanent ElevenLabs API key stays server-side. Realtime negotiation advertises its output route through `X-Speech-Output`; ElevenLabs mode requests streamed GPT text, while OpenAI mode requests native audio.

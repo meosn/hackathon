@@ -119,7 +119,7 @@ export function StudioHome({ user }: { user: User }) {
           <div className="voice-apply" role="status">
             {voiceChanged ? (
               <>
-                <span>Voice selected.</span>
+                <span>New replies use this voice.</span>
                 <button
                   onClick={() => generate.mutate('day')}
                   disabled={generate.isPending}

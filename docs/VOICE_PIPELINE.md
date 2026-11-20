@@ -73,6 +73,18 @@ When Realtime is disabled, the local profile keeps the recorded-question and aut
 
 [OpenAI WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc?api=realtime) · [Semantic VAD](https://developers.openai.com/api/docs/guides/realtime-vad)
 
+## GPT Realtime with ElevenLabs streaming speech
+
+`REALTIME_SPEECH_PROVIDER=elevenlabs` keeps GPT Realtime for understanding incoming microphone audio and generating a grounded reply. GPT returns text deltas directly, and the browser streams whole words to ElevenLabs over its multi-context TTS WebSocket. `ELEVENLABS_CONVERSATION_MODEL` defaults to `eleven_flash_v2_5`. The voice maps from the listener’s existing `voice_profile_id` through the private `ELEVENLABS_VOICE_MAP`. Changing the narrator applies to the next answer without reconnecting the microphone.
+
+The authenticated, listener-owned `/conversations/{id}/speech-session` endpoint exchanges the server API key for a single-use TTS authorization. The API key never reaches the browser. The ephemeral token is held in memory and used once to open the vendor socket. PCM audio at 24 kHz plays through the already unlocked Web Audio context as chunks arrive, before the full answer exists. No answer text is rendered in the interface.
+
+A silent standby context keeps the TTS connection ready. Separate context IDs isolate each answer. On interruption, queued PCM sources are stopped immediately, the old synthesis context is closed and late GPT text/audio from the interrupted response is rejected. Muting input leaves pending generation and scheduled output playing. Completion is reported after the provider’s final packet and the last queued PCM sample, so explicit resume commands do not overlap the voice reply. Route changes, sign-out and idle shutdown release both transports.
+
+Set `REALTIME_SPEECH_PROVIDER=openai` to use native Realtime audio instead. Provider failure never silently displays a text answer. Streamed TTS bypasses the prepared-audio file cache and its per-file cost ledger; vendor usage remains available in the ElevenLabs account.
+
+[ElevenLabs streamed TTS](https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/realtime-tts) · [Multi-context streaming](https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/multi-context-web-socket)
+
 ## Prepared speech and recorded conversations
 
 The configured conversation provider receives the current story, briefing and topic, listener preferences, recent messages and retrieved evidence. Neural article embeddings support cross-language retrieval. Structured answers cite an allowlisted claim per sentence and pass the database-backed wording/evidence gate. The router resolves follow-up references from recent history. Recorded-answer provider or verification failures recover to verified source wording. Conversation screens play replies aloud and never render their text.

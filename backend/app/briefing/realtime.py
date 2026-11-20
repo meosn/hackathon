@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from pydantic import Field
 
 from .contracts import Strict, Decision
+from .conversation_speech import enabled as eleven_speech_enabled
 from sqlalchemy import select
 from app.accounts import preferences
 from app.news.service import story_detail, verify_segment
@@ -23,6 +24,7 @@ def enabled():
 
 
 class Offer(Strict):
+    speech_stream: bool = False
     sdp: str = Field(min_length=20, max_length=65536)
 
 
@@ -93,11 +95,12 @@ def evidence_context(db, conv, story_ids=None):
     }
 
 
-def session_config(language, titles, context=None):
+def session_config(language, titles, context=None, speech_stream=None):
+    speech_stream = eleven_speech_enabled() and speech_stream is not False
     return {
         "type": "realtime",
         "model": os.getenv("REALTIME_MODEL") or "gpt-realtime-2.1",
-        "output_modalities": ["audio"],
+        "output_modalities": ["text" if speech_stream else "audio"],
         "max_output_tokens": 2048,
         "audio": {
             "input": {
@@ -114,8 +117,13 @@ def session_config(language, titles, context=None):
             "output": {"voice": os.getenv("REALTIME_VOICE") or "marin"},
         },
         "instructions": (
-            "You are Sourcera, a warm, concise spoken news companion. Output audio only. "
-            "Understand the user's audio directly, including Russian, English, German and Dutch. "
+            "You are Sourcera, a warm, concise spoken news companion. "
+            + (
+                "Output plain spoken prose for live text-to-speech. No markdown, URLs, stage directions, or audio tags. "
+                if speech_stream
+                else "Output audio only. "
+            )
+            + "Understand the user's audio directly, including Russian, English, German and Dutch. "
             "Answer in the language the listener just used. Default language: "
             + language
             + ". "
@@ -172,7 +180,7 @@ def session_config(language, titles, context=None):
     }
 
 
-def negotiate(sdp, language, titles, user_id, context=None):
+def negotiate(sdp, language, titles, user_id, context=None, speech_stream=None):
     if not enabled():
         raise HTTPException(503, "Realtime voice is not configured.")
     key = os.getenv("OPENAI_API_KEY") or os.environ["LLM_API_KEY"]
@@ -189,7 +197,9 @@ def negotiate(sdp, language, titles, user_id, context=None):
                 "sdp": (None, sdp, "application/sdp"),
                 "session": (
                     None,
-                    json.dumps(session_config(language, titles, context)),
+                    json.dumps(
+                        session_config(language, titles, context, speech_stream)
+                    ),
                     "application/json",
                 ),
             },

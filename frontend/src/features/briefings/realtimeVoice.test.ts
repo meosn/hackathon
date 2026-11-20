@@ -2,6 +2,28 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { RealtimeVoice } from './realtimeVoice'
 import { api, request } from '../../api/client'
 vi.mock('../../api/client', () => ({ api: vi.fn(), request: vi.fn() }))
+const speechMock = vi.hoisted(() => ({
+  connect: vi.fn().mockResolvedValue(undefined),
+  append: vi.fn(),
+  finish: vi.fn(),
+  cancel: vi.fn(),
+  close: vi.fn(),
+  prepare: vi.fn(),
+  callbacks: null as any,
+}))
+vi.mock('./elevenSpeech', () => ({
+  ElevenSpeech: class {
+    constructor(_id: string, _context: unknown, callbacks: unknown) {
+      speechMock.callbacks = callbacks
+    }
+    connect = speechMock.connect
+    append = speechMock.append
+    finish = speechMock.finish
+    cancel = speechMock.cancel
+    close = speechMock.close
+    prepare = speechMock.prepare
+  },
+}))
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -183,5 +205,59 @@ it('warms the verified prefix silently without changing playback or conversation
   expect(callbacks.interrupt).not.toHaveBeenCalled()
   expect(callbacks.failed).not.toHaveBeenCalled()
   expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+  voice.close()
+})
+
+it('streams GPT text to ElevenLabs and rejects late text from an interrupted answer', async () => {
+  const { voice, event, sent, callbacks } = setup()
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      resume = vi.fn().mockResolvedValue(undefined)
+      close = vi.fn().mockResolvedValue(undefined)
+    },
+  )
+  vi.mocked(request).mockResolvedValue(
+    new Response('answer-sdp', {
+      headers: { 'X-Speech-Output': 'elevenlabs' },
+    }),
+  )
+  await voice.connect()
+  await voice.sendText('A question')
+  expect(
+    sent.filter((e) => e.type === 'response.create').at(-1)?.response
+      .output_modalities,
+  ).toEqual(['text'])
+  event({ type: 'response.created', response: { id: 'answer-1' } })
+  event({
+    type: 'response.output_text.delta',
+    response_id: 'answer-1',
+    delta: 'Streaming words ',
+  })
+  expect(speechMock.append).toHaveBeenLastCalledWith(
+    'answer-1',
+    'Streaming words ',
+  )
+  speechMock.callbacks.started()
+  expect(callbacks.phase).toHaveBeenLastCalledWith('speaking')
+  const cancellations = speechMock.cancel.mock.calls.length
+  await voice.setMicrophone(false)
+  expect(speechMock.cancel).toHaveBeenCalledTimes(cancellations)
+  event({ type: 'input_audio_buffer.speech_started' })
+  event({
+    type: 'response.output_text.delta',
+    response_id: 'answer-1',
+    delta: 'Must not be spoken',
+  })
+  expect(speechMock.append).toHaveBeenCalledTimes(1)
+  event({ type: 'response.created', response: { id: 'answer-2' } })
+  event({
+    type: 'response.output_text.delta',
+    response_id: 'answer-2',
+    delta: 'New answer',
+  })
+  expect(speechMock.append).toHaveBeenLastCalledWith('answer-2', 'New answer')
+  event({ type: 'response.output_text.done', response_id: 'answer-2' })
+  expect(speechMock.finish).toHaveBeenLastCalledWith('answer-2')
   voice.close()
 })

@@ -397,3 +397,56 @@ def test_realtime_session_is_private_and_evidence_uses_no_text_model(api, monkey
         api.post(path + "/realtime-evidence", headers=headers, json=payload).status_code
         == 422
     )
+
+
+def test_streamed_speech_token_is_private_and_uses_the_selected_voice(api, monkeypatch):
+    import json
+    import httpx
+    from app.briefing import conversation_speech, realtime
+
+    token = api.post(V1 + "/auth/demo", json={"profile": "tech"}).json()["access_token"]
+    headers = {"Authorization": "Bearer " + token}
+    other = {
+        "Authorization": "Bearer "
+        + api.post(V1 + "/auth/demo", json={"profile": "finance"}).json()[
+            "access_token"
+        ]
+    }
+    conv = api.post(V1 + "/conversations", headers=headers).json()
+    path = V1 + "/conversations/" + conv["id"] + "/speech-session"
+    monkeypatch.setenv("REALTIME_SPEECH_PROVIDER", "elevenlabs")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "server-private-key")
+    monkeypatch.setenv(
+        "ELEVENLABS_VOICE_MAP",
+        json.dumps({"professional": "voice-a", "casual": "voice-b"}),
+    )
+    calls = []
+
+    def authorize(url, **kwargs):
+        calls.append((url, kwargs))
+        return httpx.Response(
+            200,
+            json={"token": "single-use-authorization"},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(conversation_speech.httpx, "post", authorize)
+    assert api.post(path, headers=other).status_code == 404
+    assert calls == []
+    result = api.post(path, headers=headers)
+    assert result.status_code == 200
+    assert result.headers["cache-control"] == "private, no-store"
+    assert result.json()["token"] == "single-use-authorization"
+    assert result.json()["voice_id"] == "voice-a"
+    assert "server-private-key" not in result.text
+    assert calls[0][1]["headers"]["xi-api-key"] == "server-private-key"
+    assert realtime.session_config("en", [])["output_modalities"] == ["text"]
+    assert realtime.session_config("en", [], speech_stream=False)[
+        "output_modalities"
+    ] == ["audio"]
+    api.patch(
+        V1 + "/users/me/preferences",
+        headers=headers,
+        json={"voice_profile_id": "casual"},
+    )
+    assert api.post(path, headers=headers).json()["voice_id"] == "voice-b"
