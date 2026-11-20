@@ -177,8 +177,14 @@ test('arbitrary listener can complete onboarding and schedule a briefing on mobi
   await page.getByPlaceholder('Enter a topic').fill('low carbon science')
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await page.getByRole('tab', { name: /Daily routine/ }).click()
-  await page.getByLabel('Daily briefing', { exact: false }).check()
-  await page.getByLabel('Delivery time', { exact: true }).fill('10:20')
+  await page.getByLabel('Scheduled briefings', { exact: true }).check()
+  await page.getByRole('combobox', { name: 'News frequency' }).selectOption('twice-weekly')
+  await page.getByLabel('Monday delivery time 1', { exact: true }).selectOption('10:20')
+  await page.getByRole('button', { name: 'Add a time', exact: true }).click()
+  await page.getByLabel('Monday delivery time 2', { exact: true }).selectOption('18:45')
+  await page.getByRole('button', { name: 'Edit Thursday times' }).click()
+  await page.getByLabel('Thursday delivery time 1', { exact: true }).selectOption('15:10')
+  await page.getByRole('combobox', { name: 'Time zone', exact: true }).selectOption('Europe/Berlin')
   await page.getByRole('button', { name: /save preferences/i }).click()
   await expect(page.getByText('Preferences saved.')).toBeVisible()
   await page.goto('/')
@@ -198,9 +204,14 @@ test('arbitrary listener can complete onboarding and schedule a briefing on mobi
     page.getByRole('button', { name: 'Low carbon science' }),
   ).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('tab', { name: /Daily routine/ }).click()
-  await expect(page.getByLabel('Delivery time', { exact: true })).toHaveValue(
+  await expect(page.getByLabel('Monday delivery time 1', { exact: true })).toHaveValue(
     '10:20',
   )
+  await expect(page.getByLabel('Monday delivery time 2', { exact: true })).toHaveValue('18:45')
+  await expect(page.getByLabel('Tuesday delivery', { exact: true })).not.toBeChecked()
+  await page.getByRole('button', { name: 'Edit Thursday times' }).click()
+  await expect(page.getByLabel('Thursday delivery time 1', { exact: true })).toHaveValue('15:10')
+  await expect(page.getByRole('combobox', { name: 'Time zone', exact: true })).toHaveValue('Europe/Berlin')
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > innerWidth,
   )

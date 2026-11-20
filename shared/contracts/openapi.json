@@ -436,6 +436,33 @@
         ]
       }
     },
+    "/api/v1/timezones": {
+      "get": {
+        "summary": "Timezones",
+        "operationId": "timezones_api_v1_timezones_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Timezones Api V1 Timezones Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/schedules": {
       "get": {
         "summary": "Schedules",
@@ -451,6 +478,57 @@
                   },
                   "type": "array",
                   "title": "Response Schedules Api V1 Schedules Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "summary": "Replace Schedules",
+        "description": "Save a listener's entire weekly plan atomically, preserving completed runs.",
+        "operationId": "replace_schedules_api_v1_schedules_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/ScheduleInput"
+                },
+                "type": "array",
+                "maxItems": 84,
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleView"
+                  },
+                  "type": "array",
+                  "title": "Response Replace Schedules Api V1 Schedules Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -4355,6 +4433,17 @@
             "type": "boolean",
             "title": "Enabled",
             "default": true
+          },
+          "days_of_week": {
+            "items": {
+              "type": "integer",
+              "maximum": 6.0,
+              "minimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Days Of Week"
           }
         },
         "additionalProperties": false,
@@ -4401,6 +4490,24 @@
               }
             ],
             "title": "Enabled"
+          },
+          "days_of_week": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer",
+                  "maximum": 6.0,
+                  "minimum": 0.0
+                },
+                "type": "array",
+                "maxItems": 7,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Of Week"
           }
         },
         "additionalProperties": false,
@@ -4424,6 +4531,13 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled"
+          },
+          "days_of_week": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Days Of Week"
           }
         },
         "type": "object",
@@ -4431,7 +4545,8 @@
           "id",
           "time",
           "timezone",
-          "enabled"
+          "enabled",
+          "days_of_week"
         ],
         "title": "ScheduleView"
       },

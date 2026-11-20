@@ -29,6 +29,8 @@ import { Button, Dropdown, ErrorNote, Loading } from '../../components/UI'
 import { CustomVoiceSettings } from '../voice/CustomVoice'
 import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
+import { SchedulePicker, TimeZoneSelect } from './SchedulePicker'
+import { routineFromSchedules, routineSummary, scheduleRows } from './weeklySchedule'
 import './settings.css'
 
 type Engine = {
@@ -51,47 +53,6 @@ const languages: Record<string, string> = {
 }
 const pageSize = 7
 
-export function SchedulePicker({
-  time,
-  enabled,
-  onTime,
-  onEnabled,
-}: {
-  time: string
-  enabled: boolean
-  onTime: (s: string) => void
-  onEnabled: (b: boolean) => void
-}) {
-  return (
-    <div className="routine-controls">
-      <label className="routine-toggle">
-        <span>
-          <strong>Daily briefing</strong>
-          <small>Have an edition ready at your time.</small>
-        </span>
-        <input
-          className="preference-switch"
-          aria-label="Daily briefing"
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => onEnabled(e.target.checked)}
-        />
-      </label>
-      {enabled && (
-        <label className="field delivery-time">
-          Delivery time
-          <input
-            type="time"
-            required
-            value={time}
-            onChange={(e) => onTime(e.target.value)}
-          />
-        </label>
-      )}
-    </div>
-  )
-}
-
 export function Settings() {
   const p = useApi<Preferences>('/users/me/preferences'),
     s = useApi<Schedule[]>('/schedules'),
@@ -112,7 +73,7 @@ export function Settings() {
   return (
     <SettingsForm
       base={p.data}
-      schedule={s.data[0]}
+      schedules={s.data}
       sources={src.data}
       topics={t.data}
       voices={v.data}
@@ -123,14 +84,14 @@ export function Settings() {
 
 function SettingsForm({
   base,
-  schedule,
+  schedules,
   sources,
   topics,
   voices,
   engines,
 }: {
   base: Preferences
-  schedule?: Schedule
+  schedules: Schedule[]
   sources: Source[]
   topics: Topic[]
   voices: Voice[]
@@ -138,13 +99,11 @@ function SettingsForm({
 }) {
   const [prefs, setPrefs] = useState(base)
   const elevenAgents = prefs.voice_engine === 'elevenlabs'
-  const [time, setTime] = useState(schedule?.time.slice(0, 5) || '08:00')
-  const [enabled, setEnabled] = useState(schedule?.enabled || false)
+  const [routine, setRoutine] = useState(() => routineFromSchedules(schedules))
   const [extra, setExtra] = useState('')
   const [addingTopic, setAddingTopic] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [currentSchedule, setCurrentSchedule] = useState(schedule?.id)
-  const [snapshot, setSnapshot] = useState({ prefs: base, time, enabled })
+  const [snapshot, setSnapshot] = useState({ prefs: base, routine })
   useEffect(() => {
     setPrefs(previous => ({ ...previous, voice_engine: base.voice_engine }))
     setSnapshot(previous => ({ ...previous, prefs: { ...previous.prefs, voice_engine: base.voice_engine } }))
@@ -161,12 +120,12 @@ function SettingsForm({
     : 'briefing'
   const tabs = useRef<(HTMLButtonElement | null)[]>([])
   const dirty =
-    JSON.stringify({ prefs, time, enabled }) !== JSON.stringify(snapshot)
+    JSON.stringify({ prefs, routine }) !== JSON.stringify(snapshot)
   const voice = voices.find((v) => v.id === prefs.voice_profile_id)
   const summaries = {
     briefing: `${prefs.interests.length} interests · ${label(prefs.depth)}`,
     audio: `${voice?.name || 'Choose a voice'} · ${languages[prefs.language] || prefs.language}`,
-    routine: enabled ? `Every day at ${time}` : 'On your terms',
+    routine: routineSummary(routine),
     sources: `${prefs.preferred_sources.length} preferred · ${prefs.excluded_sources.length} excluded`,
   }
   useEffect(() => {
@@ -205,17 +164,18 @@ function SettingsForm({
         selectSection('briefing')
         throw new Error('Choose a briefing length between 1 and 30 minutes.')
       }
-      if (enabled && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      let rows
+      try { rows = scheduleRows(routine, prefs.timezone) }
+      catch (error) {
         selectSection('routine')
-        throw new Error('Choose a delivery time for your daily briefing.')
+        throw error
       }
       try {
         if (!prefs.timezone.trim()) throw new Error()
-        new Intl.DateTimeFormat('en', { timeZone: prefs.timezone })
       } catch {
         selectSection('routine')
         throw new Error(
-          'Enter a valid time zone, for example Europe/Amsterdam.',
+          'Choose a valid time zone.',
         )
       }
       const updated = await api<Preferences>(
@@ -224,20 +184,12 @@ function SettingsForm({
         prefs,
       )
       queryClient.setQueryData(['/users/me/preferences'], updated)
-      if (currentSchedule || enabled) {
-        const s = await api<Schedule>(
-          currentSchedule ? '/schedules/' + currentSchedule : '/schedules',
-          currentSchedule ? 'PATCH' : 'POST',
-          { time, enabled, timezone: prefs.timezone },
-        )
-        setCurrentSchedule(s.id)
-        queryClient.setQueryData<Schedule[]>(['/schedules'], (previous) => [
-          s,
-          ...(previous || []).filter((r) => r.id !== s.id),
-        ])
-      }
+      const savedSchedules = await api<Schedule[]>('/schedules', 'PUT', rows)
+      queryClient.setQueryData(['/schedules'], savedSchedules)
+      const savedRoutine = routineFromSchedules(savedSchedules)
       setPrefs(updated)
-      setSnapshot({ prefs: updated, time, enabled })
+      setRoutine(savedRoutine)
+      setSnapshot({ prefs: updated, routine: savedRoutine })
     },
     onSuccess: () => {
       setSaved(true)
@@ -666,55 +618,15 @@ function SettingsForm({
                     <h2>A moment for the world.</h2>
                     <p>Make your briefing part of your day.</p>
                   </div>
-                  <div
-                    className={'routine-clock ' + (enabled ? 'enabled' : '')}
-                    aria-hidden="true"
-                  >
-                    <Clock3 size={32} strokeWidth={1} />
-                    <span>{enabled ? time : 'Anytime'}</span>
-                    <small>
-                      {enabled ? 'YOUR DAILY MOMENT' : 'WHENEVER YOU’RE READY'}
-                    </small>
+                  <div className="schedule-overview">
+                    <Clock3 size={22} strokeWidth={1.3} />
+                    <div><strong>{routineSummary(routine)}</strong><small>All times follow your selected time zone.</small></div>
                   </div>
                   <section className="preference-block">
-                    <SchedulePicker
-                      time={time}
-                      enabled={enabled}
-                      onTime={(t) => {
-                        setTime(t)
-                        setSaved(false)
-                      }}
-                      onEnabled={(v) => {
-                        setEnabled(v)
-                        setSaved(false)
-                      }}
-                    />
+                    <SchedulePicker value={routine} onChange={value => { setRoutine(value); setSaved(false) }} />
                   </section>
                   <section className="preference-block">
-                    <label className="field">
-                      Time zone
-                      <input
-                        required
-                        value={prefs.timezone}
-                        onChange={(e) => patch('timezone', e.target.value)}
-                        placeholder="Europe/Amsterdam"
-                        list="timezones"
-                      />
-                    </label>
-                    <datalist id="timezones">
-                      {[
-                        ...new Set([
-                          Intl.DateTimeFormat().resolvedOptions().timeZone,
-                          'Europe/Amsterdam',
-                          'Europe/Berlin',
-                          'Europe/London',
-                          'America/New_York',
-                          'Asia/Dubai',
-                        ]),
-                      ].map((zone) => (
-                        <option key={zone} value={zone} />
-                      ))}
-                    </datalist>
+                    <TimeZoneSelect value={prefs.timezone} onChange={value => patch('timezone', value)} />
                     <button
                       className="preference-text-button"
                       type="button"
@@ -727,6 +639,7 @@ function SettingsForm({
                     >
                       <Globe2 size={14} /> Use my current time zone
                     </button>
+                    <p className="preference-hint">Scheduled editions appear in your <Link to="/briefings">briefing library</Link>.</p>
                   </section>
                 </>
               )}
@@ -908,8 +821,7 @@ function SettingsForm({
                   className="preference-text-button"
                   onClick={() => {
                     setPrefs(snapshot.prefs)
-                    setTime(snapshot.time)
-                    setEnabled(snapshot.enabled)
+                    setRoutine(snapshot.routine)
                     setSaved(false)
                     save.reset()
                   }}

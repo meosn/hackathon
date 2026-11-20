@@ -226,12 +226,16 @@ def discover(db, now):
     ).all()
     for s in schedules:
         local = now.astimezone(ZoneInfo(s.timezone))
-        if s.last_local_date == local.date() or local.strftime("%H:%M") < s.time:
+        if local.weekday() not in s.days_of_week or s.last_local_date == local.date() or local.strftime("%H:%M") < s.time:
             continue
         s.last_local_date = local.date()
-        from .briefing.daily import ensure_daily
+        from .briefing.service import create_briefing
+        from .briefing.contracts import BriefingRequest
 
-        briefing = ensure_daily(db, s.user_id, now)
+        briefing = create_briefing(
+            db, s.user_id, BriefingRequest(period="day", story_limit=3),
+            schedule_key=f"scheduled/{s.user_id}/{local.date()}/{s.time}/{s.id}",
+        )
         queue_record(db, "briefing", briefing.id)
     db.commit()
 

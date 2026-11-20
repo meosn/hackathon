@@ -8,6 +8,7 @@ from sqlalchemy import (
     Date,
     ForeignKey,
     LargeBinary,
+    JSON,
     String,
     UniqueConstraint,
     delete,
@@ -87,6 +88,7 @@ class Schedule(Record):
     time: Mapped[str] = mapped_column(String(5))
     timezone: Mapped[str]
     enabled: Mapped[bool] = mapped_column(default=True)
+    days_of_week: Mapped[list[int]] = mapped_column(JSON, default=lambda: list(range(7)))
     last_local_date: Mapped[date | None] = mapped_column(Date)
 
 

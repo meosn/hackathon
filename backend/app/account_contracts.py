@@ -44,6 +44,7 @@ class ScheduleView(BaseModel):
     time: str
     timezone: str
     enabled: bool
+    days_of_week: list[int]
 
 
 class CostReport(BaseModel):

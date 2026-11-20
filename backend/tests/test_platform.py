@@ -212,3 +212,75 @@ def test_discussion_model_preference_persists_and_uses_evidence_rules(
         classify(session, conv.id, "What do other sources say?").intent
         == "COMPARE_SOURCES"
     )
+
+
+def test_weekly_schedule_is_atomic_private_and_preserves_completed_slots(client, session, monkeypatch):
+    from app import account_routes
+    fixed = datetime(2026, 11, 23, 6, tzinfo=timezone.utc)
+    monkeypatch.setattr(account_routes, 'utcnow', lambda: fixed)
+    token = client.post('/api/v1/auth/demo', json={'profile': 'tech'}).json()['access_token']
+    headers = {'Authorization': 'Bearer ' + token}
+    rows = [
+        {'time': '08:00', 'timezone': 'Europe/Berlin', 'days_of_week': [0, 2], 'enabled': True},
+        {'time': '18:30', 'timezone': 'Europe/Berlin', 'days_of_week': [0], 'enabled': True},
+    ]
+    result = client.put('/api/v1/schedules', json=rows, headers=headers)
+    assert result.status_code == 200, result.text
+    ids = [row['id'] for row in result.json()]
+    first = session.get(Schedule, ids[0])
+    first.last_local_date = fixed.date()
+    session.commit()
+    repeated = client.put('/api/v1/schedules', json=rows, headers=headers)
+    assert [row['id'] for row in repeated.json()] == ids
+    assert session.get(Schedule, ids[0]).last_local_date == fixed.date()
+    for invalid in [
+        [{**rows[0], 'days_of_week': []}],
+        [{**rows[0], 'days_of_week': [7]}],
+        [{**rows[0], 'days_of_week': ['0']}],
+        [{**rows[0], 'timezone': 'Mars/Unknown'}],
+        [rows[0], {**rows[0], 'days_of_week': [2]}],
+    ]:
+        assert client.put('/api/v1/schedules', json=invalid, headers=headers).status_code == 422
+        assert [row['id'] for row in client.get('/api/v1/schedules', headers=headers).json()] == ids
+    other = client.post('/api/v1/auth/demo', json={'profile': 'finance'}).json()['access_token']
+    assert client.get('/api/v1/schedules', headers={'Authorization': 'Bearer '+other}).json() == []
+    zones = client.get('/api/v1/timezones', headers=headers).json()
+    assert {'UTC', 'Europe/Berlin', 'America/New_York', 'Asia/Tokyo'} <= set(zones)
+    assert client.get('/api/v1/timezones').status_code == 401
+    # A newly added past slot waits for its next occurrence; it does not replay today.
+    past = client.put('/api/v1/schedules', json=[{**rows[0], 'time': '01:00'}], headers=headers).json()[0]
+    assert session.get(Schedule, past['id']).last_local_date == fixed.date()
+
+
+def test_scheduler_creates_separate_weekday_editions_for_each_delivery(session):
+    from app.briefing.models import Briefing
+    user = demo_listener(session, 'tech')
+    for time, days in [('08:00', [0]), ('18:00', [0]), ('09:00', [2])]:
+        session.add(Schedule(user_id=user.id, time=time, timezone='Europe/Berlin', days_of_week=days, enabled=True))
+    session.commit()
+    count = lambda: session.scalar(select(func.count()).select_from(Briefing))
+    for date, hour, minute, expected in [
+        (22, 20, 0, 0),  # Sunday, no delivery.
+        (23, 6, 59, 0),  # Monday, before 08:00 Berlin.
+        (23, 7, 0, 1),
+        (23, 7, 15, 1),  # Repeated discovery is idempotent.
+        (23, 17, 0, 2),
+        (24, 20, 0, 2),  # Tuesday is disabled.
+        (25, 8, 0, 3),
+    ]:
+        discover(session, datetime(2026, 11, date, hour, minute, tzinfo=timezone.utc))
+        assert count() == expected
+    keys = session.scalars(select(Briefing.schedule_key)).all()
+    assert len(set(keys)) == 3
+    assert all(key.startswith('scheduled/') for key in keys)
+
+
+def test_schedule_weekday_uses_the_delivery_zone_across_midnight(session):
+    from app.briefing.models import Briefing
+    user = demo_listener(session, 'tech')
+    session.add(Schedule(user_id=user.id, time='08:00', timezone='Pacific/Kiritimati', days_of_week=[0], enabled=True))
+    session.commit()
+    # Sunday in UTC is already Monday morning in this delivery zone.
+    discover(session, datetime(2026, 11, 22, 18, tzinfo=timezone.utc))
+    row = session.scalar(select(Briefing))
+    assert '/2026-11-23/08:00/' in row.schedule_key

@@ -194,6 +194,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/timezones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timezones */
+        get: operations["timezones_api_v1_timezones_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/schedules": {
         parameters: {
             query?: never;
@@ -203,7 +220,11 @@ export interface paths {
         };
         /** Schedules */
         get: operations["schedules_api_v1_schedules_get"];
-        put?: never;
+        /**
+         * Replace Schedules
+         * @description Save a listener's entire weekly plan atomically, preserving completed runs.
+         */
+        put: operations["replace_schedules_api_v1_schedules_put"];
         /** Add Schedule */
         post: operations["add_schedule_api_v1_schedules_post"];
         delete?: never;
@@ -1518,6 +1539,8 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /** Days Of Week */
+            days_of_week?: number[];
         };
         /** SchedulePatch */
         SchedulePatch: {
@@ -1527,6 +1550,8 @@ export interface components {
             timezone?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Days Of Week */
+            days_of_week?: number[] | null;
         };
         /** ScheduleView */
         ScheduleView: {
@@ -1538,6 +1563,8 @@ export interface components {
             timezone: string;
             /** Enabled */
             enabled: boolean;
+            /** Days Of Week */
+            days_of_week: number[];
         };
         /** Segment */
         Segment: {
@@ -2179,6 +2206,26 @@ export interface operations {
             };
         };
     };
+    timezones_api_v1_timezones_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
     schedules_api_v1_schedules_get: {
         parameters: {
             query?: never;
@@ -2195,6 +2242,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScheduleView"][];
+                };
+            };
+        };
+    };
+    replace_schedules_api_v1_schedules_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleInput"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

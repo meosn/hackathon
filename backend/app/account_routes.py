@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, available_timezones
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import EmailStr, Field, field_validator
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from .accounts import (
 )
 from .auth import current_user, dummy_hash, hash_password, password_matches, token
 from .config import settings
-from .db import get_db
+from .db import get_db, utcnow
 from .usage import costs
 
 from . import account_contracts as views
@@ -155,10 +156,19 @@ def voices(user=Depends(current_user), db=Depends(get_db)):
     ]
 
 
+Weekdays = list[Annotated[int, Field(strict=True, ge=0, le=6)]]
+
+
 class SchedulePatch(Input):
     time: str | None = Field(None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
     timezone: str | None = Field(None, max_length=80)
     enabled: bool | None = None
+    days_of_week: Weekdays | None = Field(None, min_length=1, max_length=7)
+
+    @field_validator("days_of_week")
+    @classmethod
+    def distinct_days(cls, value):
+        return sorted(set(value)) if value is not None else value
 
     @field_validator("timezone")
     @classmethod
@@ -170,10 +180,61 @@ class ScheduleInput(SchedulePatch):
     time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
     timezone: str = Field(max_length=80)
     enabled: bool = True
+    days_of_week: Weekdays = Field(default_factory=lambda: list(range(7)), min_length=1, max_length=7)
 
 
 def schedule_data(s):
-    return {k: getattr(s, k) for k in ("id", "time", "timezone", "enabled")}
+    return {k: getattr(s, k) for k in ("id", "time", "timezone", "enabled", "days_of_week")}
+
+
+@router.get("/timezones", response_model=list[str])
+def timezones(user=Depends(current_user)):
+    regions = {"Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic", "Australia", "Europe", "Indian", "Pacific"}
+    return ["UTC", *sorted(zone for zone in available_timezones() if zone.split("/")[0] in regions)]
+
+
+def validate_schedule_slots(rows):
+    seen = set()
+    for row in rows:
+        for day in row["days_of_week"]:
+            key = (row["timezone"], day, row["time"])
+            if key in seen:
+                raise HTTPException(422, "Choose distinct delivery times for each day")
+            seen.add(key)
+
+
+@router.put("/schedules", response_model=list[views.ScheduleView])
+def replace_schedules(
+    body: Annotated[list[ScheduleInput], Field(max_length=84)],
+    user=Depends(current_user), db=Depends(get_db),
+):
+    """Save a listener's entire weekly plan atomically, preserving completed runs."""
+    rows = [item.model_dump() for item in body]
+    validate_schedule_slots(rows)
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    previous = db.scalars(select(Schedule).where(Schedule.user_id == user.id).with_for_update()).all()
+    identity = lambda row: (row.time, row.timezone, tuple(row.days_of_week))
+    available = {identity(row): row for row in previous}
+    selected = []
+    now = utcnow()
+    for data in rows:
+        row = available.pop((data["time"], data["timezone"], tuple(data["days_of_week"])), None)
+        newly_enabled = row is None or (not row.enabled and data["enabled"])
+        if row is None:
+            row = Schedule(user_id=user.id, **data)
+            db.add(row)
+        else:
+            row.enabled = data["enabled"]
+        if newly_enabled:
+            local = now.astimezone(ZoneInfo(data["timezone"]))
+            if data["time"] <= local.strftime("%H:%M"):
+                row.last_local_date = local.date()
+        selected.append(row)
+    for row in previous:
+        if row not in selected:
+            db.delete(row)
+    db.commit()
+    return [schedule_data(row) for row in selected]
 
 
 def owned_schedule(db, user, id):
@@ -199,6 +260,9 @@ def schedules(user=Depends(current_user), db=Depends(get_db)):
 
 @router.post("/schedules", response_model=views.ScheduleView, status_code=201)
 def add_schedule(body: ScheduleInput, user=Depends(current_user), db=Depends(get_db)):
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    existing = db.scalars(select(Schedule).where(Schedule.user_id == user.id)).all()
+    validate_schedule_slots([*(schedule_data(row) for row in existing), body.model_dump()])
     row = Schedule(user_id=user.id, **body.model_dump())
     db.add(row)
     db.commit()
@@ -213,7 +277,11 @@ def edit_schedule(
     db=Depends(get_db),
 ):
     row = owned_schedule(db, user, schedule_id)
-    for k, v in body.model_dump(exclude_none=True).items():
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    changes = body.model_dump(exclude_none=True)
+    existing = db.scalars(select(Schedule).where(Schedule.user_id == user.id, Schedule.id != row.id)).all()
+    validate_schedule_slots([*(schedule_data(other) for other in existing), {**schedule_data(row), **changes}])
+    for k, v in changes.items():
         setattr(row, k, v)
     db.commit()
     return schedule_data(row)
