@@ -3045,7 +3045,8 @@
               "fixture",
               "dataset",
               "rss",
-              "crawl"
+              "crawl",
+              "source"
             ],
             "title": "Kind",
             "default": "fixture"

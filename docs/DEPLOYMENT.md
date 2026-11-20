@@ -27,6 +27,7 @@ The Compose environment file is ignored by Git. Configuration is read at process
 | MAX_REQUEST_BYTES, RATE_PER_MINUTE | Upload ceiling and rate limit in a one-minute window |
 | DATASET_DIR, DATASET_FILES | Mounted private directory and allowlisted input filenames |
 | RSS_FEED_URLS, RSS_INTERVAL_MINUTES | Authorized HTTPS feed URLs and their polling interval |
+| NEWS_SOURCES | Comma-separated live source IDs (bloomberg, dw, bbc, forex-factory), using the same polling interval |
 | NEWS_HTML_PARSER | beautifulsoup by default, or scrapling with the crawl extra |
 | EMBEDDING_PROVIDER, EMBEDDING_MODEL, CLUSTER_SIMILARITY | local_hash or sentence_transformers, 384-dimensional semantic model and candidate similarity threshold |
 | BACKEND_EXTRAS | Optional build extras, for example [ml,crawl]. The ML extra can materially increase image size |

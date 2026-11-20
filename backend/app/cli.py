@@ -3,6 +3,8 @@
 import argparse
 import json
 import os
+import sys
+from datetime import datetime
 from pathlib import Path
 from alembic import command
 from alembic.config import Config
@@ -74,6 +76,12 @@ def main():
     sub.add_parser("replay-events")
     imp = sub.add_parser("ingest")
     imp.add_argument("filename")
+    sources = sub.add_parser("ingest-source")
+    sources.add_argument("source_id")
+    forex = sub.add_parser(
+        "ingest-forex-html", help="Import a Forex Factory page from stdin"
+    )
+    forex.add_argument("--captured-at", required=True, type=datetime.fromisoformat)
     sub.add_parser("ingest-all")
     grant = sub.add_parser("grant-admin")
     grant.add_argument("email")
@@ -138,13 +146,44 @@ def main():
                     ),
                     flush=True,
                 )
-        elif args.name == "ingest":
-            from .news.service import create_job
-            from .jobs import enqueue_ingestion
+        elif args.name == "ingest-forex-html":
+            from .news.adapters import MAX_BYTES
+            from .news.service import import_forex_snapshot
 
-            job = create_job(db, kind="dataset", locator=args.filename)
+            html = sys.stdin.buffer.read(MAX_BYTES + 1)
+            if not html or len(html) > MAX_BYTES:
+                parser.error("Provide Forex Factory HTML within the 15 MiB limit")
+            try:
+                job = import_forex_snapshot(db, html, args.captured_at)
+            except ValueError as exc:
+                parser.error(str(exc))
             db.commit()
-            enqueue_ingestion(job.id)
+            print(
+                json.dumps(
+                    {
+                        "job_id": job.id,
+                        "received": job.received,
+                        "duplicates": job.duplicates,
+                        "analyzed": job.analyzed,
+                    }
+                )
+            )
+        elif args.name in {"ingest", "ingest-source"}:
+            from .news.service import create_job
+            from .jobs import publish, queue_record
+
+            kind, locator = (
+                ("dataset", args.filename)
+                if args.name == "ingest"
+                else ("source", args.source_id)
+            )
+            try:
+                job = create_job(db, kind=kind, locator=locator)
+            except ValueError as exc:
+                parser.error(str(exc))
+            task_id = queue_record(db, "ingestion", job.id).id
+            db.commit()
+            publish(task_id)
             print(job.id)
         elif args.name == "replay-events":
             from .messaging import Outbox
