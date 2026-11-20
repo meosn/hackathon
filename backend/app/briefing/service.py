@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.accounts import VoiceProfile, preferences
+from app.accounts import ACTIVE_VOICES, VoiceProfile, preferences
 from app.messaging import emit
 from app.news.service import story_detail, verify_segment
 from app.usage import record
@@ -83,7 +83,7 @@ def create_briefing(db, user_id, request: BriefingRequest, schedule_key=None):
             (VoiceProfile.slug == selected_voice) | (VoiceProfile.id == selected_voice)
         )
     )
-    if not profile:
+    if not profile or profile.slug not in ACTIVE_VOICES:
         raise ValueError("Unknown voice profile")
     for story_id in set(request.selected_story_ids):
         if not story_detail(db, story_id):

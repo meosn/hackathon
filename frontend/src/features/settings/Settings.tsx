@@ -29,6 +29,7 @@ import { Button, Dropdown, ErrorNote, Loading } from '../../components/UI'
 import { CustomVoiceSettings } from '../voice/CustomVoice'
 import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
+import { useVoicePreview } from '../voice/useVoicePreview'
 import { SchedulePicker, TimeZoneSelect } from './SchedulePicker'
 import { routineFromSchedules, routineSummary, scheduleRows } from './weeklySchedule'
 import { asGmtOffset, gmtOffset } from './gmtOffsets'
@@ -99,6 +100,7 @@ function SettingsForm({
   engines: Engine[]
 }) {
   const [prefs, setPrefs] = useState(base)
+  const preview = useVoicePreview()
   const elevenAgents = prefs.voice_engine === 'elevenlabs'
   const [routine, setRoutine] = useState(() => routineFromSchedules(schedules))
   const [extra, setExtra] = useState('')
@@ -537,7 +539,9 @@ function SettingsForm({
                           key={v.id}
                           type="button"
                           aria-pressed={prefs.voice_profile_id === v.id}
+                          title={'Preview and select ' + v.name}
                           onClick={() => {
+                            preview.play(v.id, v.id === 'energetic' ? 'elevenlabs' : prefs.voice_engine, prefs.language)
                             patch('voice_profile_id', v.id)
                             if (v.id === 'energetic') patch('voice_engine', 'elevenlabs')
                           }}
@@ -555,6 +559,7 @@ function SettingsForm({
                         </button>
                       ))}
                     </div>
+                    <ErrorNote error={preview.error} />
                     <p className="preference-hint">
                       Used for new editions and live replies. OpenAI uses the character’s delivery with an OpenAI voice.
                     </p>

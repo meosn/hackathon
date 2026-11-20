@@ -18,6 +18,7 @@ import {
   type VoicePhase,
 } from './realtimeVoice'
 import { createVoiceConnection, useVoiceChoice, type VoiceConnection } from '../voice/voiceChoice'
+import { PLAYBACK_START, PREVIEW_START } from '../voice/useVoicePreview'
 
 export function DailySession({
   selectedId = '',
@@ -95,6 +96,10 @@ export function DailySession({
   editionRef.current = edition
   const bufferedId = audio.data ? edition?.id : undefined
   const lastStarted = useRef(0)
+  useEffect(() => {
+    window.addEventListener(PREVIEW_START, stopSession)
+    return () => window.removeEventListener(PREVIEW_START, stopSession)
+  }, [])
 
   useEffect(() => {
     stopSession()
@@ -275,6 +280,7 @@ export function DailySession({
     return voice
   }
   async function startListening() {
+    window.dispatchEvent(new Event(PLAYBACK_START))
     voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     setVoiceConnecting(true)
@@ -309,6 +315,7 @@ export function DailySession({
     }
   }
   async function moreNews() {
+    window.dispatchEvent(new Event(PLAYBACK_START))
     voiceOutput.current = unlockVoiceAudio(voiceOutput.current)
     setError('')
     if (choice.engine === 'elevenlabs' || health.data?.realtime_voice) {
@@ -406,6 +413,7 @@ export function DailySession({
     }
   }
   function play() {
+    window.dispatchEvent(new Event(PLAYBACK_START))
     setError('')
     resumeAfterAnswer.current = false
     if (playing || answerPlaying) {

@@ -254,10 +254,10 @@ def test_conversation_retrieval_and_controls(session):
         == []
     )
     assert (
-        discussion.respond(session, conv, "Switch to the casual voice").action[
+        discussion.respond(session, conv, "Switch to the jarvis voice").action[
             "voice_profile_id"
         ]
-        == "casual"
+        == "jarvis"
     )
     assert discussion.respond(session, conv, "Stop playback").intent == "STOP_PLAYBACK"
     news = discussion.respond(session, conv, "Tell me about AI")

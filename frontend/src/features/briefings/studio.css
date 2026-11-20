@@ -706,6 +706,22 @@ html {
 }
 .voice-engine-options button:disabled { opacity: .45; cursor: default; }
 
+.voice-preview-indicator {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #f8ffe8;
+  background: #10170c66;
+  opacity: 0;
+  transition: opacity .15s ease;
+  pointer-events: none;
+}
+.music-host:hover .voice-preview-indicator,
+.music-host:focus-visible .voice-preview-indicator,
+.voice-preview-indicator.active { opacity: 1; }
+
 .research-sources {
   max-width: 620px;
   margin: 18px auto 0;

@@ -422,6 +422,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/voices/{voice_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Voice Preview */
+        post: operations["voice_preview_api_v1_voices__voice_id__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/voice-engines": {
         parameters: {
             query?: never;
@@ -1507,6 +1524,13 @@ export interface components {
             /** Excluded Sources */
             excluded_sources: string[];
         };
+        /** PreviewRequest */
+        PreviewRequest: {
+            /** Engine */
+            engine?: ("openai" | "elevenlabs") | null;
+            /** Language */
+            language?: ("en" | "de" | "nl") | null;
+        };
         /** Queued */
         Queued: {
             /** Briefing Id */
@@ -1883,6 +1907,7 @@ export type SchemaOffer = components['schemas']['Offer'];
 export type SchemaPage = components['schemas']['Page'];
 export type SchemaPreferencePatch = components['schemas']['PreferencePatch'];
 export type SchemaPreferenceView = components['schemas']['PreferenceView'];
+export type SchemaPreviewRequest = components['schemas']['PreviewRequest'];
 export type SchemaQueued = components['schemas']['Queued'];
 export type SchemaRealtimeEvidence = components['schemas']['RealtimeEvidence'];
 export type SchemaRegister = components['schemas']['Register'];
@@ -2739,6 +2764,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentSession"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    voice_preview_api_v1_voices__voice_id__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                voice_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/wav": string;
                 };
             };
             /** @description Validation Error */

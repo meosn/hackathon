@@ -127,6 +127,18 @@ def render_segment(db, text, lang, voice, config, reference_id):
     try:
         if kind == "local":
             return local_pcm(text, lang, voice)
+        if kind == "openai":
+            result = httpx.post(
+                "https://api.openai.com/v1/audio/speech",
+                timeout=httpx.Timeout(30, connect=5),
+                json={"model": model, "voice": voice_id, "input": text, "response_format": "mp3"},
+                headers={"Authorization": "Bearer " + (os.getenv("OPENAI_API_KEY") or os.environ["LLM_API_KEY"])},
+            )
+            result.raise_for_status()
+            pcm = convert_audio(result.content)
+            if not pcm:
+                raise ValueError("Speech provider returned empty audio")
+            return pcm
         result = httpx.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice_id, safe='')}",
             params={"output_format": "mp3_44100_128"},

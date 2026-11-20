@@ -128,10 +128,10 @@ VOICE_STYLES = [
     ("professional", "Professional news", "Even pacing and a clear newsroom delivery."),
     ("jarvis", "Studio assistant", "A composed, precise synthetic assistant."),
     ("energetic", "Donald Trump", "AI character voice from the supplied recording. Uses ElevenLabs."),
-    ("casual", "Street casual", "Relaxed conversational pacing."),
     ("cyberpunk", "Cyberpunk narrator", "Low, measured late-night narration."),
     ("gangsta", "CJ · GTA Gangsta", "A laid-back West Coast character with confident street delivery."),
 ]
+ACTIVE_VOICES = frozenset(slug for slug, _, _ in VOICE_STYLES)
 VOICE_DEFAULTS = {
     "professional": ("onwK4e9ZLuTAKqWW03F9", "marin", "Speak with clear, composed newsroom delivery."),
     "jarvis": ("JBFqnCBsd6RMkjVDRZzb", "cedar", "Speak with calm precision, like a helpful studio assistant."),
@@ -216,9 +216,9 @@ def set_preferences(db, user_id, changes):
             owner.custom_voice_active = False
     old = preferences(db, user_id)
     pref = db.scalar(select(UserPreference).where(UserPreference.user_id == user_id))
-    if "voice_profile_id" in delta and not db.scalar(
+    if "voice_profile_id" in delta and (delta["voice_profile_id"] not in ACTIVE_VOICES or not db.scalar(
         select(VoiceProfile.id).where(VoiceProfile.slug == delta["voice_profile_id"])
-    ):
+    )):
         raise HTTPException(422, "Unknown voice")
     if "interests" in delta:
         db.execute(delete(UserInterest).where(UserInterest.user_id == user_id))

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from .accounts import (
     Input,
+    ACTIVE_VOICES,
     PreferencePatch,
     Schedule,
     User,
@@ -152,7 +153,7 @@ def put_sources(body: Sources, user=Depends(current_user), db=Depends(get_db)):
 def voices(user=Depends(current_user), db=Depends(get_db)):
     return [
         {"id": v.slug, "name": v.name, "description": v.description}
-        for v in db.scalars(select(VoiceProfile).order_by(VoiceProfile.name))
+        for v in db.scalars(select(VoiceProfile).where(VoiceProfile.slug.in_(ACTIVE_VOICES)).order_by(VoiceProfile.name))
     ]
 
 

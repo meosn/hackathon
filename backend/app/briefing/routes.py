@@ -28,6 +28,7 @@ from app.messaging import emit
 from app.news.service import story_detail
 from . import agent, characters, conversation_speech, custom_voice, realtime, research, service, voice
 from .accounting import account_attempts
+from . import preview
 from . import contracts
 from .contracts import BriefingRequest, MessageInput, StartConversation
 from .discussion import message_view, respond
@@ -190,6 +191,20 @@ def agent_session(
         "persona": character["persona"],
         "language": character["language"],
     }
+
+
+@router.post("/voices/{voice_id}/preview", response_class=Response,
+             responses={200: {"content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}}}})
+def voice_preview(voice_id: str, data: preview.PreviewRequest = preview.PreviewRequest(),
+                  db=Depends(get_db), user=Depends(current_user)):
+    with account_attempts(db):
+        try:
+            audio = preview.render(db, user, voice_id, data)
+            content = voice.read_object(audio.object_key)
+            db.commit()
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, "The voice sample is unavailable. Please retry.") from exc
+    return Response(content, media_type="audio/wav", headers={"Cache-Control": "private, no-store"})
 
 
 @router.get("/voice-engines", response_model=list[contracts.VoiceEngine])

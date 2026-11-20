@@ -10,7 +10,7 @@ import httpx
 from pydantic import ValidationError
 from sqlalchemy import select
 
-from app.accounts import VoiceProfile, preferences, set_preferences
+from app.accounts import ACTIVE_VOICES, VoiceProfile, preferences, set_preferences
 from app.news.service import story_detail, verify_segment
 from .contracts import Answer, Decision
 from .models import Briefing, BriefingItem, ConversationMessage, Conversation
@@ -576,7 +576,7 @@ def respond(db, conv, text, *, decision=None, extractive=False):
         action["path"] = "/settings"
         reply = "Open settings to change your interests, sources, language or schedule."
     elif intent == "CHANGE_VOICE":
-        slugs = list(db.scalars(select(VoiceProfile.slug).order_by(VoiceProfile.slug)))
+        slugs = list(db.scalars(select(VoiceProfile.slug).where(VoiceProfile.slug.in_(ACTIVE_VOICES)).order_by(VoiceProfile.slug)))
         if slugs:
             current = prefs["voice_profile_id"]
             chosen = next((s for s in slugs if s in text.casefold()), None)

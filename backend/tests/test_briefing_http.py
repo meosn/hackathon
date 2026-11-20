@@ -325,7 +325,7 @@ def test_daily_is_prepared_once_and_playback_never_regenerates(api):
     api.patch(
         V1 + "/users/me/preferences",
         headers=headers,
-        json={"voice_profile_id": "casual"},
+        json={"voice_profile_id": "jarvis"},
     )
     same = api.post(V1 + "/briefings/daily", headers=headers).json()
     assert same["id"] == daily["id"] and same["voice_profile_id"] == "professional"
@@ -333,7 +333,7 @@ def test_daily_is_prepared_once_and_playback_never_regenerates(api):
     custom_edition = wait_for_edition(
         api, V1 + "/briefings/" + custom["briefing_id"], headers
     )
-    assert custom_edition["voice_profile_id"] == "casual"
+    assert custom_edition["voice_profile_id"] == "jarvis"
     assert custom_edition["id"] != daily["id"]
     conversation = api.post(
         V1 + "/conversations", headers=headers, json={"briefing_id": daily["id"]}
@@ -572,7 +572,7 @@ def test_streamed_speech_token_is_private_and_uses_the_selected_voice(api, monke
     monkeypatch.setenv("ELEVENLABS_API_KEY", "server-private-key")
     monkeypatch.setenv(
         "ELEVENLABS_VOICE_MAP",
-        json.dumps({"professional": "voice-a", "casual": "voice-b"}),
+        json.dumps({"professional": "voice-a", "jarvis": "voice-b"}),
     )
     calls = []
 
@@ -601,7 +601,7 @@ def test_streamed_speech_token_is_private_and_uses_the_selected_voice(api, monke
     api.patch(
         V1 + "/users/me/preferences",
         headers=headers,
-        json={"voice_profile_id": "casual"},
+        json={"voice_profile_id": "jarvis"},
     )
     assert api.post(path, headers=headers).json()["voice_id"] == "voice-b"
 
