@@ -28,7 +28,7 @@ def content_key(prefs, kind):
         kind=kind,
         period=os.getenv("DAILY_NEWS_PERIOD", "day") if kind == "day" else "week",
         edition=os.getenv("NEWS_EDITION_VERSION", ""),
-        recipe="personalized-v5",
+        recipe="personalized-v4",
     )
     return hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()[
         :16
@@ -61,7 +61,8 @@ def ensure_prepared(db, user_id, kind="day", now=None):
             "/" + characters.revision(user)
             if narrator["profile_id"] == "custom"
             else ""
-        ),
+        )
+        + ("/timed-v5" if narrator["profile_id"] != "professional" else ""),
     }
     today = (now or utcnow()).astimezone(resolve_timezone(prefs["timezone"])).date()
     key = daily_key(user_id, prefs, today, kind)
