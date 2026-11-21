@@ -23,7 +23,9 @@ it('shows only name and file, creates in one action and retains input after a fa
     }
     return {}
   })
-  render(<QueryClientProvider client={new QueryClient()}><CustomVoiceSettings /></QueryClientProvider>)
+  const savePreferences = vi.fn(event => event.preventDefault())
+  render(<QueryClientProvider client={new QueryClient()}><form onSubmit={savePreferences}><CustomVoiceSettings /></form></QueryClientProvider>)
+  expect(document.querySelectorAll('form')).toHaveLength(1)
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   expect(screen.queryByText('Character name & delivery')).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole('textbox', { name: 'Character name' }), { target: { value: 'My host' } })
@@ -34,4 +36,5 @@ it('shows only name and file, creates in one action and retains input after a fa
   expect(screen.getByText('voice.m4a')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Create character' }))
   await waitFor(() => expect(attempts).toBe(2))
+  expect(savePreferences).not.toHaveBeenCalled()
 })

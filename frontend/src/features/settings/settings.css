@@ -957,7 +957,7 @@
 .schedule-time-parts .field { min-width: 0; flex: 1; }
 .schedule-time-parts select { width: 100%; font-variant-numeric: tabular-nums; }
 .schedule-time-colon { align-self: flex-end; padding-bottom: 11px; color: #96a08c; }
-.custom-character form { display: grid; gap: 18px; max-width: 560px; }
+.custom-character-fields { display: grid; gap: 18px; max-width: 560px; }
 .custom-character .field { margin: 0; }
 .character-upload { position: relative; display: flex; align-items: center; gap: 16px; padding: 22px; border: 1px dashed #71805c; border-radius: 14px; cursor: pointer; background: #1c231722; transition: border-color .15s; }
 .character-upload:hover, .character-upload:focus-within { border-color: #ddecaa; }

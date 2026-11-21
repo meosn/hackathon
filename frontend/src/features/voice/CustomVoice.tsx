@@ -60,9 +60,14 @@ export function CustomVoiceSettings() {
   })
   return <section ref={section} id="custom-voice" className="preference-block custom-character">
     <h3>Your character</h3>
-    <form onSubmit={event => { event.preventDefault(); update.mutate() }}>
+    <div className="custom-character-fields" onKeyDown={event => {
+      if (event.key === 'Enter' && event.target instanceof HTMLInputElement && event.target.type === 'text') {
+        event.preventDefault(); event.stopPropagation()
+        if (!update.isPending && name.trim() && (file || voice.data?.saved || voice.data?.sample_uploaded)) update.mutate()
+      }
+    }}>
       <label className="field">Character name
-        <input aria-label="Character name" placeholder="Give your narrator a name" value={name} maxLength={80} required
+        <input type="text" aria-label="Character name" aria-required="true" placeholder="Give your narrator a name" value={name} maxLength={80}
           onChange={event => setName(event.target.value)} disabled={update.isPending} />
       </label>
       <label className={'character-upload' + (file ? ' has-file' : '')}>
@@ -73,11 +78,11 @@ export function CustomVoiceSettings() {
           onChange={event => setFile(event.target.files?.[0] || null)} />
       </label>
       <p className="preference-hint">Use a recording you have permission to clone.</p>
-      <Button type="submit" disabled={update.isPending || !name.trim() || (!file && !voice.data?.saved && !voice.data?.sample_uploaded)}>
+      <Button type="button" onClick={() => update.mutate()} disabled={update.isPending || !name.trim() || (!file && !voice.data?.saved && !voice.data?.sample_uploaded)}>
         {update.isPending ? 'Creating your character…' : voice.data?.sample_uploaded && !file ? 'Create from saved recording' : voice.data?.saved ? 'Save character' : 'Create character'}
       </Button>
       {update.isSuccess && voice.data?.saved && <p className="character-ready" role="status"><Check size={15} /> Ready — selected for your briefings and voice chat.</p>}
       <ErrorNote error={update.error || voice.error} />
-    </form>
+    </div>
   </section>
 }
