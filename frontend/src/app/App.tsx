@@ -18,6 +18,7 @@ import { Settings } from '../features/settings/Settings'
 import { Analytics } from '../features/analytics/Analytics'
 import { StudioHome } from '../features/briefings/StudioHome'
 import { AgentCatalog } from '../features/voice/AgentCatalog'
+import { About } from '../features/about/About'
 import { usePlayer } from '../stores/player'
 
 const subscribe = (callback: () => void) => {
@@ -31,6 +32,7 @@ export function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const setActive = usePlayer((state) => state.setActive)
+  if (location.pathname === '/about') return <About />
   if (!token) return <Auth />
   if (user.isPending && !user.data)
     return (
@@ -65,6 +67,7 @@ export function App() {
           <Brand />
         </Link>
         <div className="music-header-actions">
+          <Link to="/about" className="about-header-link">About us</Link>
           {me.is_guest && <button type="button" className="btn quiet" onClick={() => { setActive(null); navigate('/login'); setToken(null) }}>Create account</button>}
           <NotificationInbox/>
           <Link to="/settings" className="music-settings" aria-label="Settings">

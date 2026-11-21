@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -113,6 +114,7 @@ export function Auth() {
               </div>
             </form>
           <ErrorNote error={sign.error} />
+          <Link to="/about" className="auth-about-link">About Sourcera ↗</Link>
         </div>
       </section>
     </main>
