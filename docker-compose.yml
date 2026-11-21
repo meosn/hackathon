@@ -108,11 +108,11 @@ services:
     healthcheck: *worker-health
   briefing-worker:
     <<: *backend
-    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.briefing","-n","worker@%h","-c","1"]
+    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.briefing","-n","worker@%h","-c","2"]
     healthcheck: *worker-health
   voice-worker:
     <<: *backend
-    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.voice","-n","worker@%h","-c","1"]
+    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.voice","-n","worker@%h","-c","2"]
     healthcheck: *worker-health
   scheduler:
     <<: *backend

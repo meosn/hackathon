@@ -14,7 +14,7 @@ export function useVoiceChoice() {
   const prefs = preferences.data
   const saving = useIsMutating({ mutationKey: ['voice-preferences'] }) > 0
   const engine: VoiceEngine = prefs?.voice_engine === 'elevenlabs' ? 'elevenlabs' : 'openai'
-  return { engine, ready: !!prefs && !saving, signature: prefs ? `${engine}:${prefs.voice_profile_id}:${!!custom.data?.active}` : '' }
+  return { engine, ready: !!prefs && !saving, signature: prefs ? `${engine}:${prefs.voice_profile_id}:${!!custom.data?.active}:${custom.data?.revision || ''}` : '' }
 }
 
 export function createVoiceConnection(engine: VoiceEngine, id: string, callbacks: VoiceCallbacks, context?: AudioContext): VoiceConnection {

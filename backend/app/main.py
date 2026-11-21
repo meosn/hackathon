@@ -170,7 +170,8 @@ class RequestLimits:
                 return
             chunk = message.get("body", b"")
             size += len(chunk)
-            if size > settings.request_limit:
+            upload_limit = 26 * 1024 * 1024 if scope["path"].endswith("/users/me/custom-voice") else settings.request_limit
+            if size > upload_limit:
                 return await reject(
                     "request_too_large", "Request exceeds upload limit.", 413
                 )

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.accounts import ACTIVE_VOICES, VoiceProfile, preferences
+from app.accounts import ACTIVE_VOICES, User, VoiceProfile, preferences, require_voice_access
 from app.messaging import emit
 from app.news.service import story_detail, verify_segment
 from app.usage import record
@@ -79,12 +79,17 @@ def create_briefing(db, user_id, request: BriefingRequest, schedule_key=None):
     prefs = preferences(db, user_id)
     language = request.language or prefs["language"]
     selected_voice = request.voice_profile_id or prefs["voice_profile_id"]
+    owner = db.get(User, user_id)
+    custom = selected_voice == "custom" and owner.custom_voice_id
+    require_voice_access(owner, selected_voice)
     profile = db.scalar(
         select(VoiceProfile).where(
             (VoiceProfile.slug == selected_voice) | (VoiceProfile.id == selected_voice)
         )
     )
-    if not profile or profile.slug not in ACTIVE_VOICES:
+    if profile:
+        require_voice_access(owner, profile.slug)
+    if not custom and (not profile or profile.slug not in ACTIVE_VOICES):
         raise ValueError("Unknown voice profile")
     for story_id in set(request.selected_story_ids):
         if not story_detail(db, story_id):
@@ -93,13 +98,15 @@ def create_briefing(db, user_id, request: BriefingRequest, schedule_key=None):
     data.update(
         duration_minutes=request.duration_minutes or prefs["duration_minutes"],
         language=language,
-        voice_profile_id=profile.slug,
+        voice_profile_id="custom" if custom else profile.slug,
         depth=prefs["depth"],
     )
+    if custom:
+        data["narrator_voice_id"] = owner.custom_voice_id
     item = Briefing(
         user_id=user_id,
         language=language,
-        voice_profile_id=profile.slug,
+        voice_profile_id=data["voice_profile_id"],
         schedule_key=schedule_key,
         request=data,
         title=TITLES[language][request.period],
@@ -515,8 +522,12 @@ def revoice_briefing(db, source, user_id):
     if source.user_id != user_id or source.status != "completed":
         raise ValueError("Choose a completed episode to change its voice.")
     selected = preferences(db, user_id)["voice_profile_id"]
+    owner = db.get(User, user_id)
+    require_voice_access(owner, selected)
+    if owner.custom_voice_active and owner.custom_voice_id:
+        selected = "custom"
     profile = db.scalar(select(VoiceProfile).where(VoiceProfile.slug == selected))
-    if not profile:
+    if not profile and selected != "custom":
         raise ValueError("Unknown voice profile")
     rows = segments_for(db, source.id)
     if not rows:
@@ -525,10 +536,11 @@ def revoice_briefing(db, source, user_id):
         user_id=user_id,
         title=source.title,
         language=source.language,
-        voice_profile_id=profile.slug,
+        voice_profile_id=selected,
         request={
             **source.request,
-            "voice_profile_id": profile.slug,
+            "voice_profile_id": selected,
+            "narrator_voice_id": owner.custom_voice_id if selected == "custom" else None,
             "source_briefing_id": source.id,
         },
         status="script_ready",
@@ -572,6 +584,7 @@ def synthesize_briefing(db, briefing_id):
 
 def _synthesize_briefing(db, briefing_id):
     item = lock_briefing(db, briefing_id)
+    require_voice_access(db.get(User, item.user_id), item.voice_profile_id)
     if item.status not in {"script_ready", "audio_generating"}:
         return item.status
     if item.status == "script_ready":
@@ -584,7 +597,14 @@ def _synthesize_briefing(db, briefing_id):
     rows = segments_for(db, item.id)
     if not verified_script(db, rows):
         raise VerificationError("Evidence changed before audio generation.")
-    audio = voice.render_audio(db, rows, item.voice_profile_id, item.id)
+    config = None
+    if item.voice_profile_id == "custom":
+        if not item.request.get("narrator_voice_id"):
+            raise ValueError("The selected custom narrator is unavailable")
+        config = ("elevenlabs", os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2", item.request["narrator_voice_id"])
+        if os.getenv("TTS_PROVIDER", "local") in {"local", "mock"}:
+            config = ("local", "espeak-ng", "custom")
+    audio = voice.render_audio(db, rows, item.voice_profile_id, item.id, config=config)
     # Force fresh rows under READ COMMITTED after a potentially slow external TTS request.
     db.flush()
     db.expire_all()
@@ -670,7 +690,7 @@ def briefing_view(db, item, detail=False):
         "target_duration_seconds": target,
         "duration_note": note,
         "progress": PROGRESS[item.status],
-        "period": item.request["period"],
+        "period": item.request.get("prepared_kind", item.request["period"]),
     }
     if detail:
         items = db.scalars(

@@ -328,7 +328,8 @@ def test_daily_is_prepared_once_and_playback_never_regenerates(api):
         json={"voice_profile_id": "jarvis"},
     )
     same = api.post(V1 + "/briefings/daily", headers=headers).json()
-    assert same["id"] == daily["id"] and same["voice_profile_id"] == "professional"
+    assert same["id"] != daily["id"] and same["voice_profile_id"] == "jarvis"
+    assert [row["text"] for row in same["segments"]] == [row["text"] for row in edition["segments"]]
     custom = api.post(V1 + "/briefings", headers=headers, json={"period": "day"}).json()
     custom_edition = wait_for_edition(
         api, V1 + "/briefings/" + custom["briefing_id"], headers
@@ -490,7 +491,7 @@ def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeyp
     owner, other = listener("owner"), listener("other")
     created = []
 
-    def clone(key, audio):
+    def clone(key, audio, name="Custom"):
         assert key == "test-key"
         assert audio.startswith(b"RIFF")
         created.append(True)
@@ -507,7 +508,7 @@ def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeyp
         ).status_code
         == 422
     )
-    for seconds in (29, 61):
+    for seconds in (1, 9):
         assert (
             api.post(
                 path, headers=owner, data={"consent": "true"}, files=sample(seconds)
@@ -627,6 +628,12 @@ def test_voice_engines_and_database_characters_are_private_per_listener(api, mon
     assert {row['id'] for row in options.json() if row['available']} == {'openai', 'elevenlabs'}
     assert api.get(V1 + '/voice-engines').status_code == 401
     path = V1 + '/users/me/preferences'
+    assert api.patch(path, headers=owner, json={'voice_profile_id': 'gangsta'}).status_code == 403
+    with routes.SessionLocal() as db:
+        from app.accounts import User
+        user_id = api.get(V1 + '/users/me', headers=owner).json()['id']
+        db.get(User, user_id).is_premium = True
+        db.commit()
     chosen = api.patch(path, headers=owner, json={'voice_engine': 'elevenlabs', 'voice_profile_id': 'gangsta'})
     assert chosen.json()['voice_engine'] == 'elevenlabs'
     assert api.get(path, headers=other).json()['voice_engine'] == 'openai'

@@ -10,7 +10,7 @@ def configuration():
         "conversation_config": {
             "realtime_model": "eleven_realtime_v1_max",
             "asr": {"user_input_audio_format": "pcm_16000"},
-            "tts": {"model_id": "eleven_flash_v2", "voice_id": "onwK4e9ZLuTAKqWW03F9", "agent_output_audio_format": "pcm_24000"},
+            "tts": {"model_id": "eleven_flash_v2", "voice_id": "onwK4e9ZLuTAKqWW03F9", "agent_output_audio_format": "pcm_24000", "speed": 0.94},
             "language_presets": {lang: {"overrides": {"agent": {"language": lang, "first_message": ""}, "tts": {"model_id": "eleven_flash_v2_5"}}} for lang in ("ru", "de", "nl")},
             "turn": {"turn_eagerness": "eager", "silence_end_call_timeout": -1},
             "conversation": {"max_duration_seconds": 1800, "client_events": ["audio", "interruption", "user_transcript", "agent_response", "client_tool_call", "vad_score"]},

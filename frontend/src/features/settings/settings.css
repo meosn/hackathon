@@ -957,3 +957,13 @@
 .schedule-time-parts .field { min-width: 0; flex: 1; }
 .schedule-time-parts select { width: 100%; font-variant-numeric: tabular-nums; }
 .schedule-time-colon { align-self: flex-end; padding-bottom: 11px; color: #96a08c; }
+.custom-character form { display: grid; gap: 18px; max-width: 560px; }
+.custom-character .field { margin: 0; }
+.character-upload { position: relative; display: flex; align-items: center; gap: 16px; padding: 22px; border: 1px dashed #71805c; border-radius: 14px; cursor: pointer; background: #1c231722; transition: border-color .15s; }
+.character-upload:hover, .character-upload:focus-within { border-color: #ddecaa; }
+.character-upload span { min-width: 0; display: grid; gap: 6px; }
+.character-upload strong { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.character-upload small { color: #89967c; font-size: 12px; }
+.character-upload input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.custom-character .btn { justify-self: start; }
+.character-ready { display: flex; gap: 8px; align-items: center; color: #ddecaa; font-size: 13px; margin: 0; }

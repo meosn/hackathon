@@ -34,7 +34,7 @@ export function DailySession({
   const preferences = useApi<Preferences>('/users/me/preferences')
   const prefs = preferences.data
   const dailyKey = ['daily-edition', JSON.stringify(prefs && [prefs.language, prefs.duration_minutes,
-    prefs.depth, prefs.interests, prefs.preferred_sources, prefs.excluded_sources, prefs.timezone])]
+    prefs.depth, prefs.interests, prefs.preferred_sources, prefs.excluded_sources, prefs.timezone, choice.signature])]
   const daily = useQuery({
     queryKey: dailyKey,
     enabled: !!prefs,
@@ -52,6 +52,7 @@ export function DailySession({
   })
   const custom = useQuery({
     queryKey: ['live-custom', selectedId],
+    staleTime: Infinity,
     enabled: !!selectedId,
     queryFn: () => api<BriefingDetail>('/briefings/' + selectedId),
     refetchInterval: (q) =>

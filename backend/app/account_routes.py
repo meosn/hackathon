@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from .accounts import (
     Input,
     ACTIVE_VOICES,
+    PREMIUM_VOICES,
     PreferencePatch,
     Schedule,
     User,
@@ -95,7 +96,7 @@ def demo(body: Demo, db=Depends(get_db)):
 
 
 def public(user):
-    return {k: getattr(user, k) for k in ("id", "email", "name", "is_admin", "is_demo")}
+    return {k: getattr(user, k) for k in ("id", "email", "name", "is_admin", "is_demo", "is_premium")}
 
 
 @router.get("/auth/me", response_model=views.Listener)
@@ -152,7 +153,8 @@ def put_sources(body: Sources, user=Depends(current_user), db=Depends(get_db)):
 @router.get("/voices", response_model=list[views.VoiceView])
 def voices(user=Depends(current_user), db=Depends(get_db)):
     return [
-        {"id": v.slug, "name": v.name, "description": v.description}
+        {"id": v.slug, "name": v.name, "description": v.description,
+         "premium": v.slug in PREMIUM_VOICES, "locked": v.slug in PREMIUM_VOICES and not user.is_premium}
         for v in db.scalars(select(VoiceProfile).where(VoiceProfile.slug.in_(ACTIVE_VOICES)).order_by(VoiceProfile.name))
     ]
 

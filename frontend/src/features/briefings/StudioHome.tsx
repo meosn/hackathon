@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { AudioLines, Check, Play, Plus, LoaderCircle, Volume2 } from 'lucide-react'
+import { AudioLines, Check, Play, Plus, LoaderCircle, Volume2, Lock } from 'lucide-react'
 import { api, clockTime, niceDate, queryClient, useApi } from '../../api/client'
 import type { Health } from '../../api/client'
-import type { Briefing, BriefingDetail, Preferences, User } from '../../api/types'
+import type { Briefing, Preferences, User } from '../../api/types'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import { ErrorNote } from '../../components/UI'
 import { customVoicePath, setCustomVoice, type CustomVoiceState } from '../voice/CustomVoice'
@@ -12,6 +12,8 @@ import { DailySession } from './DailySession'
 import './studio.css'
 import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { useVoicePreview } from '../voice/useVoicePreview'
+import { PremiumNotice } from '../voice/PremiumNotice'
+import { usePreparedEditions } from './usePreparedEditions'
 
 const hosts = [
   { id: 'professional', name: 'The Anchor' },
@@ -36,8 +38,8 @@ export function StudioHome({ user }: { user: User }) {
   const health = useApi<Health>('/health')
   const [selectedId, setSelectedId] = useState('')
   const [playRequest, setPlayRequest] = useState(0)
-  const [voiceChanged, setVoiceChanged] = useState(false)
-  const [edition, setEdition] = useState<BriefingDetail>()
+  const [premiumNotice, setPremiumNotice] = useState(false)
+  const prepared = usePreparedEditions()
   const preview = useVoicePreview()
   const engine = useMutation({
     mutationFn: (voice_engine: string) => api<Preferences>('/users/me/preferences', 'PATCH', { voice_engine }),
@@ -72,28 +74,6 @@ export function StudioHome({ user }: { user: User }) {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(['/users/me/preferences'], data)
-      setVoiceChanged(true)
-    },
-  })
-  const generate = useMutation({
-    mutationFn: (period: 'day' | 'week') =>
-      api<{ briefing_id: string }>('/briefings', 'POST', {
-        period,
-        ...(period === 'day' ? { story_limit: 3 } : {}),
-      }),
-    onSuccess: (r) => {
-      selectEpisode(r.briefing_id)
-      setVoiceChanged(false)
-      void briefs.refetch()
-    },
-  })
-  const revoice = useMutation({
-    mutationFn: (id: string) =>
-      api<{ briefing_id: string }>('/briefings/' + id + '/revoice', 'POST'),
-    onSuccess: (r) => {
-      selectEpisode(r.briefing_id)
-      setVoiceChanged(false)
-      void briefs.refetch()
     },
   })
   function selectEpisode(id: string) {
@@ -111,13 +91,12 @@ export function StudioHome({ user }: { user: User }) {
           new Date(b.created_at).toDateString() !== new Date().toDateString(),
       )
       .slice(0, 4) || []
-  const weekly = briefs.data?.find(
-    (b) => b.period === 'week' && b.status === 'completed',
-  )
+  const weekly = prepared.data?.weekly
   return (
     <>
       <main id="main" className="music-main">
-        <DailySession selectedId={selectedId} playRequest={playRequest} onEditionChange={setEdition} />
+        {premiumNotice && <PremiumNotice onClose={() => setPremiumNotice(false)} />}
+        <DailySession selectedId={selectedId} playRequest={playRequest} />
         <section className="music-voices" aria-label="Choose your voice">
           <div className="music-section-heading">
             <h2>Your voice</h2>
@@ -132,10 +111,11 @@ export function StudioHome({ user }: { user: User }) {
                 type="button"
                 key={host.id}
                 aria-pressed={!custom.data?.active && prefs.data?.voice_profile_id === host.id}
-                className="music-host"
+                className={'music-host' + (host.id === 'gangsta' && !user.is_premium ? ' locked' : '')}
                 title={'Preview and select ' + host.name}
                 disabled={save.isPending || selectCustom.isPending || !prefs.data}
                 onClick={async () => {
+                  if (host.id === 'gangsta' && !user.is_premium) { setPremiumNotice(true); return }
                   preview.play(host.id, host.id === 'energetic' ? 'elevenlabs' : prefs.data?.voice_engine || 'openai', prefs.data?.language || 'en')
                   if (custom.data?.active) {
                     try { await selectCustom.mutateAsync(false) } catch { return }
@@ -145,8 +125,8 @@ export function StudioHome({ user }: { user: User }) {
               >
                 <span className="portrait-wrap">
                   <SpeakerAvatar id={host.id} />
-                  <span className={'voice-preview-indicator' + (preview.id === host.id ? ' active' : '')} aria-hidden="true">
-                    {preview.id === host.id ? preview.loading ? <LoaderCircle className="spin" size={20} /> : <Volume2 size={20} /> : <Play size={18} fill="currentColor" />}
+                  <span className={'voice-preview-indicator' + (preview.id === host.id || host.id === 'gangsta' && !user.is_premium ? ' active' : '')} aria-hidden="true">
+                    {host.id === 'gangsta' && !user.is_premium ? <Lock size={24} /> : preview.id === host.id ? preview.loading ? <LoaderCircle className="spin" size={20} /> : <Volume2 size={20} /> : <Play size={18} fill="currentColor" />}
                   </span>
                   {!custom.data?.active && prefs.data?.voice_profile_id === host.id && (
                     <span className="voice-check">
@@ -161,7 +141,7 @@ export function StudioHome({ user }: { user: User }) {
               <button type="button" className="music-host" aria-pressed={custom.data.active}
                 disabled={selectCustom.isPending || save.isPending}
                 title="Preview and select your custom voice"
-                onClick={() => { preview.play('custom', 'elevenlabs', prefs.data?.language || 'en'); setVoiceChanged(false); selectCustom.mutate(true) }}>
+                onClick={() => { preview.play('custom', 'elevenlabs', prefs.data?.language || 'en'); selectCustom.mutate(true) }}>
                 <span className="portrait-wrap">
                   <span className="speaker-avatar custom-voice-icon" aria-hidden="true">C</span>
                   <span className={'voice-preview-indicator' + (preview.id === 'custom' ? ' active' : '')} aria-hidden="true">
@@ -180,21 +160,9 @@ export function StudioHome({ user }: { user: User }) {
             </Link>
           </div>
           <div className="voice-apply" role="status">
-            {custom.data?.active && prefs.data?.voice_engine === 'elevenlabs' ? 'Custom voice selected for ElevenLabs live chat.' : voiceChanged ? (
-              <>
-                <span>New replies use this voice.</span>
-                <button
-                  onClick={() => edition && revoice.mutate(edition.id)}
-                  disabled={revoice.isPending || save.isPending || edition?.status !== 'completed'}
-                >
-                  Create with this voice
-                </button>
-              </>
-            ) : save.isPending ? (
-              'Saving voice…'
-            ) : null}
+            {prepared.updating ? 'Preparing your daily and weekly editions…' : custom.data?.active ? 'Your custom character is ready.' : ''}
           </div>
-          <ErrorNote error={save.error || prefs.error || generate.error || revoice.error || selectCustom.error || preview.error} />
+          <ErrorNote error={save.error || prefs.error || prepared.error || selectCustom.error || preview.error} />
         </section>
         <section className="music-library" aria-label="Podcast library">
           <div className="music-section-heading">
@@ -222,10 +190,8 @@ export function StudioHome({ user }: { user: User }) {
             </button>
             <button
               className="episode-card"
-              disabled={generate.isPending}
-              onClick={() =>
-                weekly ? selectEpisode(weekly.id) : generate.mutate('week')
-              }
+              disabled={!weekly || weekly.status !== 'failed' && !prepared.weeklyPlayable}
+              onClick={() => weekly && selectEpisode(weekly.id)}
             >
               <span className="episode-cover week">
                 <AudioLines size={43} />
@@ -235,11 +201,7 @@ export function StudioHome({ user }: { user: User }) {
               </span>
               <strong>This week</strong>
               <span>
-                {weekly
-                  ? clockTime(weekly.duration_seconds) + ' · Weekly briefing'
-                  : generate.isPending
-                    ? 'Preparing…'
-                    : 'Create a weekly edition'}
+                {weekly?.status === 'completed' ? prepared.weeklyPlayable ? clockTime(weekly.duration_seconds) + ' · Weekly briefing' : 'Loading audio…' : weekly?.status === 'failed' ? 'Needs attention' : 'Preparing…'}
               </span>
             </button>
             {episodes

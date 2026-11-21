@@ -141,6 +141,18 @@ def prepared_daily(db=Depends(get_db), user=Depends(current_user)):
     return service.briefing_view(db, item, detail=True)
 
 
+@router.post("/briefings/prepare", response_model=contracts.PreparedEditions)
+def prepare_editions(db=Depends(get_db), user=Depends(current_user)):
+    from .daily import prepare_listener, ensure_weekly
+    from app.jobs import recover
+
+    daily = prepare_listener(db, user.id)
+    weekly = ensure_weekly(db, user.id)
+    db.commit()
+    recover()
+    return {"daily": service.briefing_view(db, daily), "weekly": service.briefing_view(db, weekly)}
+
+
 @router.post("/briefings/daily", response_model=contracts.BriefingDetail)
 def daily_briefing(db=Depends(get_db), user=Depends(current_user)):
     from .daily import prepare_listener
@@ -216,8 +228,6 @@ def voice_engines(user=Depends(current_user)):
 
 
 def custom_voice_key(user):
-    if user.is_demo:
-        return None
     return os.getenv("ELEVENLABS_API_KEY") or None
 
 
@@ -230,9 +240,10 @@ def custom_voice_view(db, user):
         "persona": user.custom_voice_persona,
         "saved": bool(user.custom_voice_id),
         "active": bool(user.custom_voice_id and user.custom_voice_active),
-        "can_upload": not user.custom_voice_id,
+        "can_upload": True,
         "can_create": bool(custom_voice_key(user)),
         "sample_uploaded": bool(uploaded),
+        "revision": characters.revision(user),
     }
 
 
@@ -248,13 +259,11 @@ def lock_custom_voice_owner(db, user):
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    if owner.custom_voice_id:
-        raise HTTPException(409, "A custom voice is already saved for this listener.")
     return owner
 
 
 def provision_custom_voice(owner, api_key, sample):
-    owner.custom_voice_id = custom_voice.clone_voice(api_key, sample)
+    owner.custom_voice_id = custom_voice.clone_voice(api_key, sample, owner.custom_voice_name)
     owner.custom_voice_active = True
     owner.custom_voice_sample = None
 
@@ -276,11 +285,14 @@ def upload_custom_voice(
     owner = lock_custom_voice_owner(db, user)
     owner.custom_voice_name, owner.custom_voice_persona = name.strip() or "Custom", persona.strip() or "Natural, conversational delivery."
     api_key = custom_voice_key(owner)
+    owner.custom_voice_sample = sample
+    db.commit()
+    owner = lock_custom_voice_owner(db, owner)
+    if owner.custom_voice_sample != sample:
+        raise HTTPException(409, "The recording changed while it was being processed. Please retry.")
     if api_key:
         provision_custom_voice(owner, api_key, sample)
         set_preferences(db, owner.id, {"voice_engine": "elevenlabs"})
-    else:
-        owner.custom_voice_sample = sample
     db.commit()
     return custom_voice_view(db, owner)
 

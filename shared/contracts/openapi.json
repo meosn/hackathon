@@ -900,6 +900,29 @@
         ]
       }
     },
+    "/api/v1/briefings/prepare": {
+      "post": {
+        "summary": "Prepare Editions",
+        "operationId": "prepare_editions_api_v1_briefings_prepare_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreparedEditions"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/briefings/{briefing_id}": {
       "get": {
         "summary": "Get Briefing",
@@ -3485,6 +3508,11 @@
       },
       "CustomVoice": {
         "properties": {
+          "revision": {
+            "type": "string",
+            "title": "Revision",
+            "default": ""
+          },
           "name": {
             "type": "string",
             "title": "Name"
@@ -3987,6 +4015,11 @@
       },
       "Listener": {
         "properties": {
+          "is_premium": {
+            "type": "boolean",
+            "title": "Is Premium",
+            "default": false
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -4449,6 +4482,22 @@
           "excluded_sources"
         ],
         "title": "PreferenceView"
+      },
+      "PreparedEditions": {
+        "properties": {
+          "daily": {
+            "$ref": "#/components/schemas/BriefingView"
+          },
+          "weekly": {
+            "$ref": "#/components/schemas/BriefingView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "daily",
+          "weekly"
+        ],
+        "title": "PreparedEditions"
       },
       "PreviewRequest": {
         "properties": {
@@ -5474,6 +5523,16 @@
       },
       "VoiceView": {
         "properties": {
+          "premium": {
+            "type": "boolean",
+            "title": "Premium",
+            "default": false
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked",
+            "default": false
+          },
           "id": {
             "type": "string",
             "title": "Id"

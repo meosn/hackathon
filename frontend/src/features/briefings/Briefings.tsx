@@ -58,8 +58,8 @@ export function VoiceSelector({
   return (
     <Dropdown label="Voice style" value={value} onChange={onChange}>
       {voices.map((v) => (
-        <option value={v.id} key={v.id}>
-          {v.name}
+        <option value={v.id} key={v.id} disabled={v.locked}>
+          {v.name}{v.locked ? ' · Premium' : ''}
         </option>
       ))}
     </Dropdown>

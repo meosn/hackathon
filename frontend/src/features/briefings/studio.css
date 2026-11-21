@@ -721,6 +721,9 @@ html {
 .music-host:hover .voice-preview-indicator,
 .music-host:focus-visible .voice-preview-indicator,
 .voice-preview-indicator.active { opacity: 1; }
+.music-host.locked .speaker-avatar { filter: grayscale(.6); opacity: .65; }
+.music-host.locked .voice-preview-indicator { background: #10170c70; color: #e7eecb; }
+.premium-message { display: grid; justify-items: center; gap: 12px; padding: 18px 8px; text-align: center; }
 
 .research-sources {
   max-width: 620px;

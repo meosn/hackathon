@@ -104,13 +104,12 @@ queryClient.getQueryCache().subscribe((event) => {
     if (audio) URL.revokeObjectURL(audio.url)
   }
 })
-export const useBriefingAudio = (briefingId?: string) =>
-  useQuery({
+const briefingAudioOptions = (briefingId?: string) => ({
     queryKey: ['briefing-audio', briefingId],
     enabled: !!briefingId,
     staleTime: Infinity,
     gcTime: 5 * 60 * 1000,
-    queryFn: async ({ signal }): Promise<BriefingAudio> => {
+    queryFn: async ({ signal }: { signal: AbortSignal }): Promise<BriefingAudio> => {
       const response = await request(
         '/briefings/' + briefingId + '/audio',
         'GET',
@@ -122,3 +121,5 @@ export const useBriefingAudio = (briefingId?: string) =>
       return { url: URL.createObjectURL(blob) }
     },
   })
+export const useBriefingAudio = (briefingId?: string) => useQuery(briefingAudioOptions(briefingId))
+export const preloadBriefingAudio = (id: string) => queryClient.prefetchQuery(briefingAudioOptions(id))

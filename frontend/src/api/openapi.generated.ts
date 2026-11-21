@@ -354,6 +354,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/briefings/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare Editions */
+        post: operations["prepare_editions_api_v1_briefings_prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/briefings/{briefing_id}": {
         parameters: {
             query?: never;
@@ -1227,6 +1244,11 @@ export interface components {
         };
         /** CustomVoice */
         CustomVoice: {
+            /**
+             * Revision
+             * @default
+             */
+            revision: string;
             /** Name */
             name: string;
             /** Persona */
@@ -1410,6 +1432,11 @@ export interface components {
         };
         /** Listener */
         Listener: {
+            /**
+             * Is Premium
+             * @default false
+             */
+            is_premium: boolean;
             /** Id */
             id: string;
             /** Email */
@@ -1537,6 +1564,11 @@ export interface components {
             preferred_sources: string[];
             /** Excluded Sources */
             excluded_sources: string[];
+        };
+        /** PreparedEditions */
+        PreparedEditions: {
+            daily: components["schemas"]["BriefingView"];
+            weekly: components["schemas"]["BriefingView"];
         };
         /** PreviewRequest */
         PreviewRequest: {
@@ -1872,6 +1904,16 @@ export interface components {
         };
         /** VoiceView */
         VoiceView: {
+            /**
+             * Premium
+             * @default false
+             */
+            premium: boolean;
+            /**
+             * Locked
+             * @default false
+             */
+            locked: boolean;
             /** Id */
             id: string;
             /** Name */
@@ -1921,6 +1963,7 @@ export type SchemaOffer = components['schemas']['Offer'];
 export type SchemaPage = components['schemas']['Page'];
 export type SchemaPreferencePatch = components['schemas']['PreferencePatch'];
 export type SchemaPreferenceView = components['schemas']['PreferenceView'];
+export type SchemaPreparedEditions = components['schemas']['PreparedEditions'];
 export type SchemaPreviewRequest = components['schemas']['PreviewRequest'];
 export type SchemaQueued = components['schemas']['Queued'];
 export type SchemaRealtimeEvidence = components['schemas']['RealtimeEvidence'];
@@ -2661,6 +2704,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BriefingDetail"];
+                };
+            };
+        };
+    };
+    prepare_editions_api_v1_briefings_prepare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreparedEditions"];
                 };
             };
         };

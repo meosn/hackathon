@@ -210,8 +210,8 @@ def read_object(key):
     return _local_path(key).read_bytes()
 
 
-def render_audio(db, segments, voice, reference_id):
-    config = provider_config(voice, db)
+def render_audio(db, segments, voice, reference_id, config=None):
+    config = config or provider_config(voice, db)
     try:
         return _render_audio(db, segments, voice, reference_id, config)
     except (httpx.HTTPError, subprocess.SubprocessError):
@@ -222,7 +222,7 @@ def render_audio(db, segments, voice, reference_id):
         raise
 
 
-def render_aligned(db, parts, config, reference_id):
+def render_aligned(db, parts, config, reference_id, pauses=None):
     """Synthesize paragraph batches and retain provider character timings."""
     _, model, voice_id = config
     chunks = []
@@ -236,6 +236,7 @@ def render_aligned(db, parts, config, reference_id):
     if current:
         chunks.append(current)
     pcm, boundaries = bytearray(), []
+    part_offset = 0
     for chunk in chunks:
         joined = "\n\n".join(text for text, _ in chunk)
         start = monotonic()
@@ -263,16 +264,57 @@ def render_aligned(db, parts, config, reference_id):
                 raise ValueError("Speech returned invalid timing information")
             if times != sorted(times):
                 raise ValueError("Speech timings are out of order")
-            offset, position, starts = len(pcm) / (2 * RATE), 0, []
+            offset, position, starts, positions = len(pcm) / (2 * RATE), 0, [], []
             for text, _ in chunk:
                 starts.append(times[position])
+                positions.append(position)
                 position += len(text) + 2
             starts[0] = 0
+            # Preserve the original verified text/alignment while adding only the
+            # missing breathing space between sentences and story paragraphs.
+            ends = alignment.get("character_end_times_seconds") or []
+            inserts = []
+            added = 0.0
+            for index in range(1, len(starts)):
+                target = pauses[part_offset + index - 1] if pauses else 0.32
+                previous = positions[index] - 3
+                while previous > 0 and not joined[previous].isalnum():
+                    previous -= 1
+                end = ends[previous] if len(ends) == len(joined) else starts[index]
+                if not math.isfinite(end) or not 0 <= end <= starts[index]:
+                    end = starts[index]
+                gap = max(0, target - (starts[index] - end))
+                gap_frames = round(gap * RATE)
+                cut = round((end + starts[index]) / 2 * RATE) * 2
+                inserts.append((cut, gap_frames))
+                added += gap_frames / RATE
+                starts[index] += added
+            if inserts:
+                samples = bytearray(audio)
+                fade = round(RATE * 0.002)
+                for cut, frames in inserts:
+                    if not frames:
+                        continue
+                    for frame in range(fade):
+                        for pos, gain in ((cut - (frame + 1) * 2, (frame + 1) / fade), (cut + frame * 2, frame / fade)):
+                            if 0 <= pos < len(samples) - 1:
+                                value = int.from_bytes(samples[pos:pos + 2], "little", signed=True)
+                                samples[pos:pos + 2] = int(value * gain).to_bytes(2, "little", signed=True)
+                audio = bytes(samples)
+                paced, cursor = bytearray(), 0
+                for cut, frames in inserts:
+                    paced.extend(audio[cursor:cut])
+                    paced.extend(b"\0\0" * frames)
+                    cursor = cut
+                paced.extend(audio[cursor:])
+                audio = bytes(paced)
+                duration = len(audio) / (2 * RATE)
             for index, cue in enumerate(starts):
                 end = starts[index + 1] if index + 1 < len(starts) else duration + 0.2
                 boundaries.append([offset + cue, offset + end])
             pcm.extend(audio)
             pcm.extend(b"\0\0" * (RATE // 5))
+            part_offset += len(chunk)
         finally:
             observe(
                 db,
@@ -288,7 +330,7 @@ def render_aligned(db, parts, config, reference_id):
 def _render_audio(db, segments, voice, reference_id, config):
     parts = [(s.text, s.language) for s in segments]
     key = hashlib.sha256(
-        json.dumps([2, config, voice, parts], ensure_ascii=False).encode()
+        json.dumps([3, config, voice, parts], ensure_ascii=False).encode()
     ).hexdigest()
     if db.get_bind().dialect.name == "postgresql":
         db.execute(
@@ -303,7 +345,12 @@ def _render_audio(db, segments, voice, reference_id, config):
         and len(parts) > 1
         and os.getenv("ELEVENLABS_BATCH_TTS", "1") == "1"
     ):
-        pcm, boundaries = render_aligned(db, parts, config, reference_id)
+        pauses = [
+            0.7 if getattr(left, "story_id", None) != getattr(right, "story_id", None)
+            else 0.32
+            for left, right in zip(segments, segments[1:])
+        ]
+        pcm, boundaries = render_aligned(db, parts, config, reference_id, pauses=pauses)
     else:
         pcm, boundaries = bytearray(), []
         for text, lang in parts:

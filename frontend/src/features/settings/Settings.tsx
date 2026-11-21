@@ -16,6 +16,7 @@ import {
   Search,
   SlidersHorizontal,
   X,
+  Lock,
 } from 'lucide-react'
 import { api, label, queryClient, useApi } from '../../api/client'
 import type {
@@ -30,6 +31,8 @@ import { CustomVoiceSettings } from '../voice/CustomVoice'
 import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import { useVoicePreview } from '../voice/useVoicePreview'
+import { PremiumNotice } from '../voice/PremiumNotice'
+import { usePreparedEditions } from '../briefings/usePreparedEditions'
 import { SchedulePicker, TimeZoneSelect } from './SchedulePicker'
 import { routineFromSchedules, routineSummary, scheduleRows } from './weeklySchedule'
 import { asGmtOffset, gmtOffset } from './gmtOffsets'
@@ -101,6 +104,9 @@ function SettingsForm({
 }) {
   const [prefs, setPrefs] = useState(base)
   const preview = useVoicePreview()
+  const [premiumNotice, setPremiumNotice] = useState(false)
+  const [defaultNarrator, setDefaultNarrator] = useState(false)
+  const prepared = usePreparedEditions()
   const elevenAgents = prefs.voice_engine === 'elevenlabs'
   const [routine, setRoutine] = useState(() => routineFromSchedules(schedules))
   const [extra, setExtra] = useState('')
@@ -190,6 +196,13 @@ function SettingsForm({
       queryClient.setQueryData(['/users/me/preferences'], updated)
       const savedSchedules = await api<Schedule[]>('/schedules', 'PUT', rows)
       queryClient.setQueryData(['/schedules'], savedSchedules)
+      if (defaultNarrator) {
+        await api('/users/me/custom-voice', 'PATCH', { active: false })
+        void queryClient.invalidateQueries({ queryKey: ['/users/me/custom-voice'] })
+        setDefaultNarrator(false)
+      }
+      await api('/briefings/prepare', 'POST')
+      void queryClient.invalidateQueries({ queryKey: ['prepared-editions'] })
       const savedRoutine = routineFromSchedules(savedSchedules)
       setPrefs(updated)
       setRoutine(savedRoutine)
@@ -238,6 +251,8 @@ function SettingsForm({
 
   return (
     <div className="preferences-page">
+      {premiumNotice && <PremiumNotice onClose={() => setPremiumNotice(false)} />}
+      {saved && prepared.updating && <p className="preference-hint" role="status">Preparing your updated daily and weekly editions…</p>}
       <Link to="/" className="preferences-back">
         <ArrowLeft size={15} /> Listening room
       </Link>
@@ -541,6 +556,8 @@ function SettingsForm({
                           aria-pressed={prefs.voice_profile_id === v.id}
                           title={'Preview and select ' + v.name}
                           onClick={() => {
+                            if (v.locked) { setPremiumNotice(true); return }
+                            setDefaultNarrator(true)
                             preview.play(v.id, v.id === 'energetic' ? 'elevenlabs' : prefs.voice_engine, prefs.language)
                             patch('voice_profile_id', v.id)
                             if (v.id === 'energetic') patch('voice_engine', 'elevenlabs')
@@ -552,7 +569,7 @@ function SettingsForm({
                             <small>{v.description}</small>
                           </span>
                           <span className="selection-circle">
-                            {prefs.voice_profile_id === v.id && (
+                            {v.locked ? <Lock size={14} /> : prefs.voice_profile_id === v.id && (
                               <Check size={12} />
                             )}
                           </span>

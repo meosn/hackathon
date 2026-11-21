@@ -68,6 +68,7 @@ class VoiceEngine(BaseModel):
 
 
 class CustomVoice(Strict):
+    revision: str = ""
     name: str
     persona: str
     saved: bool
@@ -232,3 +233,8 @@ class SpeechSession(BaseModel):
     voice_profile_id: str
     model_id: str
     sample_rate: int
+
+
+class PreparedEditions(BaseModel):
+    daily: BriefingView
+    weekly: BriefingView

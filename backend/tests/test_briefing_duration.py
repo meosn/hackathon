@@ -71,10 +71,15 @@ def test_preference_change_replaces_daily_cache_but_voice_change_keeps_script(se
     set_preferences(session, user.id, {"duration_minutes": 5})
     changed = ensure_daily(session, user.id)
     assert changed.id != first.id and changed.request["duration_minutes"] == 5
+    service.generate_script(session, changed.id)
+    service.synthesize_briefing(session, changed.id)
     set_preferences(
         session, user.id, {"voice_profile_id": "jarvis", "voice_engine": "elevenlabs"}
     )
-    assert ensure_daily(session, user.id).id == changed.id
+    voice_version = ensure_daily(session, user.id)
+    assert voice_version.id != changed.id
+    assert voice_version.status == "script_ready"
+    assert voice_version.request["source_briefing_id"] == changed.id
     prefs = preferences(session, user.id)
     assert (
         daily_key(user.id, prefs, date(2026, 11, 21))

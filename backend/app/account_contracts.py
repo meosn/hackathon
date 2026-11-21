@@ -9,6 +9,7 @@ class SessionToken(BaseModel):
 
 
 class Listener(BaseModel):
+    is_premium: bool = False
     id: str
     email: str
     name: str
@@ -34,6 +35,8 @@ class TopicSelection(BaseModel):
 
 
 class VoiceView(BaseModel):
+    premium: bool = False
+    locked: bool = False
     id: str
     name: str
     description: str

@@ -3,7 +3,7 @@
 
 Personalized audio news with a prepared daily briefing and an interruptible voice conversation.
 
-Press **Play** to hear today's saved edition. Ask a question while listening to pause the recording and receive a spoken, source-grounded answer. Say **continue** to return to the briefing. Choose a different narrator or create a weekly edition from the episode library. Detailed preferences and model selection live in **Settings**.
+Press **Play** to hear today's saved edition. Ask a question while listening to pause the recording and receive a spoken, source-grounded answer. Say **continue** to return to the briefing. Choose a different narrator or open the prepared weekly edition from the episode library. Detailed preferences and model selection live in **Settings**.
 
 ## Quick start
 
@@ -70,11 +70,11 @@ Use a voice available to your ElevenLabs account. `ELEVENLABS_VOICE_MAP` can map
 
 ## Daily editions and personalization
 
-A listener's baseline edition is prepared once per local calendar day with the **Professional news** voice. New listeners receive a default 06:00 preparation schedule in their profile time zone when they have no schedule. Settings → Daily routine provides daily, twice-daily, weekday, weekly and custom plans. Each selected day can have its own delivery times; the time zone uses a short GMT-offset list, and hours (00–23) and minutes (00–59) have separate dropdowns. GMT offsets stay fixed; saved regional zones remain compatible. The scheduler creates a distinct three-story edition for each slot and avoids repeating it during daylight-saving clock changes. Scheduled editions appear in the briefing library. Existing plans can be edited or disabled.
+Daily and weekly editions are prepared proactively for the listener's current content settings and chosen narrator. New listeners receive a default 06:00 preparation schedule in their profile time zone when they have no schedule. Settings → Daily routine provides daily, twice-daily, weekday, weekly and custom plans. Each selected day can have its own delivery times; the time zone uses a short GMT-offset list, and hours (00–23) and minutes (00–59) have separate dropdowns. GMT offsets stay fixed; saved regional zones remain compatible. The scheduler creates a distinct three-story edition for each slot and avoids repeating it during daylight-saving clock changes. Scheduled editions appear in the briefing library. Existing plans can be edited or disabled.
 
 Daily editions select the three highest-ranked eligible stories. Choose **More news** to hear additional stories without repeating the original selection. Follow-up questions can request more detail about a story. Dated archives display their reference date in the listening room.
 
-The recording is downloaded before Play is enabled. Pressing Play uses the buffered audio. Selecting another voice saves the preference; **Create with this voice** generates a separate edition. Prepared weekly editions play from their cover. A missing weekly edition is presented as a creation action.
+The recording is downloaded before Play is enabled. Pressing Play uses the buffered audio. Selecting a voice previews it and saves the preference; narration is prepared in the background using the existing approved script where possible. Daily and weekly editions are queued on entry and after applying settings. Weekly covers are enabled after the recording is ready and buffered.
 
 Two demo preference templates use different interests and languages. Their prepared audio can be reused while each listener keeps private edition records and conversation history. A new preference set requires an initial preparation.
 

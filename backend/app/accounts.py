@@ -26,6 +26,7 @@ class User(Record):
     password_hash: Mapped[str]
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_premium: Mapped[bool] = mapped_column(Boolean, default=False)
     custom_voice_id: Mapped[str | None] = mapped_column(String(128))
     custom_voice_active: Mapped[bool] = mapped_column(Boolean, default=False)
     custom_voice_name: Mapped[str] = mapped_column(String(80), default="Custom")
@@ -132,6 +133,12 @@ VOICE_STYLES = [
     ("gangsta", "CJ · GTA Gangsta", "A laid-back West Coast character with confident street delivery."),
 ]
 ACTIVE_VOICES = frozenset(slug for slug, _, _ in VOICE_STYLES)
+PREMIUM_VOICES = frozenset({"gangsta"})
+
+
+def require_voice_access(user, slug):
+    if slug in PREMIUM_VOICES and not user.is_premium:
+        raise HTTPException(403, "This character is available with Premium only.")
 VOICE_DEFAULTS = {
     "professional": ("onwK4e9ZLuTAKqWW03F9", "marin", "Speak with clear, composed newsroom delivery."),
     "jarvis": ("JBFqnCBsd6RMkjVDRZzb", "cedar", "Speak with calm precision, like a helpful studio assistant."),
@@ -215,6 +222,8 @@ def set_preferences(db, user_id, changes):
         if owner:
             owner.custom_voice_active = False
     old = preferences(db, user_id)
+    if "voice_profile_id" in delta:
+        require_voice_access(db.get(User, user_id), delta["voice_profile_id"])
     pref = db.scalar(select(UserPreference).where(UserPreference.user_id == user_id))
     if "voice_profile_id" in delta and (delta["voice_profile_id"] not in ACTIVE_VOICES or not db.scalar(
         select(VoiceProfile.id).where(VoiceProfile.slug == delta["voice_profile_id"])

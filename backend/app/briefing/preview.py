@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from typing import Literal
 
-from app.accounts import ACTIVE_VOICES, VoiceProfile, preferences
+from app.accounts import ACTIVE_VOICES, VoiceProfile, preferences, require_voice_access
 from .contracts import Strict
 from . import voice
 
@@ -25,6 +25,7 @@ class PreviewRequest(Strict):
 
 def render(db, user, slug, request):
     prefs = preferences(db, user.id)
+    require_voice_access(user, slug)
     engine, language = (
         request.engine or prefs["voice_engine"],
         request.language or prefs["language"],
@@ -84,7 +85,7 @@ if __name__ == "__main__":
 
     jobs = [
         (slug, engine, language)
-        for slug in sorted(ACTIVE_VOICES)
+        for slug in sorted(ACTIVE_VOICES - {"gangsta"})
         for engine in ("openai", "elevenlabs")
         for language in PHRASES
     ]
