@@ -7,7 +7,7 @@ from .accounts import User, VoiceProfile, ACTIVE_VOICES, PREMIUM_VOICES, prefere
 from .auth import current_user
 from .db import Record, get_db
 
-DEFAULT_FAVORITES = {"professional", "energetic"}
+DEFAULT_FAVORITES = ACTIVE_VOICES
 
 class ListenerVoice(Record):
     __tablename__ = "listener_voices"

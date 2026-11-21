@@ -16,7 +16,10 @@ from test_briefing_http import api
 def test_favorites_and_custom_collection_are_private_persist_and_delete(session):
     owner=listener(session,'collection','en',[])
     other=listener(session,'other-collection','en',[])
-    assert {x['id'] for x in v.collection(session,owner) if x['favorite']}=={'professional','energetic'}
+    assert {x['id'] for x in v.collection(session,owner) if x['favorite']}==v.ACTIVE_VOICES
+    v.change_voice('cyberpunk',v.LibraryPatch(favorite=False),session,owner)
+    assert not next(x for x in v.collection(session,owner) if x['id']=='cyberpunk')['favorite']
+    assert next(x for x in v.collection(session,other) if x['id']=='cyberpunk')['favorite']
     owner.custom_voice_id,owner.custom_voice_name='one','First voice'
     first=v.remember(session,owner)
     owner.custom_voice_id,owner.custom_voice_name='two','Second voice'
