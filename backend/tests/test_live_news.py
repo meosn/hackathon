@@ -124,6 +124,10 @@ def test_live_recommendations_use_fresh_public_articles_and_ignore_archive_ancho
     assert abs((news_now() - now).total_seconds()) < 10
     rows = recommendations(session, user.id, period="day")
     assert [row["id"] for row in rows] == [ids["source"]]
+    explicit = recommendations(
+        session, user.id, period="day", selected=[ids["dataset"]]
+    )
+    assert [row["id"] for row in explicit] == [ids["dataset"]]
     assert "politics" in analysis.classify(
         "Parliament votes in presidential election",
         "The government announced the result.",

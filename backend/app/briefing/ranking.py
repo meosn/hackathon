@@ -164,10 +164,13 @@ def recommendations(
     now = news_now()
     from app.news.corpus import restrict_stories, live, live_publication_window
 
-    query = restrict_stories(select(Story).where(Story.archived.is_(False)))
+    query = select(Story).where(Story.archived.is_(False))
     if selected:
+        if os.getenv("ACTIVE_CORPUS") in {"licensed", "live"}:
+            query = query.where(Story.is_synthetic.is_(False))
         query = query.where(Story.id.in_(selected))
     else:
+        query = restrict_stories(query)
         query = query.where(
             live_publication_window(now - timedelta(days=DAYS[period]), now)
             if live()
