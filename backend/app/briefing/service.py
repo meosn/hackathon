@@ -704,10 +704,26 @@ def fail_briefing(db, briefing_id, error):
     if isinstance(error, VerificationError):
         item.error = str(error)
         emit(db, "briefing.verification.failed", item.id)
+    elif provider_quota_exhausted(error):
+        item.error = (
+            "The voice provider has reached its character limit. "
+            "Please contact support to restore new audio generation. "
+            "Previously prepared recordings remain available."
+        )
     else:
         item.error = "Briefing generation was interrupted. You can retry this edition."
     emit(db, "briefing.failed", item.id)
     db.commit()
+
+
+def provider_quota_exhausted(error):
+    if not isinstance(error, httpx.HTTPStatusError):
+        return False
+    try:
+        detail = error.response.json().get("detail", {})
+    except (ValueError, AttributeError):
+        return False
+    return isinstance(detail, dict) and detail.get("status") == "quota_exceeded"
 
 
 def segment_view(s):

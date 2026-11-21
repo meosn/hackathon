@@ -22,6 +22,10 @@ CONTENT_KEYS = (
 )
 
 
+def fit_narrator_duration():
+    return os.getenv("VOICE_DETAIL_FIT", "1") == "1"
+
+
 def content_key(prefs, kind):
     settings = {key: prefs[key] for key in CONTENT_KEYS}
     settings.update(
@@ -62,7 +66,11 @@ def ensure_prepared(db, user_id, kind="day", now=None):
             if narrator["profile_id"] == "custom"
             else ""
         )
-        + ("/timed-v5" if narrator["profile_id"] != "professional" else ""),
+        + (
+            "/timed-v5"
+            if narrator["profile_id"] != "professional" and fit_narrator_duration()
+            else ""
+        ),
     }
     today = (now or utcnow()).astimezone(resolve_timezone(prefs["timezone"])).date()
     key = daily_key(user_id, prefs, today, kind)
@@ -143,7 +151,7 @@ def ensure_prepared(db, user_id, kind="day", now=None):
         )
         copied_rows, resized = (
             sized_voice_copy(db, item, source)
-            if not same_voice
+            if not same_voice and fit_narrator_duration()
             else (service.segments_for(db, source.id), False)
         )
         for row in db.scalars(

@@ -106,6 +106,45 @@ def test_voice_copy_adds_verified_detail_when_a_faster_voice_would_be_too_short(
     )
 
 
+def test_cached_voice_editions_can_be_reused_without_resizing(session, monkeypatch):
+    from app.briefing import daily
+
+    user = listener(session, "cached-copy", "en", ["technology"])
+    source = ensure_daily(session, user.id)
+    service.generate_script(session, source.id)
+    original = [s.text for s in service.segments_for(session, source.id)]
+    set_preferences(session, user.id, {"voice_profile_id": "jarvis"})
+    monkeypatch.setenv("VOICE_DETAIL_FIT", "0")
+    monkeypatch.setattr(
+        daily, "sized_voice_copy",
+        lambda *args: (_ for _ in ()).throw(AssertionError("Must reuse cached text")),
+    )
+    changed = ensure_daily(session, user.id)
+    assert changed.request["prepared_voice_key"] == "jarvis"
+    assert [s.text for s in service.segments_for(session, changed.id)] == original
+
+
+def test_provider_quota_error_has_an_actionable_message(session):
+    import httpx
+
+    user = listener(session, "quota", "en", [])
+    item = service.create_briefing(session, user.id, BriefingRequest())
+    response = httpx.Response(
+        401, json={"detail": {"status": "quota_exceeded", "message": "private"}},
+        request=httpx.Request("POST", "https://api.elevenlabs.io/v1/text-to-speech/test"),
+    )
+    error = httpx.HTTPStatusError("private provider error", request=response.request, response=response)
+    service.fail_briefing(session, item.id, error)
+    assert item.status == "failed"
+    assert "character limit" in item.error
+    assert "private" not in item.error
+    assert not service.provider_quota_exhausted(RuntimeError("quota_exceeded"))
+    response = httpx.Response(502, text="unavailable", request=response.request)
+    assert not service.provider_quota_exhausted(
+        httpx.HTTPStatusError("unavailable", request=response.request, response=response)
+    )
+
+
 def test_daily_length_adds_balanced_detail_instead_of_capping_at_two_facts(
     session, monkeypatch
 ):
