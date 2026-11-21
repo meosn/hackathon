@@ -16,7 +16,7 @@ from .timezones import resolve_timezone
 
 log = logging.getLogger("sourcera.workers")
 local_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sourcera-local")
-KINDS = ("ingestion", "analysis", "briefing", "voice")
+KINDS = ("ingestion", "analysis", "briefing", "voice", "notification")
 tasks = Celery("sourcera", broker=settings.broker_url)
 task_exchange = Exchange("sourcera.tasks", type="direct", durable=True)
 tasks.conf.update(
@@ -174,6 +174,9 @@ def _execute(db, id):
             news.run_analysis(db, entity)
         elif kind == "briefing":
             briefing.generate_script(db, entity)
+        elif kind == "notification":
+            from .notifications import deliver
+            deliver(db, entity)
         else:
             briefing.synthesize_briefing(db, entity)
         next_kind = {"ingestion": "analysis", "briefing": "voice"}.get(kind)
@@ -232,8 +235,11 @@ def discover(db, now):
         from .briefing.service import create_briefing
         from .briefing.contracts import BriefingRequest
 
+        from .briefing.characters import selected
+        from .accounts import User
+        narrator = selected(db, db.get(User, s.user_id))
         briefing = create_briefing(
-            db, s.user_id, BriefingRequest(period="day", story_limit=3),
+            db, s.user_id, BriefingRequest(period="day", story_limit=3, voice_profile_id=narrator["profile_id"]),
             schedule_key=f"scheduled/{s.user_id}/{local.date()}/{s.time}/{s.id}",
         )
         queue_record(db, "briefing", briefing.id)

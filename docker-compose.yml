@@ -1,6 +1,7 @@
 name: sourcera
 x-backend: &backend
   image: sourcera-backend:local
+  extra_hosts: ["host.docker.internal:host-gateway"]
   pull_policy: never
   env_file: .env
   environment: &backend-env
@@ -99,7 +100,7 @@ services:
       start_period: 10s
   ingestion-worker:
     <<: *backend
-    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.ingestion","-n","worker@%h","-c","1"]
+    command: ["celery","-A","app.jobs:tasks","worker","-l","WARNING","-Q","tasks.ingestion,tasks.notification","-n","worker@%h","-c","1"]
     healthcheck: *worker-health
   analysis-worker:
     <<: *backend

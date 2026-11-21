@@ -101,7 +101,7 @@ def classify(db, cid, text):
     conversation = db.get(Conversation, cid)
     if (
         conversation
-        and preferences(db, conversation.user_id)["discussion_model"] == "grounded"
+        and preferences(db, conversation.user_id)["discussion_model"] in {"grounded", "local"}
     ):
         return Decision(intent="FOLLOW_UP")
     try:
@@ -318,7 +318,7 @@ def generated_answer(db, conv, story, question, prefs, intent):
     rows.sort(key=lambda pair: len(terms & _terms(pair[0]["text"])), reverse=True)
     evidence = {
         fact["id"]: (fact, citations)
-        for fact, citations in rows[:24]
+        for fact, citations in rows[:6 if prefs["discussion_model"] == "local" else 24]
         if verify_segment(
             db,
             fact["text"],
@@ -624,14 +624,13 @@ def respond(db, conv, text, *, decision=None, extractive=False):
             used = {c["claim_id"] for msg in recent for c in msg.citations}
             if (
                 not extractive
-                and prefs["discussion_model"] == "configured"
-                and os.getenv("LLM_PROVIDER", "mock") != "mock"
+                and (prefs["discussion_model"] == "local" or prefs["discussion_model"] == "configured" and os.getenv("LLM_PROVIDER", "mock") != "mock")
             ):
                 try:
                     reply, citations = generated_answer(
                         db, conv, story, text, prefs, intent
                     )
-                    action["response_provider"] = os.getenv("LLM_PROVIDER")
+                    action["response_provider"] = "ollama" if prefs["discussion_model"] == "local" else os.getenv("LLM_PROVIDER")
                 except (httpx.HTTPError, ValueError, KeyError) as exc:
                     action["response_provider"] = "source_search"
                     action["fallback_reason"] = type(exc).__name__

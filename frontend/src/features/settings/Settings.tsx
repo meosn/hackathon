@@ -30,11 +30,12 @@ import { CustomVoiceSettings } from '../voice/CustomVoice'
 import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
 import { useVoicePreview } from '../voice/useVoicePreview'
-import { PremiumNotice } from '../voice/PremiumNotice'
+import { VoiceCollection } from '../voice/VoiceCollection'
 import { usePreparedEditions } from '../briefings/usePreparedEditions'
 import { SchedulePicker, TimeZoneSelect } from './SchedulePicker'
 import { routineFromSchedules, routineSummary, scheduleRows } from './weeklySchedule'
 import { asGmtOffset, gmtOffset } from './gmtOffsets'
+import { NotificationsSettings } from './NotificationsSettings'
 import './settings.css'
 
 type Engine = {
@@ -102,8 +103,6 @@ function SettingsForm({
   engines: Engine[]
 }) {
   const [prefs, setPrefs] = useState(base)
-  const preview = useVoicePreview()
-  const [premiumNotice, setPremiumNotice] = useState(false)
   const [defaultNarrator, setDefaultNarrator] = useState(false)
   const prepared = usePreparedEditions()
   const elevenAgents = prefs.voice_engine === 'elevenlabs'
@@ -239,7 +238,6 @@ function SettingsForm({
 
   return (
     <div className="preferences-page">
-      {premiumNotice && <PremiumNotice onClose={() => setPremiumNotice(false)} />}
       {saved && prepared.updating && <p className="preference-hint" role="status">Preparing your updated daily and weekly editions…</p>}
       <Link to="/" className="preferences-back">
         <ArrowLeft size={15} /> Listening room
@@ -473,35 +471,12 @@ function SettingsForm({
                       <h3>Your narrator</h3>
                       <span>One voice, every edition</span>
                     </div>
-                    <div className="narrator-options">
-                      {voices.map((v) => (
-                        <button
-                          key={v.id}
-                          type="button"
-                          aria-pressed={prefs.voice_profile_id === v.id}
-                          title={'Preview and select ' + v.name}
-                          onClick={() => {
-                            if (v.locked) { setPremiumNotice(true); return }
-                            setDefaultNarrator(true)
-                            preview.play(v.id, v.id === 'energetic' ? 'elevenlabs' : prefs.voice_engine, prefs.language)
-                            patch('voice_profile_id', v.id)
-                            if (v.id === 'energetic') patch('voice_engine', 'elevenlabs')
-                          }}
-                        >
-                          <span className="narrator-symbol"><SpeakerAvatar id={v.id} /></span>
-                          <span>
-                            <strong>{v.name}</strong>
-                            <small>{v.description}</small>
-                          </span>
-                          <span className="selection-circle">
-                            {v.locked ? <Lock size={14} /> : prefs.voice_profile_id === v.id && (
-                              <Check size={12} />
-                            )}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    <ErrorNote error={preview.error} />
+                    <VoiceCollection prefs={prefs} onSelected={updated=>{
+                      const voiceFields={voice_profile_id:updated.voice_profile_id,voice_engine:updated.voice_engine}
+                      setPrefs(previous=>({...previous,...voiceFields}))
+                      setSnapshot(previous=>({...previous,prefs:{...previous.prefs,...voiceFields}}))
+                      setDefaultNarrator(false)
+                    }}/>
                     <p className="preference-hint">
                       Used for new editions and live replies. OpenAI uses the character’s delivery with an OpenAI voice.
                     </p>
@@ -574,6 +549,7 @@ function SettingsForm({
                     <Clock3 size={22} strokeWidth={1.3} />
                     <div><strong>{routineSummary(routine)}</strong><small>All times follow your selected time zone.</small></div>
                   </div>
+                  <NotificationsSettings/>
                   <section className="preference-block">
                     <SchedulePicker value={routine} onChange={value => { setRoutine(value); setSaved(false) }} />
                   </section>

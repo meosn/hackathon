@@ -172,7 +172,7 @@ def test_discussion_model_preference_persists_and_uses_evidence_rules(
     result = client.post("/api/v1/auth/demo", json={"profile": "tech"})
     headers = {"Authorization": "Bearer " + result.json()["access_token"]}
     models = client.get("/api/v1/assistant/models", headers=headers).json()
-    assert {m["id"] for m in models} == {"grounded", "configured"}
+    assert {m["id"] for m in models} == {"grounded", "configured", "local"}
     assert (
         client.patch(
             "/api/v1/users/me/preferences",

@@ -106,6 +106,7 @@ def create_briefing(db, user_id, request: BriefingRequest, schedule_key=None):
         language=language,
         voice_profile_id="custom" if custom else profile.slug,
         depth=prefs["depth"],
+        discussion_model=prefs["discussion_model"],
     )
     if custom:
         data["narrator_voice_id"] = owner.custom_voice_id
@@ -432,7 +433,7 @@ def _generate_script(db, briefing_id):
     ]
     source_words = sum(len(row["text"].split()) for row in inputs)
     item.request = {**item.request, "selected_source_words": source_words}
-    remote = os.getenv("LLM_PROVIDER", "mock") != "mock"
+    remote = item.request.get("discussion_model") == "local" or os.getenv("LLM_PROVIDER", "mock") != "mock"
     # Keep database identifiers off the generation wire. The server binds each
     # short index back to its original story, claim and citations after writing.
     wire_inputs = (
@@ -686,6 +687,8 @@ def _synthesize_briefing(db, briefing_id):
         audio.duration_seconds,
         "completed",
     )
+    from app.notifications import record_ready
+    record_ready(db, item)
     for event in [
         "voice.synthesis.completed",
         "briefing.audio.ready",

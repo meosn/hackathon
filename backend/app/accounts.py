@@ -108,7 +108,7 @@ class PreferencePatch(Input):
     voice_profile_id: str | None = Field(None, max_length=64)
     timezone: str | None = Field(None, max_length=80)
     depth: Literal["brief", "standard", "detailed"] | None = None
-    discussion_model: Literal["grounded", "configured"] | None = None
+    discussion_model: Literal["grounded", "configured", "local"] | None = None
     voice_engine: Literal["openai", "elevenlabs"] | None = None
     interests: list[str] | None = Field(None, max_length=50)
     custom_topics: list[str] | None = Field(None, max_length=50)

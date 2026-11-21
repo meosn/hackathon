@@ -214,3 +214,19 @@ cd frontend && npm run api:types
 - [Deployment and environment variables](docs/DEPLOYMENT.md), [cost analysis](docs/COST_ANALYSIS.md) and [decisions](docs/DECISIONS.md)
 
 API keys, environment files, recordings, database state, dependency directories and licensed datasets are excluded from source control. The supplied Compose configuration exposes application and console ports on loopback for local demonstration.
+
+## Ready notifications
+
+Settings → Daily routine contains browser notification permission and device-specific opt-out, alongside the existing weekly/daily schedule. Enable notifications on each desired device; use **Send test** to check its subscription. A completed scheduled edition creates an owner-scoped inbox entry and queues a Web Push job only after the audio stage succeeds. Failed or still-generating episodes do not send ready messages. The header bell links directly to the episode. Signing in after opening a notification preserves the requested episode route.
+
+The private VAPID key is generated atomically and persists in the shared state volume. `WEB_PUSH_SUBJECT` is the application's public HTTPS URL or an operator contact URI. Subscription endpoints are restricted to supported browser push services. Expired subscriptions are deactivated; successful devices are not sent the same notification again on a job retry. Delivery still depends on browser permission, OS focus settings and connectivity. On iOS/iPadOS, install the site on the Home Screen and enable notifications from the installed app; see [Apple's Web Push requirements](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers). The service worker does not cache private audio or API responses.
+
+## Private voice collection
+
+Settings → Voice & language lists standard narrators and all of the listener's saved custom voices. Stars save favorite status immediately; the listening room shows only favorites. The initial favorites are The Anchor and Donald Trump. Removing a standard narrator hides it only for that listener and can be reversed with **Add from collection**. Removing a custom voice removes its personal collection entry and deselects it; historical episode audio is preserved. Shared provider voices are never deleted as a side effect. Creating another custom character retains the previous saved character. New previews and selection resolve the requested private voice by owner.
+
+## CPU language model
+
+An optional Qwen3 0.6B instance runs through Ollama on the Docker host. `scripts/setup-local-ai.sh` configures an existing Ollama installation for a 2-vCPU/4-GB server: Docker-bridge binding, cloud disabled, one loaded model/request, 1,400 MB memory limit, 150% CPU quota and ten-minute warm retention. The model API is not bound to the public interface. Set `LOCAL_LLM_ENABLED=1`, `LOCAL_LLM_BASE_URL=http://host.docker.internal:11434` and `LOCAL_LLM_MODEL=qwen3:0.6b` in the application environment, then redeploy backend services.
+
+Select **Local · Qwen3 (no API fees)** under Voice & language → Fine-tune your assistant and save. It handles prepared-script writing and text questions; direct intent rules avoid an extra model round trip. It receives a bounded evidence set, disables thinking, uses two CPU threads and retains the same source-verification gate. If it is unavailable or generates unsupported text, the application uses source wording/search rather than switching to a paid language model. Usage is recorded as local, with zero external inference charges; VPS resources still have a cost. Live voice conversation, voice cloning, cloud web research and ElevenLabs speech are separate services and are not made free by choosing this language model.

@@ -325,6 +325,8 @@ def upload_custom_voice(
         raise HTTPException(422, "Confirm permission to clone the recorded voice.")
     sample = custom_voice.checked_sample(file)
     owner = lock_custom_voice_owner(db, user)
+    from app.voice_library import remember
+    remember(db, owner)
     owner.custom_voice_name, owner.custom_voice_persona = (
         name.strip() or "Custom",
         persona.strip() or "Natural, conversational delivery.",
@@ -339,6 +341,7 @@ def upload_custom_voice(
         )
     if api_key:
         provision_custom_voice(owner, api_key, sample)
+        remember(db, owner)
         set_preferences(db, owner.id, {"voice_engine": "elevenlabs"})
     db.commit()
     return custom_voice_view(db, owner)
@@ -354,7 +357,10 @@ def create_custom_voice(db=Depends(get_db), user=Depends(current_user)):
     owner = lock_custom_voice_owner(db, user)
     if not owner.custom_voice_sample:
         raise HTTPException(404, "Upload a voice sample first.")
+    from app.voice_library import remember
+    remember(db, owner)
     provision_custom_voice(owner, api_key, owner.custom_voice_sample)
+    remember(db, owner)
     set_preferences(db, owner.id, {"voice_engine": "elevenlabs"})
     db.commit()
     return custom_voice_view(db, owner)
@@ -379,6 +385,9 @@ def select_custom_voice(
         )
     if data.active:
         set_preferences(db, user.id, {"voice_engine": "elevenlabs"})
+    if data.name is not None or data.persona is not None:
+        from app.voice_library import remember
+        remember(db, user, rename=True)
     db.commit()
     return custom_voice_view(db, user)
 

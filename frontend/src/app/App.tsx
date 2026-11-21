@@ -5,6 +5,7 @@ import { getToken, setToken, useApi } from '../api/client'
 import type { User } from '../api/types'
 import type { Health } from '../api/client'
 import { Brand, ErrorNote, Loading } from '../components/UI'
+import { NotificationInbox } from '../components/NotificationInbox'
 import { Auth } from '../features/auth/Auth'
 import {
   BriefingForm,
@@ -63,6 +64,7 @@ export function App() {
           <Brand />
         </Link>
         <div className="music-header-actions">
+          <NotificationInbox/>
           <Link to="/settings" className="music-settings" aria-label="Settings">
             <Settings2 size={20} />
             <span>Settings</span>

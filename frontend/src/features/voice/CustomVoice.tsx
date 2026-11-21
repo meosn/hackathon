@@ -23,7 +23,7 @@ export function CustomVoiceSettings() {
   useEffect(() => {
     if (voice.data && !initialized.current) {
       initialized.current = true
-      setName(voice.data.saved || voice.data.sample_uploaded ? voice.data.name : '')
+      setName(voice.data.sample_uploaded ? voice.data.name : '')
     }
   }, [voice.data])
   useEffect(() => {
@@ -50,7 +50,8 @@ export function CustomVoiceSettings() {
     },
     onSuccess: state => {
       queryClient.setQueryData([customVoicePath], state)
-      setName(state.name); setFile(null)
+      setName(''); setFile(null)
+      void queryClient.invalidateQueries({ queryKey: ['/voice-library'] })
       if (input.current) input.current.value = ''
       void queryClient.invalidateQueries({ queryKey: ['/users/me/preferences'] })
       void queryClient.invalidateQueries({ queryKey: ['prepared-editions'] })
@@ -59,7 +60,7 @@ export function CustomVoiceSettings() {
     onError: () => { void queryClient.invalidateQueries({ queryKey: [customVoicePath] }) },
   })
   return <section ref={section} id="custom-voice" className="preference-block custom-character">
-    <h3>Your character</h3>
+    <h3>Add your own voice</h3>
     <div className="custom-character-fields" onKeyDown={event => {
       if (event.key === 'Enter' && event.target instanceof HTMLInputElement && event.target.type === 'text') {
         event.preventDefault(); event.stopPropagation()
@@ -72,14 +73,14 @@ export function CustomVoiceSettings() {
       </label>
       <label className={'character-upload' + (file ? ' has-file' : '')}>
         <UploadCloud size={24} strokeWidth={1.5} />
-        <span><strong>{file?.name || (voice.data?.sample_uploaded ? 'Recording saved — ready to create' : voice.data?.saved ? 'Choose a new recording to change the voice' : 'Choose an audio recording')}</strong>
+        <span><strong>{file?.name || (voice.data?.sample_uploaded ? 'Recording saved — ready to create' : voice.data?.saved ? 'Choose a recording for another voice' : 'Choose an audio recording')}</strong>
         <small>M4A, MP3 or WAV · up to 25 MB · 1–2 minutes works best</small></span>
         <input ref={input} aria-label="Voice recording" type="file" accept="audio/*,.m4a,.webm" disabled={update.isPending}
           onChange={event => setFile(event.target.files?.[0] || null)} />
       </label>
       <p className="preference-hint">Use a recording you have permission to clone.</p>
       <Button type="button" onClick={() => update.mutate()} disabled={update.isPending || !name.trim() || (!file && !voice.data?.saved && !voice.data?.sample_uploaded)}>
-        {update.isPending ? 'Creating your character…' : voice.data?.sample_uploaded && !file ? 'Create from saved recording' : voice.data?.saved ? 'Save character' : 'Create character'}
+        {update.isPending ? 'Creating your character…' : voice.data?.sample_uploaded && !file ? 'Create from saved recording' : file ? 'Create character' : voice.data?.saved ? 'Save character' : 'Create character'}
       </Button>
       {update.isSuccess && voice.data?.saved && <p className="character-ready" role="status"><Check size={15} /> Ready — selected for your briefings and voice chat.</p>}
       <ErrorNote error={update.error || voice.error} />

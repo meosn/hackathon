@@ -50,7 +50,7 @@ export function useVoicePreview() {
           return response.blob()
         }
         // Custom samples are resolved by the server on every click, including after re-cloning.
-        const blob = id === 'custom' ? await load() : await queryClient.fetchQuery({
+        const blob = id.startsWith('custom') ? await load() : await queryClient.fetchQuery({
           queryKey: ['voice-preview', id, engine, language],
           queryFn: ({ signal }) => load(signal), staleTime: Infinity,
         })

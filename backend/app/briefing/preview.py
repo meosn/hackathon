@@ -26,17 +26,22 @@ class PreviewRequest(Strict):
 
 def render(db, user, slug, request):
     prefs = preferences(db, user.id)
+    private_entry = None
+    if slug.startswith("custom:"):
+        from app.voice_library import entry_for
+        private_entry = entry_for(db, user, slug)
+        slug = "custom"
     require_voice_access(user, slug)
     engine, language = (
         request.engine or prefs["voice_engine"],
         request.language or prefs["language"],
     )
     if slug == "custom":
-        if not user.custom_voice_id:
+        if not (private_entry or user.custom_voice_id):
             raise HTTPException(404, "Create your custom voice first.")
         if engine != "elevenlabs":
             raise HTTPException(422, "Custom voices use ElevenLabs.")
-        voice_id = user.custom_voice_id
+        voice_id = private_entry.provider_voice_id if private_entry else user.custom_voice_id
     else:
         profile = db.scalar(select(VoiceProfile).where(VoiceProfile.slug == slug))
         if slug not in ACTIVE_VOICES or not profile:

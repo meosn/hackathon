@@ -36,19 +36,20 @@ class RemoteProvider:
     async def generate_structured(self, messages, schema, *, model=None, timeout=None):
         local = self.provider == "ollama"
         default_url = "http://localhost:11434" if local else "https://api.openai.com/v1"
-        base = os.getenv("LLM_BASE_URL") or default_url
+        base = (os.getenv("LOCAL_LLM_BASE_URL") or (os.getenv("LLM_BASE_URL") if os.getenv("LLM_PROVIDER") == "ollama" else None) or default_url) if local else (os.getenv("LLM_BASE_URL") or default_url)
         model = (
             model or os.getenv("LLM_MODEL") or ("llama3.2" if local else "gpt-4o-mini")
         )
         headers = {}
-        if key := os.getenv("LLM_API_KEY"):
+        if not local and (key := os.getenv("LLM_API_KEY")):
             headers["Authorization"] = f"Bearer {key}"
         body = {"model": model, "messages": messages, "stream": False}
         if local:
             body.update(
                 format=schema.model_json_schema(),
-                options={"temperature": 0, "num_ctx": 8192, "num_predict": 2500},
-                keep_alive="5m",
+                options={"temperature": 0, "num_ctx": 4096, "num_predict": 768, "num_thread": 2},
+                think=False,
+                keep_alive="10m",
             )
         else:
             body["response_format"] = {
@@ -98,6 +99,16 @@ class RemoteProvider:
 
 def model_output(db, reference_id, messages, schema, *, model=None, timeout=None):
     kind = os.getenv("LLM_PROVIDER", "mock")
+    from .models import Briefing, Conversation
+    from app.accounts import preferences
+    briefing = db.get(Briefing, reference_id)
+    conversation = db.get(Conversation, reference_id) if not briefing else None
+    local_choice = (briefing and briefing.request.get("discussion_model") == "local") or (conversation and preferences(db, conversation.user_id)["discussion_model"] == "local")
+    if local_choice:
+        if os.getenv("LOCAL_LLM_ENABLED", "0") != "1":
+            raise ValueError("The local model is unavailable")
+        kind, model = "ollama", os.getenv("LOCAL_LLM_MODEL", "qwen3:0.6b")
+        timeout = float(os.getenv("LOCAL_LLM_TIMEOUT_SECONDS", "35"))
     if kind == "mock":
         return asyncio.run(MockProvider().generate_structured(messages, schema))
     if kind not in {"ollama", "api"}:

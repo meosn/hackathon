@@ -41,6 +41,8 @@ logger = logging.getLogger("sourcera")
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 logger.propagate = False
+from .notifications import router as notification_routes
+from .voice_library import router as voice_library_routes
 load_models()
 
 
@@ -270,5 +272,5 @@ def ready():
     return {"status": "ready", "jobs": settings.job_mode}
 
 
-for router in (accounts, briefings, news):
+for router in (accounts, briefings, news, notification_routes, voice_library_routes):
     app.include_router(router, prefix=prefix)

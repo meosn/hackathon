@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { api, setToken } from '../../api/client'
 import { Brand, Button, ErrorNote, Tabs } from '../../components/UI'
 const credentials = z.object({
@@ -21,12 +21,13 @@ export function Auth() {
     setError,
   } = useForm<Credentials>({ resolver: zodResolver(credentials) })
   const navigate = useNavigate()
+  const location = useLocation()
   const sign = useMutation({
     mutationFn: ({ path, data }: { path: string; data: unknown }) =>
       api<{ access_token: string }>('/auth/' + path, 'POST', data),
     onSuccess: (r) => {
       setToken(r.access_token)
-      navigate('/', { replace: true })
+      navigate(location.pathname === '/login' ? '/' : location.pathname + location.search, { replace: true })
     },
   })
   function submit(data: Credentials) {

@@ -46,7 +46,7 @@ def get_db():
 
 
 def load_models():
-    from . import accounts, messaging, usage, jobs
+    from . import accounts, messaging, usage, jobs, notifications, voice_library
     from .news import models as news
     from .briefing import models as briefings
 

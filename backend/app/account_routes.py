@@ -314,6 +314,7 @@ def discussion_models(user=Depends(current_user)):
         "mock": "Source search (offline)",
     }.get(provider, "Configured assistant")
     return [
+        {"id": "local", "name": "Local · Qwen3 (no API fees)", "description": "Runs on this server. Used for edition writing and text questions. Live audio still uses your selected audio provider.", "available": os.getenv("LOCAL_LLM_ENABLED", "0") == "1"},
         {
             "id": "grounded",
             "name": "Source search",

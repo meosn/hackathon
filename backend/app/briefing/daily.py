@@ -28,6 +28,8 @@ def fit_narrator_duration():
 
 def content_key(prefs, kind):
     settings = {key: prefs[key] for key in CONTENT_KEYS}
+    if prefs.get("discussion_model") == "local":
+        settings["writer"] = "local"
     settings.update(
         kind=kind,
         period=os.getenv("DAILY_NEWS_PERIOD", "day") if kind == "day" else "week",
