@@ -1554,11 +1554,6 @@ progress {
 .auth-sign-actions .google-access small { display: block; margin-top: 6px; }
 @media (max-width: 600px) { .auth-sign-actions { flex-direction: column; } .auth-sign-actions .google-access { flex: auto; width: 100%; } }
 
-/* Match the Google Identity Services button and remove the empty loading row. */
-.google-access > div[hidden] { display: none; }
-.auth-sign-actions > .btn,
-.auth-sign-actions .google-access > .btn { height: 40px; min-height: 40px; padding-block: 0; }
-.auth-sign-actions .google-access { gap: 8px; }
-.auth-sign-actions .google-access small { margin-top: 0; line-height: 1.5; }
-
-.google-access > .btn.outline:disabled { outline: none; }
+.guest-access-button { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; border: 1px solid var(--lime); border-radius: 12px; background: #ddeaaf12; color: var(--lime); font-weight: 600; cursor: pointer; }
+.guest-access-button:hover { background: #ddeaaf22; }
+.guest-access-button:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }

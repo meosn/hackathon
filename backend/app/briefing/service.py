@@ -107,6 +107,8 @@ def create_briefing(db, user_id, request: BriefingRequest, schedule_key=None):
         voice_profile_id="custom" if custom else profile.slug,
         depth=prefs["depth"],
         discussion_model=prefs["discussion_model"],
+        voice_engine="elevenlabs" if custom else prefs["voice_engine"],
+        openai_voice=profile.openai_voice if profile else "marin",
     )
     if custom:
         data["narrator_voice_id"] = owner.custom_voice_id
@@ -600,6 +602,8 @@ def revoice_briefing(db, source, user_id):
         request={
             **source.request,
             "voice_profile_id": selected,
+            "voice_engine": "elevenlabs" if selected == "custom" else preferences(db, user_id)["voice_engine"],
+            "openai_voice": profile.openai_voice if profile else "marin",
             "narrator_voice_id": (
                 owner.custom_voice_id if selected == "custom" else None
             ),
@@ -670,6 +674,16 @@ def _synthesize_briefing(db, briefing_id):
         )
         if os.getenv("TTS_PROVIDER", "local") in {"local", "mock"}:
             config = ("local", "espeak-ng", "custom")
+    elif os.getenv("TTS_PROVIDER", "local") not in {"local", "mock"}:
+        engine = item.request.get("voice_engine") or preferences(db, item.user_id)["voice_engine"]
+        if engine == "openai":
+            if not (os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")):
+                raise ValueError("OpenAI speech is not configured")
+            profile = db.scalar(select(VoiceProfile).where(VoiceProfile.slug == item.voice_profile_id))
+            config = (
+                "openai", os.getenv("OPENAI_TTS_MODEL") or "gpt-4o-mini-tts",
+                item.request.get("openai_voice") or (profile.openai_voice if profile else "marin"),
+            )
     audio = voice.render_audio(db, rows, item.voice_profile_id, item.id, config=config)
     # Force fresh rows under READ COMMITTED after a potentially slow external TTS request.
     db.flush()
@@ -714,7 +728,7 @@ def fail_briefing(db, briefing_id, error):
         emit(db, "briefing.verification.failed", item.id)
     elif provider_quota_exhausted(error):
         item.error = (
-            "The voice provider has reached its character limit. "
+            "ElevenLabs has reached its character limit. Choose OpenAI in voice settings and retry. "
             "Please contact support to restore new audio generation. "
             "Previously prepared recordings remain available."
         )

@@ -59,7 +59,7 @@ export function Auth() {
             {tab === 'register' ? 'Create your profile' : 'Sign in'}
           </h1>
           <div className="auth-alternatives">
-            <button type="button" className="btn quiet" disabled={sign.isPending}
+            <button type="button" className="btn outline guest-access-button" disabled={sign.isPending}
               onClick={() => sign.mutate({ path: 'guest', data: { guest_token: localStorage.getItem('sourcera.guest') } })}>
               Continue as guest
             </button>

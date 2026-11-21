@@ -43,6 +43,9 @@ def content_key(prefs, kind):
 
 def daily_key(user_id, prefs, today, kind="day"):
     speaker = prefs.get("prepared_voice_key", prefs["voice_profile_id"])
+    if os.getenv("TTS_PROVIDER", "local") not in {"local", "mock"}:
+        engine = "elevenlabs" if speaker.startswith("custom") else prefs.get("voice_engine", "openai")
+        speaker += "/speech-provider-v1/" + engine
     voice_key = hashlib.sha256(speaker.encode()).hexdigest()[:12]
     family, label = ("daily", "top3") if kind == "day" else ("weekly", "week")
     edition = os.getenv("NEWS_EDITION_VERSION", "")
@@ -147,6 +150,7 @@ def ensure_prepared(db, user_id, kind="day", now=None):
         same_voice = (
             source.status == "completed"
             and source.audio_id is not None
+            and source.request.get("voice_engine") == item.request.get("voice_engine")
             and (
                 source.request.get("prepared_voice_key") == prefs["prepared_voice_key"]
             )
