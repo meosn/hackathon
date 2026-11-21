@@ -63,7 +63,7 @@ class UserPreference(Record):
     timezone: Mapped[str] = mapped_column(default="UTC")
     depth: Mapped[str] = mapped_column(default="standard")
     discussion_model: Mapped[str] = mapped_column(String(24), default="configured")
-    voice_engine: Mapped[str] = mapped_column(String(24), default="openai")
+    voice_engine: Mapped[str] = mapped_column(String(24), default="elevenlabs", server_default="elevenlabs")
     custom_topics: Mapped[list[str]] = mapped_column(JSON, default=list)
 
 

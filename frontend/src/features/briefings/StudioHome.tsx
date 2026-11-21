@@ -58,7 +58,7 @@ export function StudioHome({ user }: { user: User }) {
             <h2>Your voice</h2>
             <Link to="/settings?section=audio">Change voice</Link>
           </div>
-          <VoiceEnginePicker value={prefs.data?.voice_engine || 'openai'} disabled={engine.isPending || !prefs.data}
+          <VoiceEnginePicker value={prefs.data?.voice_engine || 'elevenlabs'} disabled={engine.isPending || !prefs.data}
             onChange={value => engine.mutate(value)} />
           <ErrorNote error={engine.error} />
           <VoiceCollection mode="home" prefs={prefs.data}/>

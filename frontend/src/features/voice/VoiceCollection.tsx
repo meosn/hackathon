@@ -44,10 +44,10 @@ export function VoiceCollection({mode='settings',prefs,onSelected}:{mode?:'home'
   })
   function select(voice:LibraryVoice) {
     if(voice.locked) {setPremium(true);return}
-    preview.play(voice.id,voice.custom||voice.id==='energetic'?'elevenlabs':prefs?.voice_engine||'openai',prefs?.language||'en')
+    preview.play(voice.id,voice.custom||voice.id==='energetic'?'elevenlabs':prefs?.voice_engine||'elevenlabs',prefs?.language||'en')
     change.mutate({voice,action:'select'})
   }
-  const openai = prefs?.voice_engine !== 'elevenlabs'
+  const openai = prefs?.voice_engine === 'openai'
   const openaiNames: Record<string, string> = {professional:'Marin',jarvis:'Cedar',cyberpunk:'Echo'}
   const providerRows = openai ? rows.filter(v=>v.id in openaiNames).map(v=>({...v,name:openaiNames[v.id],description:'OpenAI voice',hidden:false,locked:false})) : rows
   const visible=providerRows.filter(v=>!v.hidden&&(mode!=='home'||v.favorite))

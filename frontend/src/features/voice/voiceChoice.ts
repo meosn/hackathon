@@ -13,7 +13,7 @@ export function useVoiceChoice() {
   const custom = useApi<CustomVoiceState>(customVoicePath)
   const prefs = preferences.data
   const saving = useIsMutating({ mutationKey: ['voice-preferences'] }) > 0
-  const engine: VoiceEngine = prefs?.voice_engine === 'elevenlabs' ? 'elevenlabs' : 'openai'
+  const engine: VoiceEngine = prefs?.voice_engine === 'openai' ? 'openai' : 'elevenlabs'
   return { engine, ready: !!prefs && !saving, signature: prefs ? `${engine}:${prefs.voice_profile_id}:${!!custom.data?.active}:${custom.data?.revision || ''}` : '' }
 }
 
