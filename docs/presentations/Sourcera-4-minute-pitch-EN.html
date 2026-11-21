@@ -40,7 +40,7 @@ document.getElementById('prev').onclick=()=>move(-1);document.getElementById('ne
 document.getElementById('restart').onclick=()=>{pause();elapsed=0;intro.currentTime=0;show(0);renderClock()};
 document.getElementById('full').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
 function toggleNotes(){notesOpen=!notesOpen;document.getElementById('notes').classList.toggle('open',notesOpen)}document.getElementById('note').onclick=toggleNotes;document.getElementById('notes').onclick=toggleNotes;
-addEventListener('keydown',e=>{if(e.target.tagName==='VIDEO')return;if(e.code==='Space'){e.preventDefault();playing?pause():start()}if(e.code==='ArrowRight')move(1);if(e.code==='ArrowLeft')move(-1);if(e.key.toLowerCase()==='n')toggleNotes();if(e.key.toLowerCase()==='b'){pause();show(current>=MAIN?0:MAIN)}if(e.code==='Escape'&&notesOpen)toggleNotes()});
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();playing?pause():start()}if(e.code==='ArrowRight')move(1);if(e.code==='ArrowLeft')move(-1);if(e.key.toLowerCase()==='n')toggleNotes();if(e.key.toLowerCase()==='b'){pause();show(current>=MAIN?0:MAIN)}if(e.code==='Escape'&&notesOpen)toggleNotes()});
 window.pitch={get state(){return {current,playing,elapsed,total:TOTAL,introDuration:INTRO_MS}},start,pause,show};
 const initial=Number(location.hash.replace('#slide-',''))-1;show(Number.isFinite(initial)&&initial>=0?initial:0);if(current>0)elapsed=current<MAIN?bounds[current]:TOTAL;renderClock();
 </script></html>
