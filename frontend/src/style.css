@@ -1546,3 +1546,10 @@ progress {
 .google-access > div { max-width: 100%; overflow: hidden; }
 .auth-divider { display: flex; align-items: center; gap: .8rem; color: var(--muted); font-size: .8rem; }
 .auth-divider::before, .auth-divider::after { content: ''; height: 1px; flex: 1; background: var(--edge); }
+
+/* Keep Google beside the email submit action, below the credential fields. */
+.auth-sign-actions { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.auth-sign-actions > .btn { min-height: 44px; }
+.auth-sign-actions .google-access { margin: 0; flex: 1 1 220px; min-width: 0; }
+.auth-sign-actions .google-access small { display: block; margin-top: 6px; }
+@media (max-width: 600px) { .auth-sign-actions { flex-direction: column; } .auth-sign-actions .google-access { flex: auto; width: 100%; } }

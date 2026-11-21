@@ -59,7 +59,6 @@ export function Auth() {
             {tab === 'register' ? 'Create your profile' : 'Sign in'}
           </h1>
           <div className="auth-alternatives">
-            <GoogleSignIn onCredential={(credential, nonce) => sign.mutate({ path: 'google', data: { credential, nonce, guest_token: localStorage.getItem('sourcera.guest') } })} />
             <button type="button" className="btn quiet" disabled={sign.isPending}
               onClick={() => sign.mutate({ path: 'guest', data: { guest_token: localStorage.getItem('sourcera.guest') } })}>
               Continue as guest
@@ -106,9 +105,12 @@ export function Auth() {
                 />
                 {errors.password && <small>{errors.password.message}</small>}
               </label>
-              <Button disabled={sign.isPending}>
-                {tab === 'register' ? 'Create profile' : 'Sign in'}
-              </Button>
+              <div className="auth-sign-actions">
+                <Button disabled={sign.isPending}>
+                  {tab === 'register' ? 'Create profile' : 'Sign in'}
+                </Button>
+                <GoogleSignIn onCredential={(credential, nonce) => sign.mutate({ path: 'google', data: { credential, nonce, guest_token: localStorage.getItem('sourcera.guest') } })} />
+              </div>
             </form>
           <ErrorNote error={sign.error} />
         </div>
