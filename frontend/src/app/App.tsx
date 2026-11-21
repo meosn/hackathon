@@ -20,6 +20,7 @@ import { StudioHome } from '../features/briefings/StudioHome'
 import { AgentCatalog } from '../features/voice/AgentCatalog'
 import { About } from '../features/about/About'
 import { usePlayer } from '../stores/player'
+import './editorial.css'
 
 const subscribe = (callback: () => void) => {
   window.addEventListener('sourcera-session', callback)
@@ -58,7 +59,7 @@ export function App() {
   const home = location.pathname === '/'
   const settings = location.pathname === '/settings'
   return (
-    <div className="music-home">
+    <div className="music-home editorial-ui">
       <a className="skip" href="#main">
         Skip to content
       </a>
@@ -66,8 +67,11 @@ export function App() {
         <Link to="/" aria-label="Sourcera home">
           <Brand />
         </Link>
+        <nav className="studio-top-nav" aria-label="Sourcera navigation">
+          <NavLink to="/" end>Listening room</NavLink>
+          <NavLink to="/about">About us</NavLink>
+        </nav>
         <div className="music-header-actions">
-          <Link to="/about" className="about-header-link">About us</Link>
           {me.is_guest && <button type="button" className="btn quiet" onClick={() => { setActive(null); navigate('/login'); setToken(null) }}>Create account</button>}
           <NotificationInbox/>
           <Link to="/settings" className="music-settings" aria-label="Settings">

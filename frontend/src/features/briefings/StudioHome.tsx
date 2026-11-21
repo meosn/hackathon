@@ -55,8 +55,8 @@ export function StudioHome({ user }: { user: User }) {
         <DailySession selectedId={selectedId} playRequest={playRequest} />
         <section className="music-voices" aria-label="Choose your voice">
           <div className="music-section-heading">
-            <h2>Your voice</h2>
-            <Link to="/settings?section=audio">Change voice</Link>
+            <div><p className="studio-eyebrow">01 / YOUR SOUND</p><h2>A voice that <em>feels like you.</em></h2></div>
+            <Link to="/settings?section=audio">Change voice ↗</Link>
           </div>
           <VoiceEnginePicker value={prefs.data?.voice_engine || 'elevenlabs'} disabled={engine.isPending || !prefs.data}
             onChange={value => engine.mutate(value)} />
@@ -66,8 +66,8 @@ export function StudioHome({ user }: { user: User }) {
         </section>
         <section className="music-library" aria-label="Podcast library">
           <div className="music-section-heading">
-            <h2>Your episodes</h2>
-            <Link to="/briefings">Library</Link>
+            <div><p className="studio-eyebrow">02 / YOUR LISTENING SHELF</p><h2>Good stories. <em>On your time.</em></h2></div>
+            <Link to="/briefings">Open library ↗</Link>
           </div>
           <div className="episode-grid">
             <button className="episode-card" onClick={() => selectEpisode('')}>
@@ -129,7 +129,9 @@ export function StudioHome({ user }: { user: User }) {
           <ErrorNote error={briefs.error} />
         </section>
         <footer className="music-footer">
-          <Link to="/explore">Explore stories</Link>
+          <span className="studio-footer-note">Stay curious. Keep listening.</span>
+          <Link to="/explore">Explore stories ↗</Link>
+          <Link to="/about">About us ↗</Link>
           {(user.is_demo || user.is_admin) && (
             <Link to="/transparency">Transparency</Link>
           )}
