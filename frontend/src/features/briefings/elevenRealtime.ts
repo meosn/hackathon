@@ -136,9 +136,10 @@ export class ElevenRealtime {
         }
         break
       case 'user_transcript': {
+        const detectedSpeech = this.speakingInput
         this.speakingInput = false
         const text = event.user_transcription_event?.user_transcript?.trim() || ''
-        if (!/[\p{L}\p{N}]/u.test(text) || /^(?:\[(?:silence|noise|music|inaudible|unintelligible)\]|<[^>]*>)$/i.test(text)) break
+        if ((!detectedSpeech && !this.replyAllowed) || !/[\p{L}\p{N}]/u.test(text) || /^(?:\[(?:silence|noise|music|inaudible|unintelligible)\]|<[^>]*>)$/i.test(text)) break
         this.allowReply()
         this.callbacks.phase('thinking')
         break
