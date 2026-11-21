@@ -20,7 +20,7 @@ from app.messaging import emit
 from app.news.service import story_detail, verify_segment
 from app.news.verification import verify_claim
 from app.usage import record
-from . import voice
+from . import granny, voice
 from .accounting import account_attempts
 from .contracts import BriefingRequest, Script, ScriptDraft
 from .models import Briefing, BriefingItem, BriefingSegment
@@ -205,8 +205,25 @@ def eligible(story, language, excluded, allow_conflict=False):
     return available
 
 
+def narration_words(language, profile):
+    words = WORDS[language]
+    return (*granny.FRAMING[language], words[3]) if profile == "granny" else words
+
+
+def copied_editorial_text(row, item):
+    """Swap approved character framing when reusing a verified episode."""
+    if row.claim_ids or row.verification_status != "editorial":
+        return row.text
+    target = narration_words(item.language, item.voice_profile_id)
+    for source in (WORDS[row.language], (*granny.FRAMING[row.language], WORDS[row.language][3])):
+        if row.text in source:
+            return target[source.index(row.text)]
+    return row.text  # Preserve unknown text so verification can reject it.
+
+
 def draft_candidates(db, item):
     req = item.request
+    words = narration_words(item.language, item.voice_profile_id)
     prefs = preferences(db, item.user_id)
     ranked = recommendations(
         db,
@@ -219,7 +236,7 @@ def draft_candidates(db, item):
     target_words = round(req["duration_minutes"] * rate)
     item.request = {**item.request, "narration_wpm": rate, "target_words": target_words}
     budget = target_words - sum(
-        len(text.split()) for text in (WORDS[item.language][0], WORDS[item.language][2])
+        len(text.split()) for text in (words[0], words[2])
     )
     per_story = (
         1
@@ -249,9 +266,9 @@ def draft_candidates(db, item):
                 groups.append((story, candidates))
             if len(groups) == story_limit:
                 break
-        budget -= max(0, len(groups) - 1) * len(WORDS[item.language][1].split())
+        budget -= max(0, len(groups) - 1) * len(words[1].split())
         budget -= sum(bool(story["disagreements"]) for story, _ in groups) * len(
-            WORDS[item.language][3].split()
+            words[3].split()
         )
         selected = [[] for _ in groups]
         # Keep the top-three lineup; longer editions add detail inside those stories.
@@ -282,9 +299,9 @@ def draft_candidates(db, item):
         for index, (fact, citations) in enumerate(candidates[:per_story]):
             cost = len(fact["text"].split())
             if len(chosen) == before:
-                cost += len(WORDS[item.language][1].split()) if story_count else 0
+                cost += len(words[1].split()) if story_count else 0
                 cost += (
-                    len(WORDS[item.language][3].split())
+                    len(words[3].split())
                     if story["disagreements"]
                     else 0
                 )
@@ -317,11 +334,16 @@ def segment_values(story, fact, citations, text):
 
 def verified_script(db, rows):
     stories = {}
+    profiles = {}
     for line in rows:
         if not line.claim_ids:
+            if line.briefing_id not in profiles:
+                item = db.get(Briefing, line.briefing_id)
+                profiles[line.briefing_id] = item.voice_profile_id if item else "professional"
+            allowed = narration_words(line.language, profiles[line.briefing_id])
             if (
                 line.verification_status != "editorial"
-                or line.text not in WORDS.get(line.language, ())
+                or line.text not in allowed
                 or line.source_article_ids
                 or line.citations
             ):
@@ -379,7 +401,7 @@ def script_rows(db, item, chosen, result):
     result_by_id = {line.claim_id: line for line in result.lines}
     if len(result_by_id) != len(result.lines) or result_by_id.keys() != chosen.keys():
         raise VerificationError("The generated script changed the approved claim list.")
-    intro, transition, closing, conflict = WORDS[item.language]
+    intro, transition, closing, conflict = narration_words(item.language, item.voice_profile_id)
     rows = [editorial(item, 0, intro)]
     story_ids = []
     for claim_id, (story, fact, citations) in chosen.items():
@@ -616,6 +638,7 @@ def revoice_briefing(db, source, user_id):
     db.flush()
     for row in rows:
         values = segment_view(row)
+        values["text"] = copied_editorial_text(row, item)
         for key in ("id", "start_seconds", "end_seconds"):
             values.pop(key)
         db.add(BriefingSegment(briefing_id=item.id, **values))

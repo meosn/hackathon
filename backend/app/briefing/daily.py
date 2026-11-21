@@ -173,6 +173,7 @@ def ensure_prepared(db, user_id, kind="day", now=None):
             )
         for row in copied_rows:
             values = service.segment_view(row)
+            values["text"] = service.copied_editorial_text(row, item)
             values.pop("id")
             if not same_voice:
                 values.update(start_seconds=0, end_seconds=0)

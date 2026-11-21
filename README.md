@@ -52,6 +52,8 @@ Set `LLM_PROVIDER=api`, `LLM_MODEL` and `LLM_API_KEY` to enable generated conver
 
 `EMBEDDING_PROVIDER=sentence_transformers` and `BACKEND_EXTRAS=[ml,crawl]` enable multilingual neural embeddings and Scrapling. Models are cached in a private Compose volume. Optional `CLUSTER_LLM_VERIFY=1` reviews uncertain semantic event matches. `FACT_EXTRACTION_PROVIDER=hybrid` recovers short exact evidence quotations when cheap extraction finds fewer than three claims.
 
+The ElevenLabs collection includes **Granny Mode**, a fictional elderly British grandmother with a creaky voice, dry political grumbles, tea-and-slippers fussing and “back in my day” nostalgia. Her preview, briefing introductions and live conversation share the character; sourced news claims remain unchanged. Select Granny Mode in Settings → Audio.
+
 For hosted narration, edit these entries in your local `.env`:
 
 ```dotenv

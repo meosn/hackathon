@@ -15,6 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from fastapi import HTTPException
+from .briefing import granny
 from .db import Record
 from .timezones import timezone_name
 
@@ -142,6 +143,7 @@ VOICE_STYLES = [
         "AI character voice from the supplied recording. Uses ElevenLabs.",
     ),
     ("cyberpunk", "Cyberpunk narrator", "Low, measured late-night narration."),
+    ("granny", "Granny Mode", granny.DESCRIPTION),
     (
         "gangsta",
         "CJ · GTA Gangsta",
@@ -158,6 +160,7 @@ def require_voice_access(user, slug):
 
 
 VOICE_DEFAULTS = {
+    "granny": (granny.VOICE_ID, "sage", granny.PERSONA),
     "professional": (
         "onwK4e9ZLuTAKqWW03F9",
         "marin",

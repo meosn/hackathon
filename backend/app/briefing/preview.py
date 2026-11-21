@@ -10,7 +10,7 @@ from typing import Literal
 
 from app.accounts import ACTIVE_VOICES, VoiceProfile, preferences, require_voice_access
 from .contracts import Strict
-from . import voice
+from . import granny, voice
 
 PHRASES = {
     "en": "Hello! I'm your AI news host. This is how your briefing will sound.",
@@ -65,10 +65,11 @@ def render(db, user, slug, request):
         )
     # Short samples must demonstrate clear phrasing even when a clone ignores
     # punctuation. Render complete sentences and join their PCM with real silence.
+    phrase = granny.PREVIEWS[language] if slug == "granny" else PHRASES[language]
     sentences = (
-        re.split(r"(?<=[.!?])\s+", PHRASES[language])
+        re.split(r"(?<=[.!?])\s+", phrase)
         if engine == "elevenlabs"
-        else [PHRASES[language]]
+        else [phrase]
     )
     return voice._render_audio(
         db,
