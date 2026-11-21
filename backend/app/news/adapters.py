@@ -6,7 +6,8 @@ from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Iterator
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 from bs4 import BeautifulSoup
@@ -26,6 +27,10 @@ RSS_SOURCES = {
     "bloomberg": ("Bloomberg", "https://www.bloomberg.com/feeds/markets/news.rss"),
     "dw": ("DW", "https://rss.dw.com/rdf/rss-en-all"),
     "bbc": ("BBC News", "https://feeds.bbci.co.uk/news/business/rss.xml"),
+    "bbc-world": ("BBC News", "https://feeds.bbci.co.uk/news/world/rss.xml"),
+    "bbc-technology": ("BBC News", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
+    "guardian-world": ("The Guardian", "https://www.theguardian.com/world/rss"),
+    "aljazeera": ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
 }
 SOURCE_IDS = (*RSS_SOURCES, "forex-factory")
 
@@ -180,7 +185,7 @@ def source_records(source_id: str) -> Iterator[InputArticle]:
         yield from parse_news_page(download(FOREX_URL))
     else:
         publisher, url = RSS_SOURCES[source_id]
-        yield from parse_feed(download(url), url, publisher=publisher, language="en")
+        yield from prepared_feed(download(url), url, publisher=publisher, language="en")
 
 
 def validate_feed(url: str):
@@ -208,7 +213,96 @@ def download(url: str) -> bytes:
 
 def feed_records(url: str) -> Iterator[InputArticle]:
     validate_feed(url)
-    yield from parse_feed(download(url), url)
+    yield from prepared_feed(download(url), url)
+
+
+PUBLIC_ARTICLE_HOSTS = {
+    "bbc.com",
+    "www.bbc.com",
+    "bbc.co.uk",
+    "www.bbc.co.uk",
+    "www.dw.com",
+    "dw.com",
+    "www.theguardian.com",
+    "www.aljazeera.com",
+}
+
+
+def enrich_public_article(row):
+    """Read only publicly served paragraphs from known publishers; never bypass access controls."""
+    url = str(row.url)
+    try:
+        with httpx.Client(timeout=8, follow_redirects=False) as client:
+            for _ in range(4):
+                target = urlsplit(url)
+                if (
+                    target.scheme != "https"
+                    or target.hostname not in PUBLIC_ARTICLE_HOSTS
+                    or target.username
+                    or target.password
+                    or target.port not in (None, 443)
+                ):
+                    return row
+                with client.stream("GET", url) as response:
+                    if response.is_redirect:
+                        url = urljoin(url, response.headers.get("location", ""))
+                        continue
+                    response.raise_for_status()
+                    if "html" not in response.headers.get("content-type", "").lower():
+                        return row
+                    body = bytearray()
+                    for chunk in response.iter_bytes():
+                        body.extend(chunk)
+                        if len(body) > MAX_BYTES:
+                            return row
+                soup = BeautifulSoup(bytes(body), "html.parser")
+                article = soup.select_one(
+                    ".article-body-commercial-selector, .wysiwyg, article, main"
+                )
+                if article is None:
+                    return row
+                for extra in article.select(
+                    "nav,footer,aside,script,style,form,[data-component='related-content-block']"
+                ):
+                    extra.decompose()
+                paragraphs = []
+                for paragraph in article.find_all("p"):
+                    text = paragraph.get_text(" ", strip=True)
+                    if len(text) < 45 or re.search(
+                        r"^(sign up|subscribe|continue reading|read more|accept cookies|download the app)",
+                        text,
+                        re.I,
+                    ):
+                        continue
+                    if text not in paragraphs:
+                        paragraphs.append(text)
+                content = "\n\n".join(paragraphs)[:24000]
+                return (
+                    row.model_copy(update={"content": content})
+                    if len(content) > len(clean(row.content)) + 100
+                    else row
+                )
+    except (httpx.HTTPError, ValueError):
+        pass
+    return row
+
+
+def prepared_feed(data, url, **kwargs):
+    rows = list(parse_feed(data, url, **kwargs))
+    now = datetime.now(UTC)
+    hours = max(1, int(os.getenv("RSS_MAX_AGE_HOURS", "48")))
+    if os.getenv("ACTIVE_CORPUS") == "live" or os.getenv("RSS_MAX_AGE_HOURS"):
+        rows = [
+            r for r in rows if now - timedelta(hours=hours) <= r.published_at <= now
+        ]
+    rows.sort(key=lambda row: row.published_at, reverse=True)
+    limit = max(1, min(100, int(os.getenv("RSS_MAX_ARTICLES", "20"))))
+    rows = rows[:limit]
+    if os.getenv("NEWS_ENRICH_FEEDS") == "1":
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            yield from pool.map(enrich_public_article, rows)
+    else:
+        yield from rows
 
 
 def parse_feed(

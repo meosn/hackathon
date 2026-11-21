@@ -53,6 +53,31 @@ ACTIONS = {
 }
 DESCRIPTORS = {k for k in CONCEPTS if k not in ACTIONS}
 TOPICS = {
+    "politics": {
+        "politics",
+        "election",
+        "elections",
+        "president",
+        "parliament",
+        "government",
+        "minister",
+        "senate",
+        "congress",
+        "diplomacy",
+        "coalition",
+        "trump",
+    },
+    "world": {
+        "war",
+        "ceasefire",
+        "peace",
+        "conflict",
+        "iran",
+        "ukraine",
+        "gaza",
+        "missiles",
+    },
+    "health": {"health", "medical", "cancer", "vaccine", "disease", "hospital"},
     "artificial_intelligence": {
         "model",
         "benchmark",

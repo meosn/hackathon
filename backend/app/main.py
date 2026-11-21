@@ -170,7 +170,11 @@ class RequestLimits:
                 return
             chunk = message.get("body", b"")
             size += len(chunk)
-            upload_limit = 26 * 1024 * 1024 if scope["path"].endswith("/users/me/custom-voice") else settings.request_limit
+            upload_limit = (
+                26 * 1024 * 1024
+                if scope["path"].endswith("/users/me/custom-voice")
+                else settings.request_limit
+            )
             if size > upload_limit:
                 return await reject(
                     "request_too_large", "Request exceeds upload limit.", 413
@@ -213,7 +217,11 @@ def health():
         "status": "ok",
         "service": "sourcera",
         "demo_mode": settings.demo_mode,
-        "news_reference_time": os.getenv("NEWS_REFERENCE_TIME"),
+        "news_reference_time": (
+            None
+            if os.getenv("ACTIVE_CORPUS") == "live"
+            else os.getenv("NEWS_REFERENCE_TIME")
+        ),
         "corpus": os.getenv("ACTIVE_CORPUS", "demo" if settings.demo_mode else "live"),
         "conversation_provider": conversation_provider(),
     }
@@ -227,7 +235,7 @@ def ready():
             if (
                 settings.demo_mode
                 and settings.job_mode == "celery"
-                and os.getenv("ACTIVE_CORPUS") != "licensed"
+                and os.getenv("ACTIVE_CORPUS") not in {"licensed", "live"}
             ):
                 from .news.models import IngestionJob
                 from sqlalchemy import select

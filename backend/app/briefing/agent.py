@@ -128,7 +128,7 @@ def story_facts(db, story_ids, language, excluded, max_facts):
         )
         facts = [
             {
-                    "story_id": story_id,
+                "story_id": story_id,
                 "title": story["title"][:400],
                 "published_at": story["event_at"],
                 "text": fact["text"],
@@ -210,18 +210,45 @@ def episode_context(db, briefing, data, excluded):
 def context_for(db, user_id: str, data: AgentContextRequest) -> str:
     if data.conversation_id:
         from .models import Conversation, ConversationMessage
-        conv = db.scalar(select(Conversation).where(Conversation.id == data.conversation_id, Conversation.user_id == user_id))
+
+        conv = db.scalar(
+            select(Conversation).where(
+                Conversation.id == data.conversation_id, Conversation.user_id == user_id
+            )
+        )
         if not conv:
             raise HTTPException(404, "Conversation not found")
-        initial = set(db.scalars(select(BriefingItem.story_id).where(BriefingItem.briefing_id == conv.briefing_id))) if conv.briefing_id else set()
+        initial = (
+            set(
+                db.scalars(
+                    select(BriefingItem.story_id).where(
+                        BriefingItem.briefing_id == conv.briefing_id
+                    )
+                )
+            )
+            if conv.briefing_id
+            else set()
+        )
         allowed = initial | ({conv.story_id} if conv.story_id else set())
-        for action in db.scalars(select(ConversationMessage.action).where(ConversationMessage.conversation_id == conv.id, ConversationMessage.role == "assistant")):
+        for action in db.scalars(
+            select(ConversationMessage.action).where(
+                ConversationMessage.conversation_id == conv.id,
+                ConversationMessage.role == "assistant",
+            )
+        ):
             allowed.update((action or {}).get("story_ids", []))
         current = data.story_id or conv.story_id
         if current and current not in allowed:
             raise HTTPException(422, "Story is outside this conversation")
         # Additional stories belong to the conversation, beyond its original episode.
-        data = data.model_copy(update={"briefing_id": conv.briefing_id if not current or current in initial else None, "story_id": current})
+        data = data.model_copy(
+            update={
+                "briefing_id": (
+                    conv.briefing_id if not current or current in initial else None
+                ),
+                "story_id": current,
+            }
+        )
     prefs = preferences(db, user_id)
     excluded = set(prefs["excluded_sources"])
     language = prefs["language"]
@@ -246,8 +273,15 @@ def context_for(db, user_id: str, data: AgentContextRequest) -> str:
             rows = story_facts(db, [story_id], language, excluded, max_facts=8)
         else:
             now = news_now()
+            from app.news.corpus import restrict_stories, live, live_publication_window
+
             query = (
-                query.where(Story.event_at.between(now - timedelta(days=1), now))
+                restrict_stories(query)
+                .where(
+                    live_publication_window(now - timedelta(days=1), now)
+                    if live()
+                    else Story.event_at.between(now - timedelta(days=1), now)
+                )
                 .order_by(Story.event_at.desc(), Story.id)
                 .limit(12)
             )

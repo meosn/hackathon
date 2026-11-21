@@ -47,6 +47,8 @@ def article_claims(db, article):
                 },
             ],
             ExtractedQuotes,
+            model=os.getenv("NEWS_LLM_MODEL") or None,
+            timeout=20,
         )
     except (httpx.HTTPError, ValueError, KeyError):
         return claims

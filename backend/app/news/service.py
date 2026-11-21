@@ -386,7 +386,7 @@ def _analyze(db, article):
             and (
                 matched
                 or (
-                    score >= float(os.getenv("CLUSTER_REVIEW_SIMILARITY", "0.78"))
+                    score >= float(os.getenv("CLUSTER_REVIEW_SIMILARITY", "0.62"))
                     and fingerprint[0] & analysis.anchors(other.title, other.content)[0]
                 )
             )
@@ -429,6 +429,8 @@ def _analyze(db, article):
                         },
                     ],
                     Entailment,
+                    model=os.getenv("NEWS_LLM_MODEL") or None,
+                    timeout=20,
                 )
                 matched = decision.supported
             except (httpx.HTTPError, ValueError, KeyError):
@@ -525,7 +527,7 @@ def import_forex_snapshot(db, html: bytes, captured_at: datetime):
 
 
 def stats(db):
-    licensed = os.getenv("ACTIVE_CORPUS") == "licensed"
+    licensed = os.getenv("ACTIVE_CORPUS") in {"licensed", "live"}
 
     def count(table, *conditions):
         if licensed:
@@ -562,12 +564,17 @@ def summaries(db, stories, excluded=()):
 
     corroboration = coverage(db, ids, excluded)
     grouped, topics = defaultdict(list), defaultdict(list)
-    for s_id, src, lang in db.execute(
-        select(StoryArticle.story_id, Article.source_id, Article.language)
+    for s_id, src, lang, published in db.execute(
+        select(
+            StoryArticle.story_id,
+            Article.source_id,
+            Article.language,
+            Article.published_at,
+        )
         .join(Article, Article.id == StoryArticle.article_id)
         .where(StoryArticle.story_id.in_(ids))
     ):
-        grouped[s_id].append((src, lang))
+        grouped[s_id].append((src, lang, published))
     for s_id, topic in db.execute(
         select(StoryTopic.story_id, StoryTopic.name)
         .where(StoryTopic.story_id.in_(ids))
@@ -577,7 +584,7 @@ def summaries(db, stories, excluded=()):
     result = []
     for s in stories:
         rows = grouped[s.id]
-        sources = sorted({src for src, _ in rows})
+        sources = sorted({src for src, _, _ in rows})
         result.append(
             dict(
                 **corroboration[s.id],
@@ -588,11 +595,15 @@ def summaries(db, stories, excluded=()):
                 topics=topics[s.id],
                 importance=s.importance,
                 urgency=s.urgency,
-                event_at=iso(s.event_at),
+                event_at=(
+                    iso(max(utc(published) for _, _, published in rows))
+                    if rows and os.getenv("ACTIVE_CORPUS") == "live"
+                    else iso(s.event_at)
+                ),
                 updated_at=iso(s.updated_at),
                 source_count=len(sources),
                 article_count=len(rows),
-                languages=sorted({lang for _, lang in rows}),
+                languages=sorted({lang for _, lang, _ in rows}),
                 source_ids=sources,
                 is_synthetic=s.is_synthetic,
             )

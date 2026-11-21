@@ -35,7 +35,10 @@ def bootstrap():
             topology(channel)
     with SessionLocal.begin() as db:
         seed_voices(db)
-        if settings.demo_mode and os.getenv("ACTIVE_CORPUS") != "licensed":
+        if settings.demo_mode and os.getenv("ACTIVE_CORPUS") not in {
+            "licensed",
+            "live",
+        }:
             from .news.service import create_job, import_fixture
             from .news.models import IngestionJob
 

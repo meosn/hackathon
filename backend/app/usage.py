@@ -106,7 +106,7 @@ def costs(db):
         .join(CostEvent)
         .group_by(ModelUsage.scope, ModelUsage.stage)
     )
-    if os.getenv("ACTIVE_CORPUS") == "licensed":
+    if os.getenv("ACTIVE_CORPUS") in {"licensed", "live"}:
         from .news.models import Article, IngestionJob, Story
 
         references = (

@@ -109,8 +109,18 @@ class TopicInfo(BaseModel):
 @router.get("/sources", response_model=list[SourceInfo])
 def sources(db: DB):
     query = select(Source).order_by(Source.name)
-    if os.getenv("ACTIVE_CORPUS") == "licensed":
+    if os.getenv("ACTIVE_CORPUS") in {"licensed", "live"}:
         query = query.where(Source.is_synthetic.is_(False))
+    if os.getenv("ACTIVE_CORPUS") == "live":
+        from .corpus import LIVE_KINDS
+
+        query = query.where(
+            Source.id.in_(
+                select(Article.source_id)
+                .join(IngestionJob, IngestionJob.id == Article.job_id)
+                .where(IngestionJob.kind.in_(LIVE_KINDS))
+            )
+        )
     return [
         dict(id=s.id, name=s.name, is_synthetic=s.is_synthetic)
         for s in db.scalars(query)
@@ -126,8 +136,9 @@ def topics(db: DB):
         .group_by(StoryTopic.name)
         .order_by(StoryTopic.name)
     )
-    if os.getenv("ACTIVE_CORPUS") == "licensed":
-        query = query.where(Story.is_synthetic.is_(False))
+    from .corpus import restrict_stories
+
+    query = restrict_stories(query)
     rows = db.execute(query)
     return [dict(name=name, count=count) for name, count in rows]
 
@@ -146,9 +157,9 @@ def stories(
     cursor: str | None = Query(None, max_length=400),
     sort: Literal["recent", "importance", "oldest"] = "recent",
 ):
-    stmt = select(Story).where(Story.archived.is_(False))
-    if os.getenv("ACTIVE_CORPUS") == "licensed":
-        stmt = stmt.where(Story.is_synthetic.is_(False))
+    from .corpus import restrict_stories
+
+    stmt = restrict_stories(select(Story).where(Story.archived.is_(False)))
     if date_from:
         stmt = stmt.where(Story.event_at >= date_from)
     if date_to:

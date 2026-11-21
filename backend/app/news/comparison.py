@@ -62,6 +62,8 @@ def compare_claims(db, story, facts, source_ids):
                 },
             ],
             Conflicts,
+            model=os.getenv("NEWS_LLM_MODEL") or None,
+            timeout=20,
         )
     except (httpx.HTTPError, ValueError, KeyError):
         return []

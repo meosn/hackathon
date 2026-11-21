@@ -26,6 +26,8 @@ DAYS = {"day": 1, "week": 7, "month": 30}
 
 
 def news_now():
+    if os.getenv("ACTIVE_CORPUS") == "live":
+        return datetime.now(UTC)
     reference = os.getenv("NEWS_REFERENCE_TIME")
     return parse_date(reference) if reference else datetime.now(UTC)
 
@@ -114,6 +116,20 @@ def ranked(
             pair[1]["id"],
         )
     )
+    # Prefer at least one independently reported event when the filtered pool
+    # contains one; single-publisher stories retain their explicit warning.
+    compared = (
+        lambda pair: pair[1].get("publisher_count", 0) >= 2
+        and pair[1].get("coverage_status") != "conflicting"
+    )
+    corroborated = next((pair for pair in results if compared(pair)), None)
+    if (
+        corroborated
+        and results.index(corroborated) > 2
+        and not any(compared(pair) for pair in results[:3])
+    ):
+        results.remove(corroborated)
+        results.insert(0, corroborated)
     # Reserve one slot for a learned interest without replacing the whole mix.
     learned = lambda pair: any(
         affinities.get(t.casefold().replace(" ", "_"), 0) > 0.4
@@ -146,14 +162,16 @@ def recommendations(
     db: Session, user_id: str, *, period="week", topic=None, selected=None
 ):
     now = news_now()
-    query = select(Story).where(Story.archived.is_(False))
-    if os.getenv("ACTIVE_CORPUS") == "licensed":
-        query = query.where(Story.is_synthetic.is_(False))
+    from app.news.corpus import restrict_stories, live, live_publication_window
+
+    query = restrict_stories(select(Story).where(Story.archived.is_(False)))
     if selected:
         query = query.where(Story.id.in_(selected))
     else:
         query = query.where(
-            Story.event_at.between(now - timedelta(days=DAYS[period]), now)
+            live_publication_window(now - timedelta(days=DAYS[period]), now)
+            if live()
+            else Story.event_at.between(now - timedelta(days=DAYS[period]), now)
         )
     if topic:
         topic = topic.casefold().replace(" ", "_")
