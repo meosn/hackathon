@@ -1,6 +1,9 @@
 # Sourcera
 ### The Liquid Briefing · MAIN AI Hackathon 2026
 
+> **[Try the live demo →](https://sourcera.147.189.171.211.sslip.io)**
+> Open the website to test Sourcera in your browser.
+
 Personalized audio news with a prepared daily briefing and an interruptible voice conversation.
 
 Press **Play** to hear today's saved edition. Ask a question while listening to pause the recording and receive a spoken, source-grounded answer. Say **continue** to return to the briefing. Choose a different narrator or open the prepared weekly edition from the episode library. Detailed preferences and model selection live in **Settings**.
