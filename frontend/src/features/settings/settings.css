@@ -242,6 +242,10 @@
   border-color: #b9ce8645;
   color: #deedba;
 }
+.interest-option { position: relative; display: inline-flex; align-items: center; }
+.interest-option:has(.delete-interest) > button:first-child { padding-right: 33px; }
+.interest-options .delete-interest { position: absolute; right: 5px; padding: 4px; min-height: 24px; width: 24px; justify-content: center; border: 0; color: #929c87; border-radius: 50%; }
+.interest-options .delete-interest:hover { color: #efb6a7; background: #efb6a710; }
 .preference-text-button {
   display: inline-flex;
   align-items: center;

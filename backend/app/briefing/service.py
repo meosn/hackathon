@@ -187,6 +187,18 @@ def eligible(story, language, excluded, allow_conflict=False):
         citations = story_citations(story, fact, excluded)
         if citations and len(fact["text"]) <= 1500:
             available.append((fact, citations))
+    from app.news.coverage import publisher_family
+
+    originals = {a["id"] for a in story["articles"] if not a.get("near_duplicate_of")}
+    available.sort(
+        key=lambda row: -len(
+            {
+                publisher_family(c["source"])
+                for c in row[1]
+                if c["article_id"] in originals
+            }
+        )
+    )
     return available
 
 
@@ -747,18 +759,34 @@ def briefing_view(db, item, detail=False):
         "period": item.request.get("prepared_kind", item.request["period"]),
     }
     if detail:
-        items = db.scalars(
-            select(BriefingItem)
-            .where(BriefingItem.briefing_id == item.id)
-            .order_by(BriefingItem.position)
+        items = list(
+            db.scalars(
+                select(BriefingItem)
+                .where(BriefingItem.briefing_id == item.id)
+                .order_by(BriefingItem.position)
+            )
+        )
+        from app.news.coverage import coverage
+
+        rows = segments_for(db, item.id)
+        coverage_by_id = coverage(
+            db,
+            [i.story_id for i in items],
+            preferences(db, item.user_id)["excluded_sources"],
+            claim_ids={claim_id for row in rows for claim_id in row.claim_ids},
         )
         audio = db.get(voice.GeneratedAudio, item.audio_id) if item.audio_id else None
         out.update(
             audio_provider=audio.provider if audio else None,
             items=[
-                {"story_id": i.story_id, "title": i.title, "position": i.position}
+                {
+                    "story_id": i.story_id,
+                    "title": i.title,
+                    "position": i.position,
+                    **coverage_by_id[i.story_id],
+                }
                 for i in items
             ],
-            segments=[segment_view(s) for s in segments_for(db, item.id)],
+            segments=[segment_view(s) for s in rows],
         )
     return out

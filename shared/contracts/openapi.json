@@ -1548,6 +1548,48 @@
             }
           }
         }
+      },
+      "get": {
+        "summary": "Story Feedback",
+        "operationId": "story_feedback_api_v1_feedback__story_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "story_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Story Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackInput"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/conversations": {
@@ -3651,6 +3693,21 @@
       },
       "Detail": {
         "properties": {
+          "publisher_count": {
+            "type": "integer",
+            "title": "Publisher Count",
+            "default": 0
+          },
+          "corroborated_claim_count": {
+            "type": "integer",
+            "title": "Corroborated Claim Count",
+            "default": 0
+          },
+          "coverage_status": {
+            "type": "string",
+            "title": "Coverage Status",
+            "default": "single_source"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -3962,6 +4019,21 @@
       },
       "Item": {
         "properties": {
+          "publisher_count": {
+            "type": "integer",
+            "title": "Publisher Count",
+            "default": 0
+          },
+          "corroborated_claim_count": {
+            "type": "integer",
+            "title": "Corroborated Claim Count",
+            "default": 0
+          },
+          "coverage_status": {
+            "type": "string",
+            "title": "Coverage Status",
+            "default": "single_source"
+          },
           "story_id": {
             "type": "string",
             "title": "Story Id"
@@ -4381,6 +4453,21 @@
             ],
             "title": "Interests"
           },
+          "custom_topics": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Topics"
+          },
           "preferred_sources": {
             "anyOf": [
               {
@@ -4418,6 +4505,13 @@
       },
       "PreferenceView": {
         "properties": {
+          "custom_topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Custom Topics"
+          },
           "language": {
             "type": "string",
             "title": "Language"
@@ -5197,6 +5291,21 @@
       },
       "StoryInfo": {
         "properties": {
+          "publisher_count": {
+            "type": "integer",
+            "title": "Publisher Count",
+            "default": 0
+          },
+          "corroborated_claim_count": {
+            "type": "integer",
+            "title": "Corroborated Claim Count",
+            "default": 0
+          },
+          "coverage_status": {
+            "type": "string",
+            "title": "Coverage Status",
+            "default": "single_source"
+          },
           "id": {
             "type": "string",
             "title": "Id"

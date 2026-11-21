@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -18,6 +19,8 @@ WEIGHTS = {
     "source": 0.08,
     "unheard": 0.07,
     "feedback": 0.07,
+    "affinity": 0.3,
+    "corroboration": 0.12,
 }
 DAYS = {"day": 1, "week": 7, "month": 30}
 
@@ -43,10 +46,12 @@ def ranked(
     selected=None,
     heard=(),
     feedback=None,
+    affinities=None,
     now=None,
 ):
     now = now or news_now()
     feedback = feedback or {}
+    affinities = affinities or {}
     weights = WEIGHTS | json.loads(os.getenv("RANK_WEIGHTS") or "{}")
     interests = {
         word.casefold().replace(" ", "_") for word in prefs.get("interests", [])
@@ -71,13 +76,34 @@ def ranked(
         elif age < 0 or event_at < now - timedelta(days=DAYS[period]):
             continue
         values = {
-            "interest": float(bool(topics & interests)),
+            "interest": float(
+                bool(topics & interests)
+                or any(
+                    re.search(
+                        r"(?<!\w)" + re.escape(term.replace("_", " ")) + r"(?!\w)",
+                        (
+                            story.get("title", "") + " " + story.get("summary", "")
+                        ).casefold(),
+                    )
+                    for term in interests
+                )
+            ),
             "importance": story["importance"],
             "urgency": story["urgency"],
             "recency": 1 / (1 + max(0, age) / 3),
             "source": float(bool(allowed & preferred)),
             "unheard": float(story["id"] not in heard),
             "feedback": feedback.get(story["id"], 0),
+            "affinity": max(-1, min(1, sum(affinities.get(t, 0) for t in topics))),
+            "corroboration": (
+                (
+                    1
+                    if story.get("corroborated_claim_count", 0)
+                    else 0.5 if story.get("publisher_count", 0) >= 2 else 0
+                )
+                if story.get("coverage_status") != "conflicting"
+                else 0
+            ),
         }
         score = sum(weights[k] * v for k, v in values.items())
         results.append((score, story))
@@ -88,6 +114,19 @@ def ranked(
             pair[1]["id"],
         )
     )
+    # Reserve one slot for a learned interest without replacing the whole mix.
+    learned = lambda pair: any(
+        affinities.get(t.casefold().replace(" ", "_"), 0) > 0.4
+        for t in pair[1]["topics"] + [pair[1]["category"]]
+    )
+    favorite = next((pair for pair in results if learned(pair)), None)
+    if (
+        favorite
+        and results.index(favorite) > 2
+        and not any(learned(pair) for pair in results[:3])
+    ):
+        results.remove(favorite)
+        results.insert(1, favorite)
     # Keep one globally critical story in the first three without overriding explicit filters.
     critical = next(
         (
@@ -140,9 +179,13 @@ def recommendations(
             )
         ).all()
     )
+    from .learning import topic_affinities
+
+    prefs = preferences(db, user_id)
     return ranked(
-        summaries(db, stories),
-        preferences(db, user_id),
+        summaries(db, stories, excluded=prefs["excluded_sources"]),
+        prefs,
+        affinities=topic_affinities(db, user_id),
         heard=heard,
         feedback=feedback,
         period=period,

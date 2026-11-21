@@ -28,6 +28,7 @@ import {
   VerificationIndicator,
 } from '../../components/UI'
 import { SignalArt } from '../../components/SignalArt'
+import { coverageLabel } from './StoryReactions'
 export const topicVariant = (s: Story) =>
   s.topics.some((t) => ['finance', 'economy'].includes(t))
     ? 0
@@ -48,6 +49,7 @@ export function StoryCard({ story: s }: { story: Story }) {
           {label(s.category || s.topics[0] || 'News')}
         </span>
         <h3>{s.title}</h3>
+        <small className="coverage-label">{coverageLabel(s.coverage_status, s.publisher_count)}</small>
         <div className="metadata">
           <Layers3 size={14} />
           {s.source_count} {s.source_count === 1 ? 'source' : 'sources'}
@@ -226,6 +228,7 @@ export function StoryView() {
         <h2>Source comparison</h2>
         <Badge>{s.disagreements.length} disagreements</Badge>
       </div>
+      <p className="body-copy">{coverageLabel(s.coverage_status, s.publisher_count)}. Multiple reports do not mean every claim is confirmed; translations and detected reprints count as one publisher.</p>
       {s.disagreements.map((d) => (
         <div key={d.id} className="notice amber">
           {d.description}

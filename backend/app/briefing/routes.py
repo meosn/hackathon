@@ -26,7 +26,17 @@ from app.config import settings
 from app.db import SessionLocal, get_db
 from app.messaging import emit
 from app.news.service import story_detail
-from . import agent, characters, conversation_speech, custom_voice, realtime, research, service, voice
+from app.news.models import Story
+from . import (
+    agent,
+    characters,
+    conversation_speech,
+    custom_voice,
+    realtime,
+    research,
+    service,
+    voice,
+)
 from .accounting import account_attempts
 from . import preview
 from . import contracts
@@ -150,7 +160,10 @@ def prepare_editions(db=Depends(get_db), user=Depends(current_user)):
     weekly = ensure_weekly(db, user.id)
     db.commit()
     recover()
-    return {"daily": service.briefing_view(db, daily), "weekly": service.briefing_view(db, weekly)}
+    return {
+        "daily": service.briefing_view(db, daily),
+        "weekly": service.briefing_view(db, weekly),
+    }
 
 
 @router.post("/briefings/daily", response_model=contracts.BriefingDetail)
@@ -205,25 +218,50 @@ def agent_session(
     }
 
 
-@router.post("/voices/{voice_id}/preview", response_class=Response,
-             responses={200: {"content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}}}})
-def voice_preview(voice_id: str, data: preview.PreviewRequest = preview.PreviewRequest(),
-                  db=Depends(get_db), user=Depends(current_user)):
+@router.post(
+    "/voices/{voice_id}/preview",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}}
+        }
+    },
+)
+def voice_preview(
+    voice_id: str,
+    data: preview.PreviewRequest = preview.PreviewRequest(),
+    db=Depends(get_db),
+    user=Depends(current_user),
+):
     with account_attempts(db):
         try:
             audio = preview.render(db, user, voice_id, data)
             content = voice.read_object(audio.object_key)
             db.commit()
         except httpx.HTTPError as exc:
-            raise HTTPException(502, "The voice sample is unavailable. Please retry.") from exc
-    return Response(content, media_type="audio/wav", headers={"Cache-Control": "private, no-store"})
+            raise HTTPException(
+                502, "The voice sample is unavailable. Please retry."
+            ) from exc
+    return Response(
+        content, media_type="audio/wav", headers={"Cache-Control": "private, no-store"}
+    )
 
 
 @router.get("/voice-engines", response_model=list[contracts.VoiceEngine])
 def voice_engines(user=Depends(current_user)):
     return [
-        {"id": "openai", "name": "OpenAI Realtime", "available": realtime.enabled(), "description": "Direct speech-to-speech with OpenAI voices."},
-        {"id": "elevenlabs", "name": "ElevenLabs Realtime", "available": agent.available(), "description": "Live voice chat over WebSocket with character and custom voices."},
+        {
+            "id": "openai",
+            "name": "OpenAI Realtime",
+            "available": realtime.enabled(),
+            "description": "Direct speech-to-speech with OpenAI voices.",
+        },
+        {
+            "id": "elevenlabs",
+            "name": "ElevenLabs Realtime",
+            "available": agent.available(),
+            "description": "Live voice chat over WebSocket with character and custom voices.",
+        },
     ]
 
 
@@ -263,7 +301,9 @@ def lock_custom_voice_owner(db, user):
 
 
 def provision_custom_voice(owner, api_key, sample):
-    owner.custom_voice_id = custom_voice.clone_voice(api_key, sample, owner.custom_voice_name)
+    owner.custom_voice_id = custom_voice.clone_voice(
+        api_key, sample, owner.custom_voice_name
+    )
     owner.custom_voice_active = True
     owner.custom_voice_sample = None
 
@@ -275,7 +315,9 @@ def upload_custom_voice(
     file: UploadFile = File(...),
     consent: bool = Form(...),
     name: str = Form("Custom", min_length=1, max_length=80),
-    persona: str = Form("Natural, conversational delivery.", min_length=1, max_length=600),
+    persona: str = Form(
+        "Natural, conversational delivery.", min_length=1, max_length=600
+    ),
     db=Depends(get_db),
     user=Depends(current_user),
 ):
@@ -283,13 +325,18 @@ def upload_custom_voice(
         raise HTTPException(422, "Confirm permission to clone the recorded voice.")
     sample = custom_voice.checked_sample(file)
     owner = lock_custom_voice_owner(db, user)
-    owner.custom_voice_name, owner.custom_voice_persona = name.strip() or "Custom", persona.strip() or "Natural, conversational delivery."
+    owner.custom_voice_name, owner.custom_voice_persona = (
+        name.strip() or "Custom",
+        persona.strip() or "Natural, conversational delivery.",
+    )
     api_key = custom_voice_key(owner)
     owner.custom_voice_sample = sample
     db.commit()
     owner = lock_custom_voice_owner(db, owner)
     if owner.custom_voice_sample != sample:
-        raise HTTPException(409, "The recording changed while it was being processed. Please retry.")
+        raise HTTPException(
+            409, "The recording changed while it was being processed. Please retry."
+        )
     if api_key:
         provision_custom_voice(owner, api_key, sample)
         set_preferences(db, owner.id, {"voice_engine": "elevenlabs"})
@@ -327,7 +374,9 @@ def select_custom_voice(
     if data.name is not None:
         user.custom_voice_name = data.name.strip() or "Custom"
     if data.persona is not None:
-        user.custom_voice_persona = data.persona.strip() or "Natural, conversational delivery."
+        user.custom_voice_persona = (
+            data.persona.strip() or "Natural, conversational delivery."
+        )
     if data.active:
         set_preferences(db, user.id, {"voice_engine": "elevenlabs"})
     db.commit()
@@ -412,6 +461,18 @@ def feedback(
 ):
     update_story_signal(db, UserFeedback, user.id, story_id, data.score)
     return Response(status_code=204)
+
+
+@router.get("/feedback/{story_id}", response_model=FeedbackInput)
+def story_feedback(story_id: str, db=Depends(get_db), user=Depends(current_user)):
+    if not db.get(Story, story_id):
+        raise HTTPException(404, "Story not found")
+    score = db.scalar(
+        select(UserFeedback.score).where(
+            UserFeedback.user_id == user.id, UserFeedback.story_id == story_id
+        )
+    )
+    return {"score": score or 0}
 
 
 @router.websocket("/ws/briefings/{briefing_id}")
@@ -621,8 +682,14 @@ def realtime_session(
     character = characters.selected(db, user)
     speech_stream = data.speech_stream and conversation_speech.enabled()
     sdp = realtime.negotiate(
-        data.sdp, conv.language, titles, user.id, context, speech_stream,
-        character["openai_voice"], character["persona"],
+        data.sdp,
+        conv.language,
+        titles,
+        user.id,
+        context,
+        speech_stream,
+        character["openai_voice"],
+        character["persona"],
     )
     return Response(
         sdp,
@@ -634,7 +701,9 @@ def realtime_session(
     )
 
 
-@router.post("/conversations/{conversation_id}/research", response_model=contracts.ResearchResult)
+@router.post(
+    "/conversations/{conversation_id}/research", response_model=contracts.ResearchResult
+)
 def research_topic(
     conversation_id: str,
     data: contracts.ResearchRequest,

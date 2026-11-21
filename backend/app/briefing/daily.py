@@ -9,6 +9,7 @@ from app.db import utcnow
 from app.timezones import resolve_timezone
 from .contracts import BriefingRequest
 from .models import Briefing, BriefingItem, BriefingSegment
+from .models import ListeningHistory, UserFeedback
 from .service import create_briefing, lock_briefing
 
 CONTENT_KEYS = (
@@ -27,7 +28,7 @@ def content_key(prefs, kind):
         kind=kind,
         period=os.getenv("DAILY_NEWS_PERIOD", "day") if kind == "day" else "week",
         edition=os.getenv("NEWS_EDITION_VERSION", ""),
-        recipe="paced-v3",
+        recipe="personalized-v4",
     )
     return hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()[
         :16
@@ -78,7 +79,19 @@ def ensure_prepared(db, user_id, kind="day", now=None):
         .order_by(Briefing.created_at.desc())
         .limit(1)
     )
-    if not source and not prefs["excluded_sources"] and not prefs["preferred_sources"]:
+    personalized = db.scalar(
+        select(ListeningHistory.id).where(ListeningHistory.user_id == user_id).limit(1)
+    ) or db.scalar(
+        select(UserFeedback.id)
+        .where(UserFeedback.user_id == user_id, UserFeedback.score != 0)
+        .limit(1)
+    )
+    if (
+        not source
+        and not personalized
+        and not prefs["excluded_sources"]
+        and not prefs["preferred_sources"]
+    ):
         for profile in ("tech", "finance"):
             template = db.scalar(
                 select(User).where(User.email == f"daily-{profile}@system.invalid")

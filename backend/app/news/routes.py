@@ -71,6 +71,9 @@ class DisagreementInfo(BaseModel):
 
 
 class StoryInfo(BaseModel):
+    publisher_count: int = 0
+    corroborated_claim_count: int = 0
+    coverage_status: str = "single_source"
     id: str
     title: str
     summary: str

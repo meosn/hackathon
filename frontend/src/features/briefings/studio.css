@@ -724,6 +724,14 @@ html {
 .music-host.locked .speaker-avatar { filter: grayscale(.6); opacity: .65; }
 .music-host.locked .voice-preview-indicator { background: #10170c70; color: #e7eecb; }
 .premium-message { display: grid; justify-items: center; gap: 12px; padding: 18px 8px; text-align: center; }
+.current-story-learning { display: flex; gap: 18px; align-items: center; justify-content: space-between; width: min(100%, 620px); margin: 24px auto 0; padding-top: 18px; border-top: 1px solid #ffffff13; text-align: left; }
+.current-story-learning > div:first-child { min-width: 0; display: grid; gap: 6px; }
+.current-story-learning span { color: #c3ccb6; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.current-story-learning a { color: #8b977d; font-size: 11px; }
+.story-reactions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.story-reactions button { display: grid; place-items: center; width: 32px; height: 32px; background: transparent; border: 1px solid #ffffff18; border-radius: 50%; color: #929e84; }
+.story-reactions button[aria-pressed='true'] { color: #deedba; border-color: #b9ce8677; background: #dcebaf10; }
+.coverage-label { display: block; color: #8b977d; font-size: 11px; margin: 8px 0; }
 
 .research-sources {
   max-width: 620px;

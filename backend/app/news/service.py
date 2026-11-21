@@ -515,7 +515,9 @@ def import_forex_snapshot(db, html: bytes, captured_at: datetime):
     from app.news.forex_factory import parse_news_page
 
     if captured_at.utcoffset() is None:
-        raise ValueError("Capture time requires the time zone displayed by Forex Factory")
+        raise ValueError(
+            "Capture time requires the time zone displayed by Forex Factory"
+        )
     rows = parse_news_page(html, now=captured_at, page_timezone=captured_at.tzinfo)
     job = create_job(db, kind="source", locator="forex-factory")
     _normalize(db, job, rows)
@@ -552,10 +554,13 @@ def stats(db):
     )
 
 
-def summaries(db, stories):
+def summaries(db, stories, excluded=()):
     if not stories:
         return []
     ids = [s.id for s in stories]
+    from .coverage import coverage
+
+    corroboration = coverage(db, ids, excluded)
     grouped, topics = defaultdict(list), defaultdict(list)
     for s_id, src, lang in db.execute(
         select(StoryArticle.story_id, Article.source_id, Article.language)
@@ -575,6 +580,7 @@ def summaries(db, stories):
         sources = sorted({src for src, _ in rows})
         result.append(
             dict(
+                **corroboration[s.id],
                 id=s.id,
                 title=s.title,
                 summary=s.summary,

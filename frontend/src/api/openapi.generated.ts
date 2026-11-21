@@ -584,7 +584,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Story Feedback */
+        get: operations["story_feedback_api_v1_feedback__story_id__get"];
         /** Feedback */
         put: operations["feedback_api_v1_feedback__story_id__put"];
         post?: never;
@@ -1294,6 +1295,21 @@ export interface components {
         };
         /** Detail */
         Detail: {
+            /**
+             * Publisher Count
+             * @default 0
+             */
+            publisher_count: number;
+            /**
+             * Corroborated Claim Count
+             * @default 0
+             */
+            corroborated_claim_count: number;
+            /**
+             * Coverage Status
+             * @default single_source
+             */
+            coverage_status: string;
             /** Id */
             id: string;
             /** Title */
@@ -1412,6 +1428,21 @@ export interface components {
         };
         /** Item */
         Item: {
+            /**
+             * Publisher Count
+             * @default 0
+             */
+            publisher_count: number;
+            /**
+             * Corroborated Claim Count
+             * @default 0
+             */
+            corroborated_claim_count: number;
+            /**
+             * Coverage Status
+             * @default single_source
+             */
+            coverage_status: string;
             /** Story Id */
             story_id: string;
             /** Position */
@@ -1537,6 +1568,8 @@ export interface components {
             voice_engine?: ("openai" | "elevenlabs") | null;
             /** Interests */
             interests?: string[] | null;
+            /** Custom Topics */
+            custom_topics?: string[] | null;
             /** Preferred Sources */
             preferred_sources?: string[] | null;
             /** Excluded Sources */
@@ -1544,6 +1577,8 @@ export interface components {
         };
         /** PreferenceView */
         PreferenceView: {
+            /** Custom Topics */
+            custom_topics?: string[];
             /** Language */
             language: string;
             /** Duration Minutes */
@@ -1792,6 +1827,21 @@ export interface components {
         };
         /** StoryInfo */
         StoryInfo: {
+            /**
+             * Publisher Count
+             * @default 0
+             */
+            publisher_count: number;
+            /**
+             * Corroborated Claim Count
+             * @default 0
+             */
+            corroborated_claim_count: number;
+            /**
+             * Coverage Status
+             * @default single_source
+             */
+            coverage_status: string;
             /** Id */
             id: string;
             /** Title */
@@ -3126,6 +3176,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    story_feedback_api_v1_feedback__story_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackInput"];
+                };
             };
             /** @description Validation Error */
             422: {

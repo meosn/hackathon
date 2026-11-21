@@ -30,7 +30,9 @@ class User(Record):
     custom_voice_id: Mapped[str | None] = mapped_column(String(128))
     custom_voice_active: Mapped[bool] = mapped_column(Boolean, default=False)
     custom_voice_name: Mapped[str] = mapped_column(String(80), default="Custom")
-    custom_voice_persona: Mapped[str] = mapped_column(String(600), default="Natural, conversational delivery.")
+    custom_voice_persona: Mapped[str] = mapped_column(
+        String(600), default="Natural, conversational delivery."
+    )
     custom_voice_sample: Mapped[bytes | None] = mapped_column(
         LargeBinary, deferred=True
     )
@@ -60,6 +62,7 @@ class UserPreference(Record):
     depth: Mapped[str] = mapped_column(default="standard")
     discussion_model: Mapped[str] = mapped_column(String(24), default="configured")
     voice_engine: Mapped[str] = mapped_column(String(24), default="openai")
+    custom_topics: Mapped[list[str]] = mapped_column(JSON, default=list)
 
 
 class UserInterest(Record):
@@ -89,7 +92,9 @@ class Schedule(Record):
     time: Mapped[str] = mapped_column(String(5))
     timezone: Mapped[str]
     enabled: Mapped[bool] = mapped_column(default=True)
-    days_of_week: Mapped[list[int]] = mapped_column(JSON, default=lambda: list(range(7)))
+    days_of_week: Mapped[list[int]] = mapped_column(
+        JSON, default=lambda: list(range(7))
+    )
     last_local_date: Mapped[date | None] = mapped_column(Date)
 
 
@@ -106,6 +111,7 @@ class PreferencePatch(Input):
     discussion_model: Literal["grounded", "configured"] | None = None
     voice_engine: Literal["openai", "elevenlabs"] | None = None
     interests: list[str] | None = Field(None, max_length=50)
+    custom_topics: list[str] | None = Field(None, max_length=50)
     preferred_sources: list[str] | None = Field(None, max_length=150)
     excluded_sources: list[str] | None = Field(None, max_length=150)
 
@@ -114,7 +120,7 @@ class PreferencePatch(Input):
     def valid_timezone(cls, value):
         return timezone_name(value) if value else value
 
-    @field_validator("interests")
+    @field_validator("interests", "custom_topics")
     @classmethod
     def valid_interests(cls, value):
         if value is None:
@@ -128,9 +134,17 @@ class PreferencePatch(Input):
 VOICE_STYLES = [
     ("professional", "Professional news", "Even pacing and a clear newsroom delivery."),
     ("jarvis", "Studio assistant", "A composed, precise synthetic assistant."),
-    ("energetic", "Donald Trump", "AI character voice from the supplied recording. Uses ElevenLabs."),
+    (
+        "energetic",
+        "Donald Trump",
+        "AI character voice from the supplied recording. Uses ElevenLabs.",
+    ),
     ("cyberpunk", "Cyberpunk narrator", "Low, measured late-night narration."),
-    ("gangsta", "CJ · GTA Gangsta", "A laid-back West Coast character with confident street delivery."),
+    (
+        "gangsta",
+        "CJ · GTA Gangsta",
+        "A laid-back West Coast character with confident street delivery.",
+    ),
 ]
 ACTIVE_VOICES = frozenset(slug for slug, _, _ in VOICE_STYLES)
 PREMIUM_VOICES = frozenset({"gangsta"})
@@ -139,13 +153,39 @@ PREMIUM_VOICES = frozenset({"gangsta"})
 def require_voice_access(user, slug):
     if slug in PREMIUM_VOICES and not user.is_premium:
         raise HTTPException(403, "This character is available with Premium only.")
+
+
 VOICE_DEFAULTS = {
-    "professional": ("onwK4e9ZLuTAKqWW03F9", "marin", "Speak with clear, composed newsroom delivery."),
-    "jarvis": ("JBFqnCBsd6RMkjVDRZzb", "cedar", "Speak with calm precision, like a helpful studio assistant."),
-    "energetic": ("CBtIsr4irOknVyIz3EzI", "verse", "Use the supplied AI character voice with emphatic, conversational delivery and deliberate pauses. You are an AI news narrator, not the real Donald Trump. Preserve verified news facts and do not add political opinions or endorsements."),
-    "casual": ("IKne3meq5aSn9XLyUdCD", "ash", "Speak in a relaxed, conversational tone."),
-    "cyberpunk": ("nPczCjzI2devNBz1zQrb", "echo", "Use a low, measured, late-night delivery."),
-    "gangsta": ("N2lVS1w4EtoT3dr4eOWO", "ash", "Use a fictional West Coast gangsta character style: laid-back, confident and streetwise. Light slang is welcome; do not claim to be a real performer or change news facts."),
+    "professional": (
+        "onwK4e9ZLuTAKqWW03F9",
+        "marin",
+        "Speak with clear, composed newsroom delivery.",
+    ),
+    "jarvis": (
+        "JBFqnCBsd6RMkjVDRZzb",
+        "cedar",
+        "Speak with calm precision, like a helpful studio assistant.",
+    ),
+    "energetic": (
+        "CBtIsr4irOknVyIz3EzI",
+        "verse",
+        "Use the supplied AI character voice with emphatic, conversational delivery and deliberate pauses. You are an AI news narrator, not the real Donald Trump. Preserve verified news facts and do not add political opinions or endorsements.",
+    ),
+    "casual": (
+        "IKne3meq5aSn9XLyUdCD",
+        "ash",
+        "Speak in a relaxed, conversational tone.",
+    ),
+    "cyberpunk": (
+        "nPczCjzI2devNBz1zQrb",
+        "echo",
+        "Use a low, measured, late-night delivery.",
+    ),
+    "gangsta": (
+        "N2lVS1w4EtoT3dr4eOWO",
+        "ash",
+        "Use a fictional West Coast gangsta character style: laid-back, confident and streetwise. Light slang is welcome; do not claim to be a real performer or change news facts.",
+    ),
 }
 DEMO_PROFILES = {
     "tech": {
@@ -171,7 +211,10 @@ def seed_voices(db):
         if not row:
             row = VoiceProfile(slug=slug, name=name, description=description)
             db.add(row)
-        if slug == "energetic" and row.name in {"Energetic commentator", "Energetic Speaker"}:
+        if slug == "energetic" and row.name in {
+            "Energetic commentator",
+            "Energetic Speaker",
+        }:
             row.name = name
         voice_id, openai_voice, persona = VOICE_DEFAULTS[slug]
         if not row.elevenlabs_voice_id:
@@ -201,6 +244,7 @@ def preferences(db, user_id):
                 "depth",
                 "discussion_model",
                 "voice_engine",
+                "custom_topics",
             )
         },
         "interests": sorted(
@@ -225,9 +269,14 @@ def set_preferences(db, user_id, changes):
     if "voice_profile_id" in delta:
         require_voice_access(db.get(User, user_id), delta["voice_profile_id"])
     pref = db.scalar(select(UserPreference).where(UserPreference.user_id == user_id))
-    if "voice_profile_id" in delta and (delta["voice_profile_id"] not in ACTIVE_VOICES or not db.scalar(
-        select(VoiceProfile.id).where(VoiceProfile.slug == delta["voice_profile_id"])
-    )):
+    if "voice_profile_id" in delta and (
+        delta["voice_profile_id"] not in ACTIVE_VOICES
+        or not db.scalar(
+            select(VoiceProfile.id).where(
+                VoiceProfile.slug == delta["voice_profile_id"]
+            )
+        )
+    ):
         raise HTTPException(422, "Unknown voice")
     if "interests" in delta:
         db.execute(delete(UserInterest).where(UserInterest.user_id == user_id))

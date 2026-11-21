@@ -1,6 +1,6 @@
 """Public account responses. Credential hashes and storage keys never enter the wire schema."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SessionToken(BaseModel):
@@ -18,6 +18,7 @@ class Listener(BaseModel):
 
 
 class PreferenceView(BaseModel):
+    custom_topics: list[str] = Field(default_factory=list)
     language: str
     duration_minutes: int
     voice_profile_id: str

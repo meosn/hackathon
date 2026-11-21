@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { StoryReactions, coverageLabel } from '../news/StoryReactions'
+import { useStoryLearning } from './useStoryLearning'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Mic, MicOff, Pause, Play, LoaderCircle, RotateCcw } from 'lucide-react'
 import {
@@ -76,6 +79,9 @@ export function DailySession({
   const [playing, setPlaying] = useState(false)
   const [answerPlaying, setAnswerPlaying] = useState(false)
   const [position, setPosition] = useState(0)
+  useStoryLearning(edition, position, playing)
+  const storyId = edition?.segments.find(s => s.story_id && s.start_seconds <= position && s.end_seconds > position)?.story_id
+  const story = edition?.items.find(item => item.story_id === storyId)
   const [listening, setListening] = useState(false)
   const [responding, setResponding] = useState(false)
   const [phase, setPhase] = useState('')
@@ -609,6 +615,10 @@ export function DailySession({
           ? 'Microphone active'
           : 'Listen freely. Turn the mic on to join in.'}
       </span>
+      {story && !hasAnswer && <div className="current-story-learning">
+        <div><span>{story.title}</span><Link to={'/stories/' + story.story_id}>{coverageLabel(story.coverage_status, story.publisher_count)}</Link></div>
+        <StoryReactions storyId={story.story_id} />
+      </div>}
       {edition?.duration_note && <p className="preference-hint">{edition.duration_note}</p>}
       {researchSources.length > 0 && (
         <details className="research-sources">

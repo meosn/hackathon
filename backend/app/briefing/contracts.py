@@ -174,6 +174,9 @@ class Segment(BaseModel):
 
 
 class Item(BaseModel):
+    publisher_count: int = 0
+    corroborated_claim_count: int = 0
+    coverage_status: str = "single_source"
     story_id: str
     position: int
     title: str

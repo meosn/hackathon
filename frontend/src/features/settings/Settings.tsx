@@ -12,10 +12,8 @@ import {
   Globe2,
   Headphones,
   LoaderCircle,
-  Plus,
   Search,
   SlidersHorizontal,
-  X,
   Lock,
 } from 'lucide-react'
 import { api, label, queryClient, useApi } from '../../api/client'
@@ -27,6 +25,7 @@ import type {
   Voice,
 } from '../../api/types'
 import { Button, Dropdown, ErrorNote, Loading } from '../../components/UI'
+import { InterestPicker } from './InterestPicker'
 import { CustomVoiceSettings } from '../voice/CustomVoice'
 import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
@@ -109,8 +108,6 @@ function SettingsForm({
   const prepared = usePreparedEditions()
   const elevenAgents = prefs.voice_engine === 'elevenlabs'
   const [routine, setRoutine] = useState(() => routineFromSchedules(schedules))
-  const [extra, setExtra] = useState('')
-  const [addingTopic, setAddingTopic] = useState(false)
   const [saved, setSaved] = useState(false)
   const [snapshot, setSnapshot] = useState({ prefs: base, routine })
   useEffect(() => {
@@ -155,13 +152,6 @@ function SettingsForm({
       },
       { replace: true },
     )
-  }
-  function addInterest() {
-    const val = extra.trim().toLowerCase().replace(/\s+/g, '_')
-    if (!val) return
-    if (!prefs.interests.includes(val))
-      patch('interests', [...prefs.interests, val])
-    setExtra('')
   }
   const save = useMutation({
     mutationFn: async () => {
@@ -245,9 +235,7 @@ function SettingsForm({
     activePage * pageSize,
     (activePage + 1) * pageSize,
   )
-  const interests = [
-    ...new Set([...topics.map((t) => t.name), ...prefs.interests]),
-  ]
+
 
   return (
     <div className="preferences-page">
@@ -369,72 +357,9 @@ function SettingsForm({
                       <h3>Your interests</h3>
                       <span>{prefs.interests.length} selected</span>
                     </div>
-                    <div className="interest-options">
-                      {interests.map((t) => (
-                        <button
-                          type="button"
-                          key={t}
-                          aria-pressed={prefs.interests.includes(t)}
-                          onClick={() =>
-                            patch(
-                              'interests',
-                              prefs.interests.includes(t)
-                                ? prefs.interests.filter((v) => v !== t)
-                                : [...prefs.interests, t],
-                            )
-                          }
-                        >
-                          {prefs.interests.includes(t) && <Check size={14} />}
-                          {label(t)}
-                        </button>
-                      ))}
-                    </div>
-                    {addingTopic ? (
-                      <div className="custom-interest">
-                        <label className="sr-only" htmlFor="custom-interest">
-                          Custom interest
-                        </label>
-                        <input
-                          autoFocus
-                          id="custom-interest"
-                          value={extra}
-                          onChange={(e) => setExtra(e.target.value)}
-                          maxLength={60}
-                          placeholder="Enter a topic"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault()
-                              addInterest()
-                            }
-                            if (e.key === 'Escape') setAddingTopic(false)
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={!extra.trim()}
-                          onClick={addInterest}
-                        >
-                          Add
-                        </Button>
-                        <button
-                          type="button"
-                          className="icon"
-                          aria-label="Close custom interest"
-                          onClick={() => setAddingTopic(false)}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="preference-text-button"
-                        type="button"
-                        onClick={() => setAddingTopic(true)}
-                      >
-                        <Plus size={15} /> Add your own topic
-                      </button>
-                    )}
+                    <InterestPicker topics={topics.map(t => t.name)} selected={prefs.interests} custom={prefs.custom_topics || []}
+                      onChange={(interests, custom_topics) => { setSaved(false); setPrefs(p => ({ ...p, interests, custom_topics })) }} />
+                    <p className="preference-hint">Your choices and story reactions shape future editions. Switching a topic off keeps it in your list.</p>
                     {prefs.interests.length === 0 && (
                       <p className="preference-hint">
                         Open to everything. You’ll hear a balanced selection of

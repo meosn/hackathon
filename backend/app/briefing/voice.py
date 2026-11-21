@@ -12,6 +12,7 @@ import tempfile
 from time import monotonic
 from urllib.parse import quote
 import wave
+from array import array
 
 import httpx
 from sqlalchemy import select, text as sql_text
@@ -115,7 +116,15 @@ def provider_config(voice, db=None):
     ) or os.getenv("ELEVENLABS_VOICE_ID")
     if db is not None:
         from app.accounts import VoiceProfile
-        voice_id = db.scalar(select(VoiceProfile.elevenlabs_voice_id).where(VoiceProfile.slug == voice)) or voice_id
+
+        voice_id = (
+            db.scalar(
+                select(VoiceProfile.elevenlabs_voice_id).where(
+                    VoiceProfile.slug == voice
+                )
+            )
+            or voice_id
+        )
     if not voice_id or not os.getenv("ELEVENLABS_API_KEY"):
         raise ValueError("Configure a permitted ElevenLabs voice and API key")
     return kind, os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2", voice_id
@@ -131,8 +140,16 @@ def render_segment(db, text, lang, voice, config, reference_id):
             result = httpx.post(
                 "https://api.openai.com/v1/audio/speech",
                 timeout=httpx.Timeout(30, connect=5),
-                json={"model": model, "voice": voice_id, "input": text, "response_format": "mp3"},
-                headers={"Authorization": "Bearer " + (os.getenv("OPENAI_API_KEY") or os.environ["LLM_API_KEY"])},
+                json={
+                    "model": model,
+                    "voice": voice_id,
+                    "input": text,
+                    "response_format": "mp3",
+                },
+                headers={
+                    "Authorization": "Bearer "
+                    + (os.getenv("OPENAI_API_KEY") or os.environ["LLM_API_KEY"])
+                },
             )
             result.raise_for_status()
             pcm = convert_audio(result.content)
@@ -296,10 +313,17 @@ def render_aligned(db, parts, config, reference_id, pauses=None):
                     if not frames:
                         continue
                     for frame in range(fade):
-                        for pos, gain in ((cut - (frame + 1) * 2, (frame + 1) / fade), (cut + frame * 2, frame / fade)):
+                        for pos, gain in (
+                            (cut - (frame + 1) * 2, (frame + 1) / fade),
+                            (cut + frame * 2, frame / fade),
+                        ):
                             if 0 <= pos < len(samples) - 1:
-                                value = int.from_bytes(samples[pos:pos + 2], "little", signed=True)
-                                samples[pos:pos + 2] = int(value * gain).to_bytes(2, "little", signed=True)
+                                value = int.from_bytes(
+                                    samples[pos : pos + 2], "little", signed=True
+                                )
+                                samples[pos : pos + 2] = int(value * gain).to_bytes(
+                                    2, "little", signed=True
+                                )
                 audio = bytes(samples)
                 paced, cursor = bytearray(), 0
                 for cut, frames in inserts:
@@ -327,14 +351,53 @@ def render_aligned(db, parts, config, reference_id, pauses=None):
     return pcm, boundaries
 
 
+def trim_long_pauses(pcm, boundaries):
+    """Shorten sustained quiet only, keeping words and their shifted cues intact."""
+    samples = array("h")
+    samples.frombytes(pcm)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    window = round(RATE * 0.01)
+    runs, start = [], None
+    for pos in range(0, len(samples), window):
+        frame = samples[pos : pos + window]
+        quiet = sum(value * value for value in frame) / len(frame) < 200**2
+        if quiet and start is None:
+            start = pos
+        if not quiet and start is not None:
+            runs.append((start, pos))
+            start = None
+    if start is not None:
+        runs.append((start, len(samples)))
+    keep = round(RATE * 0.35)
+    cuts = [
+        (left + keep // 2, right - (keep - keep // 2))
+        for left, right in runs
+        if right - left > RATE * 0.65
+    ]
+    if not cuts:
+        return pcm, boundaries
+    output, cursor = bytearray(), 0
+    for left, right in cuts:
+        output.extend(pcm[cursor * 2 : left * 2])
+        cursor = right
+    output.extend(pcm[cursor * 2 :])
+
+    def shifted(seconds):
+        frame = round(seconds * RATE)
+        removed = sum(max(0, min(frame, right) - left) for left, right in cuts)
+        return (frame - removed) / RATE
+
+    return bytes(output), [[shifted(start), shifted(end)] for start, end in boundaries]
+
+
 def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=None):
     parts = [(s.text, s.language) for s in segments]
-    recipe = [3, config, voice, parts]
+    compact_pauses = voice == "energetic" and segment_pause is None
+    recipe = [4 if compact_pauses else 3, config, voice, parts]
     if segment_pause is not None:
         recipe.append({"segment_pause": segment_pause})
-    key = hashlib.sha256(
-        json.dumps(recipe, ensure_ascii=False).encode()
-    ).hexdigest()
+    key = hashlib.sha256(json.dumps(recipe, ensure_ascii=False).encode()).hexdigest()
     if db.get_bind().dialect.name == "postgresql":
         db.execute(
             sql_text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
@@ -350,8 +413,11 @@ def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=No
         and os.getenv("ELEVENLABS_BATCH_TTS", "1") == "1"
     ):
         pauses = [
-            0.7 if getattr(left, "story_id", None) != getattr(right, "story_id", None)
-            else 0.32
+            (
+                (0.38 if compact_pauses else 0.7)
+                if getattr(left, "story_id", None) != getattr(right, "story_id", None)
+                else (0.22 if compact_pauses else 0.32)
+            )
             for left, right in zip(segments, segments[1:])
         ]
         pcm, boundaries = render_aligned(db, parts, config, reference_id, pauses=pauses)
@@ -367,6 +433,8 @@ def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=No
             )
             pcm.extend(b"\0\0" * round(RATE * pause))
             boundaries.append([start, len(pcm) / (2 * RATE)])
+    if compact_pauses:
+        pcm, boundaries = trim_long_pauses(bytes(pcm), boundaries)
     content = wav_bytes(pcm)
     digest = hashlib.sha256(content).hexdigest()
     audio = GeneratedAudio(
