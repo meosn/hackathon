@@ -10,7 +10,13 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.accounts import ACTIVE_VOICES, User, VoiceProfile, preferences, require_voice_access
+from app.accounts import (
+    ACTIVE_VOICES,
+    User,
+    VoiceProfile,
+    preferences,
+    require_voice_access,
+)
 from app.messaging import emit
 from app.news.service import story_detail, verify_segment
 from app.usage import record
@@ -439,6 +445,21 @@ def _generate_script(db, briefing_id):
     except (httpx.HTTPError, ValidationError, KeyError, json.JSONDecodeError):
         # Deterministic recovery copies only the approved evidence; it passes the identical final gate.
         result = Script(lines=inputs)
+    if os.getenv("LLM_PROVIDER", "mock") != "mock":
+        returned = [line.claim_id for line in result.lines]
+        if (
+            len(returned) != len(set(returned))
+            or set(returned) != chosen.keys()
+            or any(
+                line.story_id != chosen[line.claim_id][0]["id"]
+                for line in result.lines
+                if line.claim_id in chosen
+            )
+        ):
+            # A malformed rewrite must not discard the selected facts or stall preparation.
+            # Use the already approved source sentences, retaining the final evidence gate.
+            result = Script(lines=inputs)
+            item.request = {**item.request, "source_script_recovered": True}
     if (
         sum(len(line.text.split()) for line in result.lines)
         < min(source_words, item.request["target_words"]) * 0.95
@@ -492,7 +513,9 @@ def _generate_script(db, briefing_id):
         )
     db.add_all(rows)
     item.status, item.error = "script_ready", None
-    item.duration_seconds = sum(len(row.text.split()) for row in rows) * 60 / item.request["narration_wpm"]
+    item.duration_seconds = (
+        sum(len(row.text.split()) for row in rows) * 60 / item.request["narration_wpm"]
+    )
     emit(db, "briefing.script.ready", item.id)
     emit(db, "briefing.audio.requested", item.id)
     record(
@@ -540,7 +563,9 @@ def revoice_briefing(db, source, user_id):
         request={
             **source.request,
             "voice_profile_id": selected,
-            "narrator_voice_id": owner.custom_voice_id if selected == "custom" else None,
+            "narrator_voice_id": (
+                owner.custom_voice_id if selected == "custom" else None
+            ),
             "source_briefing_id": source.id,
         },
         status="script_ready",
@@ -601,7 +626,11 @@ def _synthesize_briefing(db, briefing_id):
     if item.voice_profile_id == "custom":
         if not item.request.get("narrator_voice_id"):
             raise ValueError("The selected custom narrator is unavailable")
-        config = ("elevenlabs", os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2", item.request["narrator_voice_id"])
+        config = (
+            "elevenlabs",
+            os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2",
+            item.request["narrator_voice_id"],
+        )
         if os.getenv("TTS_PROVIDER", "local") in {"local", "mock"}:
             config = ("local", "espeak-ng", "custom")
     audio = voice.render_audio(db, rows, item.voice_profile_id, item.id, config=config)
@@ -679,12 +708,18 @@ def briefing_view(db, item, detail=False):
         "error",
     )
     target = int(item.request.get("duration_minutes") or 0) * 60
-    short = item.status == "completed" and target and item.duration_seconds < target * 0.8
-    note = {
-        "en": "This edition is shorter than your preferred length; available verified details determine its final duration.",
-        "de": "Diese Ausgabe ist kürzer als gewünscht; die verfügbaren geprüften Details bestimmen ihre tatsächliche Länge.",
-        "nl": "Deze editie is korter dan gewenst; de beschikbare geverifieerde details bepalen de uiteindelijke lengte.",
-    }.get(item.language) if short else None
+    short = (
+        item.status == "completed" and target and item.duration_seconds < target * 0.8
+    )
+    note = (
+        {
+            "en": "This edition is shorter than your preferred length; available verified details determine its final duration.",
+            "de": "Diese Ausgabe ist kürzer als gewünscht; die verfügbaren geprüften Details bestimmen ihre tatsächliche Länge.",
+            "nl": "Deze editie is korter dan gewenst; de beschikbare geverifieerde details bepalen de uiteindelijke lengte.",
+        }.get(item.language)
+        if short
+        else None
+    )
     out = {
         **{k: getattr(item, k) for k in keys},
         "target_duration_seconds": target,

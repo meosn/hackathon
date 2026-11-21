@@ -505,6 +505,43 @@ def test_rejected_remote_wording_is_replaced_and_usage_is_retained(
     assert sum(c.input_tokens for c in calls) == 1000
 
 
+@pytest.mark.parametrize("failure", ["missing", "duplicate", "unknown", "wrong_story"])
+def test_remote_claim_mismatch_recovers_all_verified_source_sentences(
+    session, monkeypatch, failure
+):
+    import json
+
+    user = listener(session, "reader", "en", ["technology"])
+    item = service.create_briefing(session, user.id, BriefingRequest())
+    expected = service.draft_candidates(session, item)
+    calls = []
+
+    def remote(db, reference_id, messages, schema):
+        lines = json.loads(messages[-1]["content"])
+        calls.append(True)
+        if failure == "missing":
+            lines.pop()
+        elif failure == "duplicate":
+            lines.append(lines[0].copy())
+        elif failure == "unknown":
+            lines[0]["claim_id"] = "unapproved-claim"
+            lines[0]["text"] = "Unapproved information."
+        else:
+            lines[0]["story_id"] = "unrelated-story"
+        return Script(lines=lines)
+
+    monkeypatch.setenv("LLM_PROVIDER", "api")
+    monkeypatch.setattr(service, "model_output", remote)
+    assert service.generate_script(session, item.id) == "script_ready"
+    rows = [r for r in service.segments_for(session, item.id) if r.claim_ids]
+    assert {r.claim_ids[0] for r in rows} == expected.keys()
+    assert len(rows) == len(expected)
+    assert all(r.text == expected[r.claim_ids[0]][1]["text"] for r in rows)
+    assert service.verified_script(session, rows)
+    assert item.request["source_script_recovered"] is True
+    assert len(calls) == 1
+
+
 def test_daily_calendar_idempotence_and_prepared_profile_copy(session):
     from datetime import datetime, timedelta, timezone
     from app.accounts import demo_listener, set_preferences, User
