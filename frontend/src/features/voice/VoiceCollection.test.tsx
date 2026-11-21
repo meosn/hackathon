@@ -20,11 +20,11 @@ beforeEach(()=>{
 })
 afterEach(()=>{cleanup();queryClient.clear();vi.restoreAllMocks()})
 function show(mode:'home'|'settings', engine='elevenlabs') {render(<QueryClientProvider client={queryClient}><MemoryRouter><VoiceCollection mode={mode} prefs={{voice_engine:engine} as Preferences}/></MemoryRouter></QueryClientProvider>)}
-it('shows all ElevenLabs characters on home, including private voices',async()=>{
+it('shows only favorite ElevenLabs characters on home, including private voices',async()=>{
  show('home')
  await screen.findByText('My own voice')
  expect(screen.getByText('The Anchor')).toBeInTheDocument()
- expect(screen.getByText('Studio Assistant')).toBeInTheDocument()
+ expect(screen.queryByText('Studio Assistant')).not.toBeInTheDocument()
  expect(screen.getByRole('link',{name:'Manage voices'})).toBeInTheDocument()
 })
 it('lists the private voice in settings and persists favorite changes',async()=>{
@@ -39,11 +39,34 @@ it('lists the private voice in settings and persists favorite changes',async()=>
  expect(vi.mocked(fetch).mock.calls.some(([,opts])=>opts?.method==='DELETE')).toBe(false)
 })
 
-it('shows OpenAI voices without ElevenLabs characters or collection controls',async()=>{
+it('shows OpenAI voices with favorite controls and without ElevenLabs characters',async()=>{
  show('settings','openai')
  await screen.findByText('Marin')
  expect(screen.getByText('Cedar')).toBeInTheDocument()
  expect(screen.queryByText('My own voice')).not.toBeInTheDocument()
  expect(screen.queryByText('The Anchor')).not.toBeInTheDocument()
  expect(screen.queryByRole('button',{name:/Delete/})).not.toBeInTheDocument()
+})
+
+it('shows only favorite OpenAI voices on home',async()=>{
+ show('home','openai')
+ await screen.findByText('Marin')
+ expect(screen.queryByText('Cedar')).not.toBeInTheDocument()
+})
+it('lets OpenAI voices be marked as favorites in settings',async()=>{
+ show('settings','openai')
+ fireEvent.click(await screen.findByRole('button',{name:'Add Cedar to favorites'}))
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Remove Cedar from favorites'})).toHaveAttribute('aria-pressed','true'))
+})
+it('shows an explanation when no visible voices are favorites',async()=>{
+ rows=rows.map(v=>({...v,favorite:false}))
+ show('home')
+ expect(await screen.findByText('Mark voices as favorites in Settings to show them here.')).toBeInTheDocument()
+ expect(screen.queryByRole('button',{name:/Preview and select/})).not.toBeInTheDocument()
+})
+it('keeps hidden favorites off home even when selected',async()=>{
+ rows=rows.map(v=>({...v,hidden:v.favorite}))
+ show('home')
+ await screen.findByText('Mark voices as favorites in Settings to show them here.')
+ expect(screen.queryByText('The Anchor')).not.toBeInTheDocument()
 })

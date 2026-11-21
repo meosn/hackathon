@@ -50,7 +50,7 @@ export function VoiceCollection({mode='settings',prefs,onSelected}:{mode?:'home'
   const openai = prefs?.voice_engine !== 'elevenlabs'
   const openaiNames: Record<string, string> = {professional:'Marin',jarvis:'Cedar',cyberpunk:'Echo'}
   const providerRows = openai ? rows.filter(v=>v.id in openaiNames).map(v=>({...v,name:openaiNames[v.id],description:'OpenAI voice',hidden:false,locked:false})) : rows
-  const visible=providerRows.filter(v=>!v.hidden)
+  const visible=providerRows.filter(v=>!v.hidden&&(mode!=='home'||v.favorite))
   return <div className={'voice-collection '+mode}>
     {premium&&<PremiumNotice onClose={()=>setPremium(false)}/>}
     <div className={mode==='home'?'music-hosts':'voice-collection-list'}>
@@ -65,14 +65,14 @@ export function VoiceCollection({mode='settings',prefs,onSelected}:{mode?:'home'
           </span>
           <span><strong>{voice.name}</strong>{mode==='settings'&&<small>{voice.custom?'Your custom voice':voice.description}</small>}</span>
         </button>
-        {mode==='settings'&&!openai&&<div className="voice-library-actions">
+        {mode==='settings'&&<div className="voice-library-actions">
           <button type="button" className="icon" aria-label={(voice.favorite?'Remove ':'Add ')+voice.name+(voice.favorite?' from favorites':' to favorites')} aria-pressed={voice.favorite} onClick={()=>change.mutate({voice,action:'favorite'})} disabled={change.isPending}><Star size={18} fill={voice.favorite?'currentColor':'none'}/></button>
-          <button type="button" className="icon" aria-label={'Delete '+voice.name} onClick={()=>setDeleting(voice)} disabled={change.isPending}><Trash2 size={17}/></button>
+          {!openai&&<button type="button" className="icon" aria-label={'Delete '+voice.name} onClick={()=>setDeleting(voice)} disabled={change.isPending}><Trash2 size={17}/></button>}
         </div>}
       </div>)}
       {mode==='home'&&<Link to="/settings?section=audio" className="music-host"><span className="portrait-wrap"><span className="speaker-avatar custom-voice-icon"><Plus size={28}/></span></span><span>Manage voices</span></Link>}
     </div>
-    {mode==='home'&&visible.length===0&&<p className="preference-hint">Add a voice in Settings to keep it here.</p>}
+    {mode==='home'&&visible.length===0&&<p className="preference-hint">Mark voices as favorites in Settings to show them here.</p>}
     {mode==='settings'&&!openai&&<>
       <p className="preference-hint">Manage your characters and favorite voices. Changes save automatically.</p>
       {rows.some(v=>v.hidden)&&<details className="voice-restore"><summary>Add from collection</summary>{rows.filter(v=>v.hidden).map(voice=><button type="button" key={voice.id} onClick={()=>change.mutate({voice,action:'restore'})}><RotateCcw size={14}/>{voice.name}</button>)}</details>}
