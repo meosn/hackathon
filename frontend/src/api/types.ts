@@ -10,7 +10,14 @@ export type Topic = Models['TopicInfo']
 export type Article = Models['ArticleInfo']
 export type Evidence = Models['EvidenceInfo']
 export type Fact = Models['FactInfo']
-export type Story = Models['StoryInfo']
+export type Story = Models['StoryInfo'] & {
+  selection?: {
+    score: number
+    reasons: string[]
+    adjustments: string[]
+    factors: Record<string, { value: number; weight: number; contribution: number }>
+  }
+}
 export type StoryDetail = Models['Detail']
 export type StoryPage = Models['Page']
 export type Citation = Pick<

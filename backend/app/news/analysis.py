@@ -163,6 +163,25 @@ def anchors(title: str, lead: str) -> tuple[set[str], set[str], set[str]]:
     return identity, words & ACTIONS, words - identity - ACTIONS
 
 
+def distinct_reporting_periods(left: str, right: str) -> bool:
+    """Explicit incompatible earnings periods are a hard event boundary.
+
+    Reported amounts are deliberately excluded: disagreement belongs in one event.
+    """
+    def periods(title):
+        text = title.casefold()
+        quarters = set(re.findall(r"\bq([1-4])\b", text))
+        for pattern, number in ((r"first|erste[snmr]?|eerste", "1"),
+                                (r"second|zweite[snmr]?|tweede", "2"),
+                                (r"third|dritte[snmr]?|derde", "3"),
+                                (r"fourth|vierte[snmr]?|vierde", "4")):
+            if re.search(r"\b(?:" + pattern + r")[- ]+(?:quarter|quartal|kwartaal)\b", text):
+                quarters.add(number)
+        years = set(re.findall(r"\b20\d{2}\b", text))
+        return quarters, years
+    return any(a and b and a.isdisjoint(b) for a, b in zip(periods(left), periods(right)))
+
+
 def same_event(left, right, similarity: float, threshold: float) -> bool:
     le, la, ld = left
     re_, ra, rd = right
@@ -192,13 +211,10 @@ def classify(title: str, body: str) -> list[str]:
     return topics
 
 
-def scores(topics: list[str], sources: int, content: str) -> tuple[float, float]:
-    words = set(tokens(content))
-    warning = bool({"warning", "flood"} <= words or {"emergency", "evacuation"} & words)
-    impact = 0.23 if set(topics) & {"finance", "energy", "climate"} else 0.12
-    importance = min(0.99, 0.38 + impact + 0.065 * min(sources, 4) + 0.27 * warning)
-    urgency = min(0.99, 0.3 + 0.59 * warning + 0.09 * bool({"cut", "warning"} & words))
-    return round(importance, 3), round(urgency, 3)
+def scores(topics: list[str], sources: int, content: str, *, title: str = "") -> tuple[float, float]:
+    from .editorial import assess
+    result = assess(title, content, sources)
+    return result["importance"], result["urgency"]
 
 
 def model_name() -> str:

@@ -157,7 +157,7 @@ docs/                  Architecture, decisions and implementation details
 
 ## Challenge acceptance
 
-See [the criterion-by-criterion audit](docs/HACKATHON_READINESS.md) for implemented behavior, verified archive processing, costs and remaining acceptance requirements.
+See [the reproducible jury report](docs/JURY_REPORT.md) for priority explanations, clustering checks and evidence-inventory commands, and [the criterion-by-criterion audit](docs/HACKATHON_READINESS.md) for implemented behavior, verified archive processing, costs and remaining acceptance requirements.
 
 ## Development and tests
 

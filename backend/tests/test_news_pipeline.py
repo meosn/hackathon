@@ -273,3 +273,20 @@ def test_api_pagination_filter_facts_and_admin_edits(db):
     )
     assert merged.status_code == 200, merged.text
     assert merged.json()["article_count"] == 2 and merged.json()["disagreements"]
+
+
+def test_reporting_period_guard_keeps_distinct_earnings_separate(db, tmp_path, monkeypatch):
+    # Even a very high embedding similarity cannot combine explicit different quarters.
+    monkeypatch.setenv('CLUSTER_SIMILARITY', '0')
+    monkeypatch.setattr(analysis, 'cosine', lambda *_: .99)
+    rows = [dict(title=f'Arden reports {quarter} earnings',
+                 content=f'Arden reported {quarter} profit of {amount} million. The company released its results.',
+                 source=f'Publisher {i}', url=f'https://example.org/{i}',
+                 language='en', published_at='2026-11-01T12:00:00Z')
+            for i, (quarter, amount) in enumerate([('Q1', 20), ('Q1', 30), ('Q2', 40)])]
+    path = tmp_path / 'earnings.json'
+    path.write_text(json.dumps(rows))
+    service.ingest_file(db, path)
+    stories = service.story_list(db)
+    assert len(stories) == 2
+    assert sorted(s['article_count'] for s in stories) == [1, 2]

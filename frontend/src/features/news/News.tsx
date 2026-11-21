@@ -166,6 +166,7 @@ export function Explore() {
 export function StoryView() {
   const { id } = useParams(),
     q = useApi<StoryDetail>('/stories/' + id)
+  const importance = useApi<{importance:number;urgency:number;reasons:string[];independent_publishers:number}>('/stories/' + id + '/importance')
   const feedback = useMutation({
     mutationFn: (score: number) => api('/feedback/' + id, 'PUT', { score }),
     onSuccess: () =>
@@ -224,6 +225,12 @@ export function StoryView() {
         </div>
         <ErrorNote error={feedback.error} />
       </Card>
+      {importance.data && <Card>
+        <h2>Why this story matters</h2>
+        <p className="body-copy">{importance.data.importance >= .75 ? 'High' : importance.data.importance >= .5 ? 'Medium' : 'Routine'} editorial priority · {importance.data.urgency >= .7 ? 'Time-sensitive' : 'Standard urgency'}</p>
+        <ul>{importance.data.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>
+        <p className="muted">Importance {Math.round(importance.data.importance * 100)}/100 · Urgency {Math.round(importance.data.urgency * 100)}/100 · {importance.data.independent_publishers} independent publishers. Local editorial rules estimate impact. Priority describes the event’s impact. It is separate from how well individual facts are supported.</p>
+      </Card>}
       <div className="section-heading">
         <h2>Source comparison</h2>
         <Badge>{s.disagreements.length} disagreements</Badge>

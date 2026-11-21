@@ -188,7 +188,11 @@ export function BriefingForm() {
                     )
                   }
                 />
-                {s.title}
+                <span>{s.title}
+                  {s.selection && <small className="muted" style={{ display: 'block' }}>
+                    Why selected: {[...s.selection.reasons, ...s.selection.adjustments].join(' · ')}
+                  </small>}
+                </span>
               </label>
             ))}
           </fieldset>

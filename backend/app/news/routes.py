@@ -359,3 +359,12 @@ def split(db: DB, story_id: str, body: Split):
         raise HTTPException(409, str(exc))
     db.commit()
     return detail_or_404(db, target.id)
+
+
+@router.get("/stories/{story_id}/importance")
+def importance(db: DB, story_id: str):
+    from .editorial import assess_story
+    story = db.get(Story, story_id)
+    if not story or story.archived:
+        raise HTTPException(404, "Story not found")
+    return assess_story(db, story)

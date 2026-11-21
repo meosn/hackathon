@@ -108,7 +108,28 @@ def ranked(
             ),
         }
         score = sum(weights[k] * v for k, v in values.items())
-        results.append((score, story))
+        reasons = []
+        if values["interest"]:
+            reasons.append("Matches your selected interests")
+        if values["source"]:
+            reasons.append("Includes a preferred source")
+        if values["unheard"]:
+            reasons.append("You have not heard this story")
+        if values["affinity"] > 0:
+            reasons.append("Matches topics you reacted positively to")
+        if values["corroboration"]:
+            reasons.append("Independent coverage contributes to selection; check individual claims")
+        if story["importance"] >= 0.5:
+            reasons.append("Elevated editorial importance")
+        reasons.append("Freshness within your selected coverage window")
+        explanation = {
+            "score": score,
+            "factors": {k: {"value": v, "weight": weights[k], "contribution": weights[k] * v}
+                        for k, v in values.items()},
+            "reasons": reasons,
+            "adjustments": [],
+        }
+        results.append((score, story | {"selection": explanation}))
     results.sort(
         key=lambda pair: (
             -pair[0],
@@ -128,6 +149,7 @@ def ranked(
         and results.index(corroborated) > 2
         and not any(compared(pair) for pair in results[:3])
     ):
+        corroborated[1]["selection"]["adjustments"].append("Reserved a top-three slot for independent coverage")
         results.remove(corroborated)
         results.insert(0, corroborated)
     # Reserve one slot for a learned interest without replacing the whole mix.
@@ -141,6 +163,7 @@ def ranked(
         and results.index(favorite) > 2
         and not any(learned(pair) for pair in results[:3])
     ):
+        favorite[1]["selection"]["adjustments"].append("Reserved a top-three slot for a learned interest")
         results.remove(favorite)
         results.insert(1, favorite)
     # Keep one globally critical story in the first three without overriding explicit filters.
@@ -153,6 +176,7 @@ def ranked(
         None,
     )
     if critical and results.index(critical) > 2:
+        critical[1]["selection"]["adjustments"].append("Reserved a top-three slot for a critical event")
         results.remove(critical)
         results.insert(2, critical)
     return [story for _, story in results]

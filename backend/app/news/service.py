@@ -160,7 +160,7 @@ def run_ingestion(db, job_id):
 def new_story(db, article):
     topics = analysis.classify(article.title, article.content)
     importance, urgency = analysis.scores(
-        topics, 1, article.title + " " + article.content
+        topics, 1, article.content, title=article.title
     )
     claims = [
         c
@@ -334,11 +334,10 @@ def refresh_story(db, story):
     topics = analysis.classify(lead.title, lead.content)
     db.execute(delete(StoryTopic).where(StoryTopic.story_id == story.id))
     db.add_all(StoryTopic(story_id=story.id, name=topic) for topic in topics)
-    distinct = {a.source_id for a in articles if a.near_duplicate_of is None}
+    from .editorial import assess_story
     story.title, story.category = lead.title, topics[0]
-    story.importance, story.urgency = analysis.scores(
-        topics, len(distinct), lead.title + " " + lead.content
-    )
+    priority = assess_story(db, story)
+    story.importance, story.urgency = priority["importance"], priority["urgency"]
     story.event_at = min(utc(a.published_at) for a in articles)
     story.updated_at = datetime.now(UTC)
     story.summary = next(
@@ -375,6 +374,8 @@ def _analyze(db, article):
     story = None
     reviewed = 0
     for other, other_vector, candidate in _candidate_rows(db, article, vector, model):
+        if analysis.distinct_reporting_periods(article.title, other.title):
+            continue
         score = analysis.cosine(other_vector.embedding, vector)
         matched = analysis.same_event(
             fingerprint, analysis.anchors(other.title, other.content), score, threshold
