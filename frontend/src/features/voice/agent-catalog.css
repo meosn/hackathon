@@ -1,0 +1,87 @@
+.agent-catalog-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .agent-catalog-link {
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .agent-catalog-link svg {
+    transition: transform 160ms ease;
+  }
+
+  .agent-catalog-link:is(:hover, :focus-visible) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px #deef9426;
+  }
+
+  .agent-catalog-link:is(:hover, :focus-visible) svg {
+    transform: translateX(3px);
+  }
+
+  .agent-catalog-link:active {
+    transform: scale(0.98);
+    box-shadow: none;
+  }
+}
+
+.agent-catalog h1 {
+  margin: 0 0 12px;
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: clamp(36px, 6vw, 60px);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.agent-catalog-status {
+  margin: 0;
+  color: var(--lime);
+  font-weight: 600;
+}
+
+.agent-catalog-description {
+  margin: 8px 0 24px;
+  color: var(--muted);
+}
+
+.agent-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-catalog-card {
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--base);
+}
+
+.agent-catalog-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: contain;
+  background: #f7f3f0;
+}
+
+.agent-catalog-card-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.agent-catalog-card-label svg {
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: var(--lime);
+}
