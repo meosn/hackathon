@@ -1,3 +1,4 @@
+import { useStoryLearning } from './useStoryLearning'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
@@ -334,27 +335,9 @@ export function AudioPlayer({ briefing: b }: { briefing: BriefingDetail }) {
   useEffect(() => {
     if (ref.current) ref.current.playbackRate = speed
   }, [speed, url])
-  const recorded = useRef(new Set<string>())
+  useStoryLearning(b, time, playing)
   const seconds = duration || b.duration_seconds || 0,
     active = activeSegment(b.segments, time)
-  const currentStory = active?.story_id
-  useEffect(() => {
-    if (!playing || !currentStory || recorded.current.has(currentStory)) return
-    const timer = window.setTimeout(() => {
-      recorded.current.add(currentStory)
-      request('/listening-history/' + currentStory, 'PUT')
-        .then(() =>
-          queryClient.invalidateQueries({
-            predicate: (q) =>
-              String(q.queryKey[0]).startsWith('/recommendations'),
-          })
-        )
-        .catch(() => {
-          recorded.current.delete(currentStory)
-        })
-    }, 1000)
-    return () => window.clearTimeout(timer)
-  }, [playing, currentStory])
   const chapters = b.items
     .map((i) => ({
       item: i,
