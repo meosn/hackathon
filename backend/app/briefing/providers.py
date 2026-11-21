@@ -47,7 +47,7 @@ class RemoteProvider:
         if local:
             body.update(
                 format=schema.model_json_schema(),
-                options={"temperature": 0, "num_ctx": 4096, "num_predict": 768, "num_thread": 2},
+                options={"temperature": 0, "num_ctx": 2048, "num_predict": 128 if schema.__name__ == "LocalAnswer" else 768, "num_thread": 2, "num_batch": 128},
                 think=False,
                 keep_alive="10m",
             )

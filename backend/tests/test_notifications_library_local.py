@@ -6,7 +6,7 @@ from sqlalchemy import select
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from app import notifications as n, voice_library as v
-from app.accounts import set_preferences
+from app.accounts import preferences, set_preferences
 from app.briefing.models import Briefing, Conversation
 from app.briefing.providers import model_output
 from app.briefing.contracts import Decision
@@ -127,3 +127,32 @@ def test_scheduled_edition_uses_the_selected_private_voice(session):
     edition=session.scalar(select(Briefing).where(Briefing.user_id==owner.id))
     assert edition.voice_profile_id=='custom'
     assert edition.request['narrator_voice_id']=='private-narrator'
+
+def test_local_prepared_script_uses_verified_source_words_without_any_writing_api(session,monkeypatch):
+    from app.briefing import service
+    from app.briefing.contracts import BriefingRequest
+    owner=listener(session,'local-prepared','en',['technology'])
+    set_preferences(session,owner.id,{'discussion_model':'local'})
+    monkeypatch.setattr(service,'model_output',lambda *a,**kw:pytest.fail('No writing API needed for verified source assembly'))
+    item=service.create_briefing(session,owner.id,BriefingRequest(period='week',duration_minutes=1))
+    assert service.generate_script(session,item.id)=='script_ready'
+    assert item.request['local_source_script']
+    assert service.verified_script(session,service.segments_for(session,item.id))
+
+def test_local_answer_rebinds_short_indices_to_verified_source_ids(session,monkeypatch):
+    from app.briefing import discussion
+    from app.briefing.ranking import recommendations
+    from app.news.service import story_detail
+    owner=listener(session,'local-bound-answer','en',['technology'])
+    set_preferences(session,owner.id,{'discussion_model':'local'})
+    story=recommendations(session,owner.id,period='week')[0]
+    conv=Conversation(user_id=owner.id,language='en',story_id=story['id'])
+    session.add(conv);session.commit()
+    def compact(db,reference,messages,schema):
+        assert schema is discussion.LocalAnswer
+        payload=json.loads(messages[-1]['content'])
+        assert story['id'] not in messages[-1]['content']
+        return discussion.LocalAnswer(lines=[{'index':0,'text':payload['facts'][0]['text']}])
+    monkeypatch.setattr(discussion,'model_output',compact)
+    text,citations=discussion.generated_answer(session,conv,story_detail(session,story['id']),'What happened?',preferences(session,owner.id),'FOLLOW_UP')
+    assert text and citations and citations[0]['claim_id']

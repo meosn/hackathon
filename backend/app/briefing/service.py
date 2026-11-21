@@ -462,7 +462,12 @@ def _generate_script(db, briefing_id):
         {"role": "user", "content": json.dumps(wire_inputs, ensure_ascii=False)},
     ]
     try:
-        if remote:
+        if item.request.get("discussion_model") == "local":
+            # Approved source sentences already satisfy the narration contract.
+            # Long CPU rewrites add latency without adding supported information.
+            result = Script(lines=inputs)
+            item.request = {**item.request, "local_source_script": True}
+        elif remote:
             draft = model_output(
                 db,
                 briefing_id,
