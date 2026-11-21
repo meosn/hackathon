@@ -86,6 +86,7 @@ it('streams PCM input and releases only the microphone on mute while output cont
   expect(context.audioWorklet.addModule).toHaveBeenCalledWith('/voice-input-worklet.js')
   processors[0].port.onmessage({ data: new Uint8Array([1, 0, 2, 0]).buffer })
   expect(socket.sent.at(-1)).toEqual({ user_audio_chunk: 'AQACAA==' })
+  socket.receive({ type: 'user_transcript', user_transcription_event: { user_transcript: 'Why did that happen?' } })
   const cancellations = output.cancel.mock.calls.length
   await voice.setMicrophone(false)
   expect(stop).toHaveBeenCalledOnce()
@@ -99,9 +100,11 @@ it('streams PCM input and releases only the microphone on mute while output cont
 
 it('discards late interrupted audio and refreshes only its own conversation context', async () => {
   const { voice, callbacks, connect } = setup(), socket = await connect()
+  await voice.sendText('Explain the current story')
   socket.receive({ type: 'audio', audio_event: { event_id: 1, audio_base_64: 'AQACAA==' } })
   socket.receive({ type: 'interruption', interruption_event: { event_id: 3 } })
   socket.receive({ type: 'audio', audio_event: { event_id: 2, audio_base_64: 'OLD' } })
+  socket.receive({ type: 'user_transcript', user_transcription_event: { user_transcript: 'What did other sources report?' } })
   socket.receive({ type: 'audio', audio_event: { event_id: 4, audio_base_64: 'NEW' } })
   expect(output.queuePcm).toHaveBeenCalledTimes(2)
   expect(callbacks.interrupt).toHaveBeenCalled()
@@ -117,6 +120,7 @@ it('discards late interrupted audio and refreshes only its own conversation cont
 
 it('routes research consent and results through the authenticated conversation without changing stories', async () => {
   const { voice, callbacks, connect } = setup(), socket = await connect()
+  await voice.sendText('What about the moons of Mars?')
   const offered = { status: 'offered', query: 'Mars moons', answer: 'Offer to look it up.', sources: [] }
   vi.mocked(api).mockResolvedValueOnce(offered)
   socket.receive({ type: 'client_tool_call', client_tool_call: {
@@ -137,4 +141,35 @@ it('routes research consent and results through the authenticated conversation w
   expect(api).toHaveBeenLastCalledWith('/conversations/conversation/research', 'POST', { action: 'search' }, expect.any(AbortSignal))
   expect(output.setStoryOrder).not.toHaveBeenCalled()
   voice.close()
+})
+
+
+it('keeps an open microphone silent until a real transcript or explicit request', async () => {
+  const { voice, callbacks, connect } = setup(), socket = await connect()
+  await voice.setMicrophone(true)
+  socket.receive({ type: 'audio', audio_event: { event_id: 1, audio_base_64: 'UNSOLICITED' } })
+  socket.receive({ type: 'user_transcript', user_transcription_event: { user_transcript: '   ' } })
+  socket.receive({ type: 'audio', audio_event: { event_id: 2, audio_base_64: 'STILL_SILENT' } })
+  expect(output.queuePcm).not.toHaveBeenCalled()
+  expect(callbacks.phase).not.toHaveBeenCalledWith('thinking')
+  socket.receive({ type: 'user_transcript', user_transcription_event: { user_transcript: 'Почему упали акции?' } })
+  socket.receive({ type: 'audio', audio_event: { event_id: 3, audio_base_64: 'REAL_REPLY' } })
+  expect(output.queuePcm).toHaveBeenCalledWith('REAL_REPLY', 24000, undefined)
+  voice.close()
+})
+
+it('does not speak again during silence after an answer has finished', async () => {
+  const { voice, connect } = setup(), socket = await connect()
+  await voice.sendText('Explain the story')
+  vi.useFakeTimers()
+  try {
+    socket.receive({ type: 'audio', audio_event: { event_id: 1, audio_base_64: 'ANSWER' } })
+    output.callbacks.finished()
+    vi.advanceTimersByTime(6000)
+    socket.receive({ type: 'audio', audio_event: { event_id: 2, audio_base_64: 'ARE_YOU_THERE' } })
+    expect(output.queuePcm).toHaveBeenCalledTimes(1)
+    socket.receive({ type: 'client_tool_call', client_tool_call: { tool_name: 'research_topic', tool_call_id: 'idle', parameters: { action: 'offer', query: 'invented' } } })
+    expect(socket.sent.at(-1)).toMatchObject({ type: 'client_tool_result', is_error: true })
+    voice.close()
+  } finally { vi.useRealTimers() }
 })

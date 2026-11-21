@@ -119,6 +119,9 @@ def session_config(language, titles, context=None, speech_stream=None, voice=Non
         },
         "instructions": (
             "You are Sourcera, a warm, concise spoken news companion. "
+            "An open microphone is not a request. Remain silent on silence, empty audio, breathing or background noise. "
+            "Never greet, make small talk or check whether the listener is there because of inactivity. "
+            "When real attempted speech cannot be understood, ask once to repeat the question in the listener's language; do not guess it. "
             + ("Delivery style (never change factual content): " + persona + " " if persona else "")
             + (
                 "Output plain spoken prose for live text-to-speech. No markdown, URLs, stage directions, or audio tags. "

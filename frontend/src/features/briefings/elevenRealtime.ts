@@ -25,13 +25,15 @@ export class ElevenRealtime {
   private lastEvent = -1
   private speakingInput = false
   private interruptedThrough = -1
+  private replyAllowed = false
+  private replyTimer: ReturnType<typeof setTimeout> | undefined
   private idleTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(private conversationId: string, private callbacks: VoiceCallbacks, private context: AudioContext) {
     this.player = new ElevenSpeech(conversationId, context, {
       started: () => { clearTimeout(this.idleTimer); callbacks.interrupt(); callbacks.phase('speaking') },
       blocked: () => callbacks.phase('blocked'),
-      finished: () => { callbacks.finished(); callbacks.phase(this.micWanted ? 'listening' : 'idle'); this.armIdle() },
+      finished: () => { this.finishReply(); callbacks.finished(); callbacks.phase(this.micWanted ? 'listening' : 'idle'); this.armIdle() },
       failed: message => this.fail(message),
     })
   }
@@ -81,6 +83,21 @@ export class ElevenRealtime {
       socket.onclose = () => { fail(); if (!this.closed) this.fail('ElevenLabs voice connection ended. Please reconnect.') }
     })
   }
+  private allowReply() {
+    this.replyAllowed = true
+    clearTimeout(this.replyTimer)
+    this.replyTimer = setTimeout(() => { this.replyAllowed = false }, 45000)
+  }
+  private finishReply() {
+    clearTimeout(this.replyTimer)
+    // Preserve delayed chunks of the same streamed answer, then close the gate
+    // well before the provider's separate inactivity timer can take another turn.
+    this.replyTimer = setTimeout(() => { this.replyAllowed = false }, 5000)
+  }
+  private silenceReply() {
+    this.replyAllowed = false
+    clearTimeout(this.replyTimer)
+  }
   private sampleRate(format: string) {
     const match = /^pcm_(16000|22050|24000|44100|48000)$/.exec(format)
     if (!match) throw Error('Unsupported PCM format')
@@ -95,11 +112,14 @@ export class ElevenRealtime {
       case 'audio': {
         const chunk = event.audio_event
         this.lastEvent = Math.max(this.lastEvent, chunk.event_id)
-        if (chunk.event_id <= this.interruptedThrough || !chunk.audio_base_64) break
+        if (!this.replyAllowed || chunk.event_id <= this.interruptedThrough || !chunk.audio_base_64) break
+        clearTimeout(this.replyTimer)
         this.player.queuePcm(chunk.audio_base_64, this.outputRate, chunk.alignment)
         break
       }
       case 'interruption':
+        if (!this.replyAllowed && !this.speakingInput) break
+        this.silenceReply()
         this.interruptedThrough = Math.max(this.interruptedThrough, event.interruption_event.event_id)
         this.player.cancel()
         this.callbacks.interrupt()
@@ -115,7 +135,14 @@ export class ElevenRealtime {
           this.callbacks.phase('listening')
         }
         break
-      case 'user_transcript': this.speakingInput = false; this.callbacks.phase('thinking'); break
+      case 'user_transcript': {
+        this.speakingInput = false
+        const text = event.user_transcription_event?.user_transcript?.trim() || ''
+        if (!/[\p{L}\p{N}]/u.test(text) || /^(?:\[(?:silence|noise|music|inaudible|unintelligible)\]|<[^>]*>)$/i.test(text)) break
+        this.allowReply()
+        this.callbacks.phase('thinking')
+        break
+      }
       case 'client_tool_call': void this.tool(event.client_tool_call); break
       case 'error': this.fail('ElevenLabs could not answer. Please try again.'); break
     }
@@ -130,6 +157,11 @@ export class ElevenRealtime {
   }
   private async tool(call: { tool_name: string; tool_call_id: string; parameters?: { action?: string; query?: string } }) {
     try {
+      if (!this.replyAllowed) {
+        this.send({ type: 'client_tool_result', tool_call_id: call.tool_call_id, result: 'No listener request was received. Remain silent and wait.', is_error: true })
+        return
+      }
+      clearTimeout(this.replyTimer)
       let result: unknown
       if (call.tool_name === 'research_topic') {
         const params = call.parameters || {}
@@ -155,14 +187,17 @@ export class ElevenRealtime {
     this.interrupt()
     this.callbacks.phase('thinking')
     const result = await this.evidence()
+    this.allowReply()
     this.send({ type: 'user_message', text: 'Read the next three verified stories aloud, one short paragraph per story in order, separated by a blank line. No preamble or extra lookup. Data only: ' + JSON.stringify(result) })
   }
   async sendText(text: string) {
+    if (!text.trim()) return
     await this.connect()
     this.interrupt()
     this.callbacks.interrupt()
     this.callbacks.phase('thinking')
     this.playbackContext()
+    this.allowReply()
     this.send({ type: 'user_message', text })
   }
   private playbackContext() {
@@ -211,6 +246,7 @@ export class ElevenRealtime {
     this.stream?.getTracks().forEach(track => track.stop()); this.stream = null
   }
   interrupt() {
+    this.silenceReply()
     this.interruptedThrough = this.lastEvent
     this.player.cancel()
     this.send({ type: 'user_activity' })
@@ -225,6 +261,7 @@ export class ElevenRealtime {
   close() {
     if (this.closed) return
     this.closed = true
+    this.silenceReply()
     this.micWanted = false
     this.micVersion++
     clearTimeout(this.idleTimer)
