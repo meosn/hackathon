@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { Check, Star, Trash2, RotateCcw, Lock, Plus, LoaderCircle, Volume2 } from 'lucide-react'
+import { ArrowRight, Check, Star, Trash2, RotateCcw, Lock, Plus, LoaderCircle, Volume2 } from 'lucide-react'
 import { api, queryClient, useApi } from '../../api/client'
 import type { Preferences } from '../../api/types'
 import { SpeakerAvatar } from '../../components/SpeakerAvatar'
@@ -73,6 +73,9 @@ export function VoiceCollection({mode='settings',prefs,onSelected}:{mode?:'home'
       {rows.some(v=>v.hidden)&&<details className="voice-restore"><summary>Add from collection</summary>{rows.filter(v=>v.hidden).map(voice=><button type="button" key={voice.id} onClick={()=>change.mutate({voice,action:'restore'})}><RotateCcw size={14}/>{voice.name}</button>)}</details>}
       {deleting&&<div className="voice-delete-confirm" role="group" aria-label="Delete voice confirmation"><p>{deleting.custom?'Remove “'+deleting.name+'” from your account? Saved episodes will remain.':'Remove “'+deleting.name+'” from your collection? You can add it again later.'}</p><button type="button" className="btn quiet" onClick={()=>setDeleting(null)}>Keep voice</button><button type="button" className="btn outline" disabled={change.isPending} onClick={()=>change.mutate({voice:deleting,action:'remove'})}>Remove voice</button></div>}
     </>}
+    <Link className="btn outline agent-catalog-link" to="/agent-catalogs">
+      Agent Catalogs <ArrowRight size={16} aria-hidden="true" />
+    </Link>
     <ErrorNote error={library.error||change.error||preview.error}/>
   </div>
 }

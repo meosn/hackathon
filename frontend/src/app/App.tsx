@@ -17,6 +17,7 @@ import { Assistant } from '../features/assistant/Assistant'
 import { Settings } from '../features/settings/Settings'
 import { Analytics } from '../features/analytics/Analytics'
 import { StudioHome } from '../features/briefings/StudioHome'
+import { AgentCatalog } from '../features/voice/AgentCatalog'
 import { usePlayer } from '../stores/player'
 
 const subscribe = (callback: () => void) => {
@@ -122,6 +123,7 @@ export function App() {
             </nav>
           )}
           <Routes>
+            <Route path="/agent-catalogs" element={<AgentCatalog />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/stories/:id" element={<StoryView />} />
             <Route path="/briefings" element={<History />} />
