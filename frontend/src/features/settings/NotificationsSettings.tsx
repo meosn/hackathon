@@ -6,6 +6,11 @@ import { ErrorNote } from '../../components/UI'
 
 type Config={available:boolean;public_key:string|null}
 function publicKey(value:string) {return Uint8Array.from(atob(value.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-value.length%4)%4)),c=>c.charCodeAt(0))}
+async function bounded<T>(promise:Promise<T>,milliseconds:number):Promise<T>{
+  let timer:ReturnType<typeof setTimeout>|undefined
+  try{return await Promise.race([promise,new Promise<T>((_,reject)=>{timer=setTimeout(()=>reject(Error('The browser’s push service did not respond. Please try again.')),milliseconds)})])}
+  finally{if(timer)clearTimeout(timer)}
+}
 export function NotificationsSettings() {
   const config=useApi<Config>('/notifications/settings')
   const [active,setActive]=useState(false)
@@ -24,7 +29,8 @@ export function NotificationsSettings() {
   },[supported])
   const toggle=useMutation({mutationFn:async(permission:Promise<NotificationPermission>|null)=>{
     setMessage('')
-    const reg=await navigator.serviceWorker.ready
+    await navigator.serviceWorker.register('/sw.js')
+    const reg=await bounded(navigator.serviceWorker.ready,10000)
     const existing=await reg.pushManager.getSubscription()
     if(active) {
       if(existing){await api('/notifications/subscriptions','DELETE',{endpoint:existing.endpoint});await existing.unsubscribe()}
@@ -32,7 +38,7 @@ export function NotificationsSettings() {
     }
     if(await permission!=='granted')throw Error('Notifications are blocked. Allow them in your browser’s site settings.')
     if(!config.data?.public_key)throw Error('Notifications are temporarily unavailable.')
-    const sub=existing||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:publicKey(config.data.public_key)})
+    const sub=existing||await bounded(reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:publicKey(config.data.public_key)}),15000)
     await api('/notifications/subscriptions','POST',sub.toJSON())
     setActive(true);setMessage('You’ll be notified when a scheduled briefing is ready.')
   }})

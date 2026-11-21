@@ -120,7 +120,9 @@ def remove_voice(key: str, db=Depends(get_db), user=Depends(current_user)):
     if row.preset_slug:
         row.hidden, row.favorite = True, False
         if preferences(db, user.id)["voice_profile_id"] == row.preset_slug and not user.custom_voice_active:
-            set_preferences(db, user.id, {"voice_profile_id": "professional"})
+            choices = [v for v in collection(db, user) if not v["custom"] and not v["hidden"] and not v["locked"]]
+            fallback = choices[0]["id"] if choices else "professional"
+            set_preferences(db, user.id, {"voice_profile_id": fallback, **({"voice_engine": "elevenlabs"} if fallback == "energetic" else {})})
     else:
         if user.custom_voice_id == row.provider_voice_id:
             user.custom_voice_id, user.custom_voice_sample, user.custom_voice_active = None, None, False

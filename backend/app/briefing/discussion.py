@@ -345,7 +345,7 @@ def generated_answer(db, conv, story, question, prefs, intent):
         "depth": prefs["depth"],
         "topic": conv.topic,
         "briefing_id": conv.briefing_id,
-        "history": [{"role": m.role, "text": m.text[:1500]} for m in reversed(history)],
+        "history": [{"role": m.role, "text": m.text[:400 if prefs["discussion_model"] == "local" else 1500]} for m in list(reversed(history))[-4 if prefs["discussion_model"] == "local" else -10:]],
         "evidence": [
             {
                 "claim_id": fid,
