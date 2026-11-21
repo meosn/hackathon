@@ -223,7 +223,7 @@ The private VAPID key is generated atomically and persists in the shared state v
 
 ## Private voice collection
 
-Settings → Voice & language lists standard narrators and all of the listener's saved custom voices. Stars save favorite status immediately; the listening room shows only favorites. The initial favorites are The Anchor and Donald Trump. Removing a standard narrator hides it only for that listener and can be reversed with **Add from collection**. Removing a custom voice removes its personal collection entry and deselects it; historical episode audio is preserved. Shared provider voices are never deleted as a side effect. Creating another custom character retains the previous saved character. New previews and selection resolve the requested private voice by owner.
+Settings → Voice & language lists standard narrators and all of the listener's saved custom voices. Stars save favorite status immediately; the listening room shows only favorites. The initial favorites are the professional narrator and Donald Trump. Removing a standard narrator hides it only for that listener and can be reversed with **Add from collection**. Removing a custom voice removes its personal collection entry and deselects it; historical episode audio is preserved. Shared provider voices are never deleted as a side effect. Creating another custom character retains the previous saved character. New previews and selection resolve the requested private voice by owner.
 
 ## CPU language model
 

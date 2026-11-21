@@ -32,6 +32,7 @@ export function CustomVoiceSettings() {
   const update = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw Error('Give your character a name.')
+      if (!file && !voice.data?.sample_uploaded) throw Error('Choose a recording for your new voice.')
       try {
         if (file) {
           if (file.size > 25 * 1024 * 1024) throw Error('Choose an audio file smaller than 25 MB.')
@@ -64,7 +65,7 @@ export function CustomVoiceSettings() {
     <div className="custom-character-fields" onKeyDown={event => {
       if (event.key === 'Enter' && event.target instanceof HTMLInputElement && event.target.type === 'text') {
         event.preventDefault(); event.stopPropagation()
-        if (!update.isPending && name.trim() && (file || voice.data?.saved || voice.data?.sample_uploaded)) update.mutate()
+        if (!update.isPending && name.trim() && (file || voice.data?.sample_uploaded)) update.mutate()
       }
     }}>
       <label className="field">Character name
@@ -79,8 +80,8 @@ export function CustomVoiceSettings() {
           onChange={event => setFile(event.target.files?.[0] || null)} />
       </label>
       <p className="preference-hint">Use a recording you have permission to clone.</p>
-      <Button type="button" onClick={() => update.mutate()} disabled={update.isPending || !name.trim() || (!file && !voice.data?.saved && !voice.data?.sample_uploaded)}>
-        {update.isPending ? 'Creating your character…' : voice.data?.sample_uploaded && !file ? 'Create from saved recording' : file ? 'Create character' : voice.data?.saved ? 'Save character' : 'Create character'}
+      <Button type="button" onClick={() => update.mutate()} disabled={update.isPending || !name.trim() || (!file && !voice.data?.sample_uploaded)}>
+        {update.isPending ? 'Creating your character…' : voice.data?.sample_uploaded && !file ? 'Create from saved recording' : 'Create character'}
       </Button>
       {update.isSuccess && voice.data?.saved && <p className="character-ready" role="status"><Check size={15} /> Ready — selected for your briefings and voice chat.</p>}
       <ErrorNote error={update.error || voice.error} />

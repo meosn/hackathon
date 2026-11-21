@@ -38,3 +38,12 @@ it('shows only name and file, creates in one action and retains input after a fa
   await waitFor(() => expect(attempts).toBe(2))
   expect(savePreferences).not.toHaveBeenCalled()
 })
+
+it('requires a new recording instead of accidentally renaming an existing character', () => {
+  vi.mocked(useApi).mockReturnValue({ data: { ...state, saved: true, name: 'Existing host' } } as ReturnType<typeof useApi>)
+  render(<QueryClientProvider client={new QueryClient()}><CustomVoiceSettings /></QueryClientProvider>)
+  fireEvent.change(screen.getByRole('textbox', { name: 'Character name' }), { target: { value: 'Another host' } })
+  expect(screen.getByRole('button', { name: 'Create character' })).toBeDisabled()
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Character name' }), { key: 'Enter' })
+  expect(api).not.toHaveBeenCalled()
+})
