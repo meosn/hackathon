@@ -1,7 +1,7 @@
 # Sourcera
 ### The Liquid Briefing · MAIN AI Hackathon 2026
 
-> **[Try the live demo →](https://is.gd/AFH7iA)**
+> **[Try the live demo →](https://qr.me/PJUMDW)**
 > Open the website to test Sourcera in your browser.
 
 Personalized audio news with a prepared daily briefing and an interruptible voice conversation.
