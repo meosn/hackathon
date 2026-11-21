@@ -689,12 +689,12 @@ def test_agent_can_resume_additional_news_after_switching_provider(api, monkeypa
                     json={'conversation_id': conv, 'story_id': 'unrelated'}).status_code == 422
 
 
-def test_donald_trump_preset_uses_the_voice_created_from_the_reference(api, monkeypatch):
+def test_ponald_drump_preset_uses_the_voice_created_from_the_reference(api, monkeypatch):
     token = api.post(V1 + '/auth/demo', json={'profile': 'tech'}).json()['access_token']
     headers = {'Authorization': 'Bearer ' + token}
     catalog = api.get(V1 + '/voices', headers=headers).json()
     character = next(row for row in catalog if row['id'] == 'energetic')
-    assert character['name'] == 'Donald Trump'
+    assert character['name'] == 'Ponald Drump'
     assert 'recording' in character['description']
     changed = api.patch(V1 + '/users/me/preferences', headers=headers,
                         json={'voice_profile_id': 'energetic', 'voice_engine': 'elevenlabs'})

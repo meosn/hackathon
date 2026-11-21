@@ -139,7 +139,7 @@ VOICE_STYLES = [
     ("jarvis", "Studio assistant", "A composed, precise synthetic assistant."),
     (
         "energetic",
-        "Donald Trump",
+        "Ponald Drump",
         "AI character voice from the supplied recording. Uses ElevenLabs.",
     ),
     ("cyberpunk", "Cyberpunk narrator", "Low, measured late-night narration."),
@@ -219,6 +219,8 @@ def seed_voices(db):
         if slug == "energetic" and row.name in {
             "Energetic commentator",
             "Energetic Speaker",
+            "Donald Trump",
+            "Donaald Trump",
         }:
             row.name = name
         voice_id, openai_voice, persona = VOICE_DEFAULTS[slug]
