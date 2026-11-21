@@ -128,3 +128,9 @@ def test_live_recommendations_use_fresh_public_articles_and_ignore_archive_ancho
         "Parliament votes in presidential election",
         "The government announced the result.",
     )
+    assert "politics" in analysis.classify(
+        "Regierung nach der Wahl", "Das Parlament stimmt ab."
+    )
+    assert "politics" in analysis.classify(
+        "Verkiezingen in Nederland", "De regering vormt een nieuw kabinet."
+    )
