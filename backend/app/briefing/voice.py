@@ -327,10 +327,13 @@ def render_aligned(db, parts, config, reference_id, pauses=None):
     return pcm, boundaries
 
 
-def _render_audio(db, segments, voice, reference_id, config):
+def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=None):
     parts = [(s.text, s.language) for s in segments]
+    recipe = [3, config, voice, parts]
+    if segment_pause is not None:
+        recipe.append({"segment_pause": segment_pause})
     key = hashlib.sha256(
-        json.dumps([3, config, voice, parts], ensure_ascii=False).encode()
+        json.dumps(recipe, ensure_ascii=False).encode()
     ).hexdigest()
     if db.get_bind().dialect.name == "postgresql":
         db.execute(
@@ -342,6 +345,7 @@ def _render_audio(db, segments, voice, reference_id, config):
         return existing
     if (
         config[0] == "elevenlabs"
+        and segment_pause is None
         and len(parts) > 1
         and os.getenv("ELEVENLABS_BATCH_TTS", "1") == "1"
     ):
@@ -353,10 +357,15 @@ def _render_audio(db, segments, voice, reference_id, config):
         pcm, boundaries = render_aligned(db, parts, config, reference_id, pauses=pauses)
     else:
         pcm, boundaries = bytearray(), []
-        for text, lang in parts:
+        for index, (text, lang) in enumerate(parts):
             start = len(pcm) / (2 * RATE)
             pcm.extend(render_segment(db, text, lang, voice, config, reference_id))
-            pcm.extend(b"\0\0" * (RATE // 5))
+            pause = (
+                segment_pause
+                if segment_pause is not None and index < len(parts) - 1
+                else 0.2
+            )
+            pcm.extend(b"\0\0" * round(RATE * pause))
             boundaries.append([start, len(pcm) / (2 * RATE)])
     content = wav_bytes(pcm)
     digest = hashlib.sha256(content).hexdigest()

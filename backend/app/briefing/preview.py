@@ -1,6 +1,7 @@
 """Short, cached voice samples using the same selected voice IDs as live chat."""
 
 import os
+import re
 from types import SimpleNamespace
 
 from fastapi import HTTPException
@@ -57,12 +58,20 @@ def render(db, user, slug, request):
             os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2",
             voice_id,
         )
+    # Short samples must demonstrate clear phrasing even when a clone ignores
+    # punctuation. Render complete sentences and join their PCM with real silence.
+    sentences = (
+        re.split(r"(?<=[.!?])\s+", PHRASES[language])
+        if engine == "elevenlabs"
+        else [PHRASES[language]]
+    )
     return voice._render_audio(
         db,
-        [SimpleNamespace(text=PHRASES[language], language=language)],
+        [SimpleNamespace(text=text, language=language) for text in sentences],
         slug,
         "voice-preview/" + user.id,
         config,
+        segment_pause=0.55 if engine == "elevenlabs" else None,
     )
 
 

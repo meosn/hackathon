@@ -44,14 +44,33 @@ def test_samples_use_selected_engine_voice_and_cache_each_language(
     )
     assert first.id != other.id
     assert calls[1][0].endswith("/onwK4e9ZLuTAKqWW03F9")
-    assert calls[1][1]["json"]["text"] == preview.PHRASES["en"]
+    assert (
+        " ".join(call[1]["json"]["text"] for call in calls[1:]) == preview.PHRASES["en"]
+    )
+    assert len(calls) == 4
+    # The sample contains actual 550 ms PCM pauses; it does not rely on a
+    # provider interpreting punctuation, pause tags or a delivery instruction.
+    with wave.open(io.BytesIO(voice.read_object(other.object_key)), "rb") as audio:
+        frames = audio.readframes(audio.getnframes())
+    gap = round(0.55 * voice.RATE)
+    assert frames[voice.RATE * 2 : (voice.RATE + gap) * 2] == b"\0\0" * gap
+    second_end = voice.RATE * 2 + gap
+    assert frames[second_end * 2 : (second_end + gap) * 2] == b"\0\0" * gap
+    assert frames[(voice.RATE + gap) * 2 : (voice.RATE + gap) * 2 + 2] == b"\x01\0"
+    cached = preview.render(
+        session, user, "professional", preview.PreviewRequest(engine="elevenlabs")
+    )
+    assert cached.id == other.id and len(calls) == 4
     preview.render(
         session,
         user,
         "professional",
         preview.PreviewRequest(engine="elevenlabs", language="de"),
     )
-    assert len(calls) == 3 and calls[2][1]["json"]["text"] == preview.PHRASES["de"]
+    assert len(calls) == 7
+    assert (
+        " ".join(call[1]["json"]["text"] for call in calls[4:]) == preview.PHRASES["de"]
+    )
 
 
 def test_custom_previews_are_resolved_per_owner_and_change_after_recloning(
@@ -76,7 +95,7 @@ def test_custom_previews_are_resolved_per_owner_and_change_after_recloning(
     a, b = [
         preview.render(session, owner, "custom", request) for owner in (first, second)
     ]
-    assert a.id != b.id and ids == ["private-one", "private-two"]
+    assert a.id != b.id and ids == ["private-one"] * 3 + ["private-two"] * 3
     first.custom_voice_id = "private-new"
     new = preview.render(session, first, "custom", request)
     assert new.id != a.id and ids[-1] == "private-new"
