@@ -156,3 +156,31 @@ def test_local_answer_rebinds_short_indices_to_verified_source_ids(session,monke
     monkeypatch.setattr(discussion,'model_output',compact)
     text,citations=discussion.generated_answer(session,conv,story_detail(session,story['id']),'What happened?',preferences(session,owner.id),'FOLLOW_UP')
     assert text and citations and citations[0]['claim_id']
+
+def test_push_payload_is_vapid_signed_encrypted_and_readable_only_by_its_browser_key(session,monkeypatch,tmp_path):
+    import requests,http_ece
+    from app.config import settings
+    private=ec.generate_private_key(ec.SECP256R1())
+    public=private.public_key().public_bytes(serialization.Encoding.X962,serialization.PublicFormat.UncompressedPoint)
+    encode=lambda value:base64.urlsafe_b64encode(value).decode().rstrip('=')
+    auth=b'private-auth-key'
+    auth=auth.ljust(16,b'0')
+    owner=listener(session,'encrypted-push','en',[])
+    sub=n.PushSubscription(user_id=owner.id,endpoint='https://fcm.googleapis.com/fcm/send/encrypted-test',keys={'p256dh':encode(public),'auth':encode(auth)})
+    session.add(sub);session.commit()
+    notice=n.ListenerNotification(user_id=owner.id,title='Notifications are on')
+    session.add(notice);session.commit()
+    monkeypatch.setattr(settings,'state_dir',tmp_path)
+    received=[]
+    def post(url,**kwargs):
+        headers={key.lower():value for key,value in kwargs['headers'].items()}
+        assert headers['authorization'].startswith('vapid ')
+        assert headers['content-encoding']=='aes128gcm'
+        plaintext=http_ece.decrypt(kwargs['data'],private_key=private,auth_secret=auth,version='aes128gcm')
+        received.append(json.loads(plaintext))
+        response=requests.Response();response.status_code=201;response._content=b''
+        return response
+    monkeypatch.setattr(requests,'post',post)
+    n.deliver(session,notice.id)
+    assert received[0]['title']=='Notifications are on' and received[0]['url']=='/'
+    assert notice.sent_to==[sub.id]
