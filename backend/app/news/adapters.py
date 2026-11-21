@@ -26,6 +26,8 @@ MAX_BYTES = 15 * 1024 * 1024
 RSS_SOURCES = {
     "bloomberg": ("Bloomberg", "https://www.bloomberg.com/feeds/markets/news.rss"),
     "dw": ("DW", "https://rss.dw.com/rdf/rss-en-all"),
+    "dw-de": ("DW", "https://rss.dw.com/rdf/rss-de-all"),
+    "nos-nl": ("NOS", "https://feeds.nos.nl/nosnieuwsalgemeen"),
     "bbc": ("BBC News", "https://feeds.bbci.co.uk/news/business/rss.xml"),
     "bbc-world": ("BBC News", "https://feeds.bbci.co.uk/news/world/rss.xml"),
     "bbc-technology": ("BBC News", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
@@ -185,7 +187,10 @@ def source_records(source_id: str) -> Iterator[InputArticle]:
         yield from parse_news_page(download(FOREX_URL))
     else:
         publisher, url = RSS_SOURCES[source_id]
-        yield from prepared_feed(download(url), url, publisher=publisher, language="en")
+        language = {"dw-de": "de", "nos-nl": "nl"}.get(source_id, "en")
+        yield from prepared_feed(
+            download(url), url, publisher=publisher, language=language
+        )
 
 
 def validate_feed(url: str):
@@ -225,6 +230,8 @@ PUBLIC_ARTICLE_HOSTS = {
     "dw.com",
     "www.theguardian.com",
     "www.aljazeera.com",
+    "nos.nl",
+    "www.nos.nl",
 }
 
 
