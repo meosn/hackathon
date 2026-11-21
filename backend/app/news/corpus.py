@@ -1,7 +1,7 @@
 """Keep live public reporting separate from fixtures and the imported archive."""
 
 import os
-from sqlalchemy import select
+from sqlalchemy import select, func
 from .models import Article, IngestionJob, Story, StoryArticle
 
 LIVE_KINDS = ("source", "rss", "crawl")
@@ -33,3 +33,13 @@ def restrict_stories(query):
     if os.getenv("ACTIVE_CORPUS") in {"licensed", "live"}:
         query = query.where(Story.is_synthetic.is_(False))
     return query.where(live_publication_window()) if live() else query
+
+
+def latest_publication_time():
+    return (
+        select(func.max(Article.published_at))
+        .join(StoryArticle, StoryArticle.article_id == Article.id)
+        .where(StoryArticle.story_id == Story.id)
+        .correlate(Story)
+        .scalar_subquery()
+    )

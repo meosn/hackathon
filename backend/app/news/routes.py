@@ -157,13 +157,14 @@ def stories(
     cursor: str | None = Query(None, max_length=400),
     sort: Literal["recent", "importance", "oldest"] = "recent",
 ):
-    from .corpus import restrict_stories
+    from .corpus import restrict_stories, live, latest_publication_time
 
     stmt = restrict_stories(select(Story).where(Story.archived.is_(False)))
+    published = latest_publication_time() if live() else Story.event_at
     if date_from:
-        stmt = stmt.where(Story.event_at >= date_from)
+        stmt = stmt.where(published >= date_from)
     if date_to:
-        stmt = stmt.where(Story.event_at <= date_to)
+        stmt = stmt.where(published <= date_to)
     if topic:
         stmt = stmt.where(
             Story.id.in_(select(StoryTopic.story_id).where(StoryTopic.name == topic))
@@ -188,7 +189,7 @@ def stories(
                 Story.summary.icontains(search, autoescape=True),
             )
         )
-    col = Story.importance if sort == "importance" else Story.event_at
+    col = Story.importance if sort == "importance" else published
     if cursor:
         try:
             mode, key, last_id = json.loads(base64.urlsafe_b64decode(cursor))
@@ -203,14 +204,15 @@ def stories(
         col.asc() if sort == "oldest" else col.desc(), Story.id
     ).limit(limit + 1)
     rows = db.scalars(ordered).all()
+    items = service.summaries(db, rows[:limit])
     next_cursor = None
     if len(rows) > limit:
         last = rows[limit - 1]
-        key = last.importance if sort == "importance" else service.iso(last.event_at)
+        key = items[-1]["importance"] if sort == "importance" else items[-1]["event_at"]
         next_cursor = base64.urlsafe_b64encode(
             json.dumps([sort, key, last.id]).encode()
         ).decode()
-    return dict(items=service.summaries(db, rows[:limit]), next_cursor=next_cursor)
+    return dict(items=items, next_cursor=next_cursor)
 
 
 def detail_or_404(db, story_id):
