@@ -13,6 +13,7 @@ from time import monotonic
 from urllib.parse import quote
 import wave
 from array import array
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
 import httpx
 from sqlalchemy import select, text as sql_text
@@ -130,54 +131,92 @@ def provider_config(voice, db=None):
     return kind, os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2", voice_id
 
 
-def render_segment(db, text, lang, voice, config, reference_id):
+def _segment_pcm(text, lang, voice, config):
     kind, model, voice_id = config
-    start = monotonic()
-    try:
-        if kind == "local":
-            return local_pcm(text, lang, voice)
-        if kind == "openai":
-            result = httpx.post(
-                "https://api.openai.com/v1/audio/speech",
-                timeout=httpx.Timeout(30, connect=5),
-                json={
-                    "model": model,
-                    "voice": voice_id,
-                    "input": text,
-                    "response_format": "mp3",
-                },
-                headers={
-                    "Authorization": "Bearer "
-                    + (os.getenv("OPENAI_API_KEY") or os.environ["LLM_API_KEY"])
-                },
-            )
-            result.raise_for_status()
-            pcm = convert_audio(result.content)
-            if not pcm:
-                raise ValueError("Speech provider returned empty audio")
-            return pcm
+    if kind == "local":
+        return local_pcm(text, lang, voice)
+    if kind == "openai":
         result = httpx.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice_id, safe='')}",
-            params={"output_format": "mp3_44100_128"},
-            timeout=httpx.Timeout(60, connect=5),
-            json={"text": text, "model_id": model},
-            headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
+            "https://api.openai.com/v1/audio/speech",
+            timeout=httpx.Timeout(30, connect=5),
+            json={
+                "model": model,
+                "voice": voice_id,
+                "input": text,
+                "response_format": "mp3",
+            },
+            headers={
+                "Authorization": "Bearer "
+                + (os.getenv("OPENAI_API_KEY") or os.environ["LLM_API_KEY"])
+            },
         )
         result.raise_for_status()
         pcm = convert_audio(result.content)
         if not pcm:
             raise ValueError("Speech provider returned empty audio")
         return pcm
+    result = httpx.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice_id, safe='')}",
+        params={"output_format": "mp3_44100_128"},
+        timeout=httpx.Timeout(60, connect=5),
+        json={"text": text, "model_id": model},
+        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
+    )
+    result.raise_for_status()
+    pcm = convert_audio(result.content)
+    if not pcm:
+        raise ValueError("Speech provider returned empty audio")
+    return pcm
+
+
+def render_segment(db, text, lang, voice, config, reference_id):
+    start = monotonic()
+    try:
+        return _segment_pcm(text, lang, voice, config)
     finally:
-        observe(
-            db,
-            "tts",
-            model,
-            characters=len(text),
-            seconds=monotonic() - start,
-            reference_id=reference_id,
-            measured_usd=0 if kind == "local" else None,
-        )
+        observe(db, "tts", config[1], characters=len(text),
+                seconds=monotonic() - start, reference_id=reference_id,
+                measured_usd=0 if config[0] == "local" else None)
+
+
+def openai_parts(db, parts, voice, config, reference_id):
+    """Bound parallel HTTP requests; keep SQLAlchemy and accounting on this thread."""
+    workers = max(1, min(4, int(os.getenv("OPENAI_TTS_CONCURRENCY", "3"))))
+    audio = [None] * len(parts)
+    remaining = iter(enumerate(parts))
+    failure = None
+
+    def synthesize(text, language):
+        start = monotonic()
+        try:
+            return _segment_pcm(text, language, voice, config), None, monotonic() - start
+        except Exception as error:
+            return None, error, monotonic() - start
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="openai-tts") as pool:
+        pending = {}
+        while True:
+            while failure is None and len(pending) < workers:
+                part = next(remaining, None)
+                if part is None:
+                    break
+                index, (text, language) = part
+                pending[pool.submit(synthesize, text, language)] = (index, text)
+            if not pending:
+                break
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                index, text = pending.pop(future)
+                pcm, error, elapsed = future.result()
+                observe(db, "tts", config[1], characters=len(text), seconds=elapsed,
+                        reference_id=reference_id)
+                if error is not None:
+                    failure = failure or error
+                else:
+                    audio[index] = pcm
+    if failure is not None:
+        raise failure
+    return audio
 
 
 def _bucket():
@@ -476,9 +515,10 @@ def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=No
         pcm, boundaries = render_aligned(db, parts, config, reference_id, pauses=pauses)
     else:
         pcm, boundaries = bytearray(), []
+        rendered = openai_parts(db, parts, voice, config, reference_id) if config[0] == "openai" and len(parts) > 1 else None
         for index, (text, lang) in enumerate(parts):
             start = len(pcm) / (2 * RATE)
-            pcm.extend(render_segment(db, text, lang, voice, config, reference_id))
+            pcm.extend(rendered[index] if rendered is not None else render_segment(db, text, lang, voice, config, reference_id))
             pause = (
                 segment_pause
                 if segment_pause is not None and index < len(parts) - 1
