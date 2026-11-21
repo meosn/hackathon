@@ -721,6 +721,8 @@ def fail_briefing(db, briefing_id, error):
     else:
         item.error = "Briefing generation was interrupted. You can retry this edition."
     emit(db, "briefing.failed", item.id)
+    from ..notifications import record_failed
+    record_failed(db, item)
     db.commit()
 
 

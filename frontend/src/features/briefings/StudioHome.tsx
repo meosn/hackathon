@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { AudioLines, Check, Play, Plus, LoaderCircle, Volume2, Lock } from 'lucide-react'
 import { api, clockTime, niceDate, queryClient, useApi } from '../../api/client'
@@ -22,7 +22,10 @@ export function StudioHome({ user }: { user: User }) {
   const prefs = useApi<Preferences>('/users/me/preferences')
   const briefs = useApi<Briefing[]>('/briefings')
   const health = useApi<Health>('/health')
-  const [selectedId, setSelectedId] = useState('')
+  const [searchParams] = useSearchParams()
+  const notificationEdition = searchParams.get('briefing') || ''
+  const [selectedId, setSelectedId] = useState(notificationEdition)
+  useEffect(() => { setSelectedId(notificationEdition) }, [notificationEdition])
   const [playRequest, setPlayRequest] = useState(0)
   const prepared = usePreparedEditions()
   const engine = useMutation({

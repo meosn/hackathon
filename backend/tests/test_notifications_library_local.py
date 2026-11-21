@@ -84,7 +84,7 @@ def test_ready_notification_waits_for_audio_stage_and_delivery_is_idempotent(ses
     monkeypatch.setattr(pywebpush,'webpush',lambda **kw:calls.append(kw))
     n.deliver(session,notice.id);n.deliver(session,notice.id)
     assert len(calls)==1
-    assert json.loads(calls[0]['data'])['url']=='/briefings/'+edition.id
+    assert json.loads(calls[0]['data'])['url']=='/?briefing='+edition.id
     assert calls[0]['subscription_info']['keys']==data['keys']
     assert n.vapid_keys()[1]==n.vapid_keys()[1]
     assert (tmp_path/'web-push-private.pem').stat().st_mode & 0o077==0
@@ -184,3 +184,27 @@ def test_push_payload_is_vapid_signed_encrypted_and_readable_only_by_its_browser
     n.deliver(session,notice.id)
     assert received[0]['title']=='Notifications are on' and received[0]['url']=='/'
     assert notice.sent_to==[sub.id]
+
+
+def test_failed_scheduled_audio_notifies_once_with_the_actual_error(session, monkeypatch, tmp_path):
+    import pywebpush
+    from app.config import settings
+    from app.briefing.service import fail_briefing
+    owner = listener(session, 'failed-push', 'en', [])
+    session.add(n.PushSubscription(user_id=owner.id, **subscription()))
+    edition = Briefing(user_id=owner.id, title='News', language='en', voice_profile_id='professional', request={}, schedule_key='scheduled/test', status='audio_generating')
+    session.add(edition); session.commit()
+    fail_briefing(session, edition.id, RuntimeError('interrupted'))
+    notice = session.scalar(select(n.ListenerNotification).where(n.ListenerNotification.briefing_id == edition.id))
+    assert notice and 'could not' in notice.title
+    assert n.record_failed(session, edition).id == notice.id
+    monkeypatch.setattr(settings, 'state_dir', tmp_path)
+    calls = []
+    monkeypatch.setattr(pywebpush, 'webpush', lambda **kw: calls.append(kw))
+    n.deliver(session, notice.id)
+    payload = json.loads(calls[0]['data'])
+    assert payload['url'] == '/?briefing=' + edition.id
+    assert payload['body'] == edition.error
+    ordinary = Briefing(user_id=owner.id, title='News', language='en', voice_profile_id='professional', request={}, status='failed')
+    session.add(ordinary); session.flush()
+    assert n.record_failed(session, ordinary) is None

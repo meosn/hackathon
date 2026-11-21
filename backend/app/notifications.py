@@ -53,12 +53,20 @@ def vapid_keys():
 
 
 def record_ready(db, briefing):
-    if briefing.status != "completed" or not (briefing.schedule_key or "").startswith("scheduled/"):
+    return record_outcome(db, briefing, "completed")
+
+
+def record_failed(db, briefing):
+    return record_outcome(db, briefing, "failed")
+
+
+def record_outcome(db, briefing, status):
+    if briefing.status != status or not (briefing.schedule_key or "").startswith("scheduled/"):
         return None
     existing = db.scalar(select(ListenerNotification).where(ListenerNotification.briefing_id == briefing.id))
     if existing:
         return existing
-    row = ListenerNotification(user_id=briefing.user_id, briefing_id=briefing.id, title="Your news is ready")
+    row = ListenerNotification(user_id=briefing.user_id, briefing_id=briefing.id, title="Your news is ready" if status == "completed" else "Your briefing could not be prepared")
     try:
         with db.begin_nested():
             db.add(row)
@@ -75,13 +83,17 @@ def deliver(db, notification_id):
     row = db.get(ListenerNotification, notification_id)
     if not row or not enabled("WEB_PUSH_ENABLED", True):
         return
+    from .briefing.models import Briefing
+    edition = db.get(Briefing, row.briefing_id) if row.briefing_id else None
+    failed = edition is not None and edition.status == "failed"
+    body = (edition.error or "Please open the player to retry.") if failed else "Your scheduled briefing is ready. Tap to listen."
     private, _ = vapid_keys()
     subscriptions = db.scalars(select(PushSubscription).where(PushSubscription.user_id == row.user_id, PushSubscription.active.is_(True), PushSubscription.created_at <= row.created_at)).all()
     for sub in subscriptions:
         if sub.id in row.sent_to:
             continue
         try:
-            webpush(subscription_info={"endpoint": sub.endpoint, "keys": sub.keys}, data=json.dumps({"title": row.title, "body": "Your scheduled briefing is ready. Tap to listen.", "url": "/briefings/" + row.briefing_id if row.briefing_id else "/", "tag": row.id}),
+            webpush(subscription_info={"endpoint": sub.endpoint, "keys": sub.keys}, data=json.dumps({"title": row.title, "body": body, "url": "/?briefing=" + row.briefing_id if row.briefing_id else "/", "tag": row.id}),
                 vapid_private_key=private, vapid_claims={"sub": os.getenv("WEB_PUSH_SUBJECT", "https://sourcera.147.189.171.211.sslip.io")}, ttl=86400, timeout=8)
         except WebPushException as exc:
             if exc.response is not None and exc.response.status_code in {404, 410}:
@@ -154,7 +166,7 @@ def unsubscribe(body: Endpoint, db=Depends(get_db), user=Depends(current_user)):
 @router.get("/notifications")
 def inbox(db=Depends(get_db), user=Depends(current_user)):
     rows = db.scalars(select(ListenerNotification).where(ListenerNotification.user_id == user.id).order_by(ListenerNotification.created_at.desc()).limit(50)).all()
-    return [dict(id=n.id, title=n.title, url="/briefings/" + n.briefing_id if n.briefing_id else "/", read=n.read, created_at=n.created_at) for n in rows]
+    return [dict(id=n.id, title=n.title, url="/?briefing=" + n.briefing_id if n.briefing_id else "/", read=n.read, created_at=n.created_at) for n in rows]
 
 @router.post("/notifications/{notification_id}/read", status_code=204)
 def mark_read(notification_id: str, db=Depends(get_db), user=Depends(current_user)):

@@ -248,6 +248,9 @@ def test_weekly_schedule_is_atomic_private_and_preserves_completed_slots(client,
     assert {'GMT+00:00', 'GMT+02:00', 'GMT-05:00', 'GMT+05:45'} <= set(zones)
     assert all(zone.startswith('GMT') for zone in zones)
     assert client.get('/api/v1/timezones').status_code == 401
+    # Saving during the selected minute must still dispatch today's delivery.
+    current = client.put('/api/v1/schedules', json=[{**rows[0], 'time': '07:00'}], headers=headers).json()[0]
+    assert session.get(Schedule, current['id']).last_local_date is None
     # A newly added past slot waits for its next occurrence; it does not replay today.
     past = client.put('/api/v1/schedules', json=[{**rows[0], 'time': '01:00'}], headers=headers).json()[0]
     assert session.get(Schedule, past['id']).last_local_date == fixed.date()

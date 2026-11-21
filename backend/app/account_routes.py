@@ -229,7 +229,7 @@ def replace_schedules(
             row.enabled = data["enabled"]
         if newly_enabled:
             local = now.astimezone(resolve_timezone(data["timezone"]))
-            if data["time"] <= local.strftime("%H:%M"):
+            if data["time"] < local.strftime("%H:%M"):
                 row.last_local_date = local.date()
         selected.append(row)
     for row in previous:
