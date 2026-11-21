@@ -24,6 +24,8 @@ class User(Record):
     email: Mapped[str] = mapped_column(String(254), unique=True)
     name: Mapped[str] = mapped_column(String(90))
     password_hash: Mapped[str]
+    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True)
+    is_guest: Mapped[bool] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False)

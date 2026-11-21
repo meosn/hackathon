@@ -77,16 +77,27 @@ describe('source traceability and timing', () => {
 })
 describe('listener workflows', () => {
   it('offers personal sign-in without demo profiles or automatic guest access', async () => {
-    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ access_token: 'personal-test' }))
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async path => json(String(path).endsWith('/auth/providers') ? { google_client_id: null } : { access_token: 'personal-test' }))
     wrap(<Auth />)
     expect(screen.queryByRole('button', { name: 'Technology enthusiast' })).not.toBeInTheDocument()
     expect(screen.queryByText('Demo profiles')).not.toBeInTheDocument()
-    expect(fetcher).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Continue as guest' })).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'listener@example.test' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'personal-password' } })
     fireEvent.submit(screen.getByLabelText('Email').closest('form')!)
     await waitFor(() => expect(sessionStorage.getItem('sourcera.session')).toBe('personal-test'))
-    expect(fetcher.mock.calls[0][0]).toBe('/api/v1/auth/login')
+    expect(fetcher.mock.calls.some(call => call[0] === '/api/v1/auth/login')).toBe(true)
+  })
+  it('enters as a guest only after a click and remembers the guest for later', async () => {
+    localStorage.removeItem('sourcera.guest')
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async path =>
+      json(String(path).endsWith('/auth/providers') ? { google_client_id: null } : { access_token: 'guest-test' }))
+    wrap(<Auth />)
+    expect(fetcher.mock.calls.some(call => call[0] === '/api/v1/auth/guest')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Continue as guest' }))
+    await waitFor(() => expect(sessionStorage.getItem('sourcera.session')).toBe('guest-test'))
+    expect(localStorage.getItem('sourcera.guest')).toBe('guest-test')
+    localStorage.removeItem('sourcera.guest')
   })
   it('sends filters and sort to the server', async () => {
     const fetcher = vi

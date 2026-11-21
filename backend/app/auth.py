@@ -50,7 +50,7 @@ def token(user):
             "sub": user.id,
             "iss": "sourcera",
             "iat": now,
-            "exp": now + timedelta(hours=settings.token_hours),
+            "exp": now + timedelta(hours=24 * 30 if user.is_guest else settings.token_hours),
         },
         key(),
         algorithm="HS256",

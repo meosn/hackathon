@@ -64,6 +64,7 @@ export function App() {
           <Brand />
         </Link>
         <div className="music-header-actions">
+          {me.is_guest && <button type="button" className="btn quiet" onClick={() => { setActive(null); navigate('/login'); setToken(null) }}>Create account</button>}
           <NotificationInbox/>
           <Link to="/settings" className="music-settings" aria-label="Settings">
             <Settings2 size={20} />

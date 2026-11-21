@@ -38,6 +38,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auth Providers */
+        get: operations["auth_providers_api_v1_auth_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/guest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Guest */
+        post: operations["guest_api_v1_auth_guest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Google Login */
+        post: operations["google_login_api_v1_auth_google_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -1576,6 +1627,20 @@ export interface components {
              */
             score: -1 | 0 | 1;
         };
+        /** GoogleLogin */
+        GoogleLogin: {
+            /** Guest Token */
+            guest_token?: string | null;
+            /** Credential */
+            credential: string;
+            /** Nonce */
+            nonce: string;
+        };
+        /** Guest */
+        Guest: {
+            /** Guest Token */
+            guest_token?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1630,6 +1695,11 @@ export interface components {
         };
         /** Listener */
         Listener: {
+            /**
+             * Is Guest
+             * @default false
+             */
+            is_guest: boolean;
             /**
              * Is Premium
              * @default false
@@ -1831,6 +1901,8 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /** Guest Token */
+            guest_token?: string | null;
             /** Name */
             name: string;
         };
@@ -2176,6 +2248,8 @@ export type SchemaEndpoint = components['schemas']['Endpoint'];
 export type SchemaEvidenceInfo = components['schemas']['EvidenceInfo'];
 export type SchemaFactInfo = components['schemas']['FactInfo'];
 export type SchemaFeedbackInput = components['schemas']['FeedbackInput'];
+export type SchemaGoogleLogin = components['schemas']['GoogleLogin'];
+export type SchemaGuest = components['schemas']['Guest'];
 export type SchemaHttpValidationError = components['schemas']['HTTPValidationError'];
 export type SchemaInterests = components['schemas']['Interests'];
 export type SchemaItem = components['schemas']['Item'];
@@ -2257,6 +2331,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    auth_providers_api_v1_auth_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    guest_api_v1_auth_guest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Guest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionToken"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    google_login_api_v1_auth_google_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleLogin"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionToken"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

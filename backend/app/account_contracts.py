@@ -9,6 +9,7 @@ class SessionToken(BaseModel):
 
 
 class Listener(BaseModel):
+    is_guest: bool = False
     is_premium: bool = False
     id: str
     email: str

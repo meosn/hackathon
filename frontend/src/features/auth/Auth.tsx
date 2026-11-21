@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api, setToken } from '../../api/client'
 import { Brand, Button, ErrorNote, Tabs } from '../../components/UI'
+import { GoogleSignIn } from './GoogleSignIn'
 const credentials = z.object({
   name: z.string().trim().max(100).optional(),
   email: z.string().email(),
@@ -25,7 +26,9 @@ export function Auth() {
   const sign = useMutation({
     mutationFn: ({ path, data }: { path: string; data: unknown }) =>
       api<{ access_token: string }>('/auth/' + path, 'POST', data),
-    onSuccess: (r) => {
+    onSuccess: (r, input) => {
+      if (input.path === 'guest') localStorage.setItem('sourcera.guest', r.access_token)
+      else localStorage.removeItem('sourcera.guest')
       setToken(r.access_token)
       navigate(location.pathname === '/login' ? '/' : location.pathname + location.search, { replace: true })
     },
@@ -43,7 +46,7 @@ export function Auth() {
       path: tab,
       data:
         tab === 'register'
-          ? data
+          ? { ...data, guest_token: localStorage.getItem('sourcera.guest') }
           : { email: data.email, password: data.password },
     })
   }
@@ -55,6 +58,15 @@ export function Auth() {
           <h1>
             {tab === 'register' ? 'Create your profile' : 'Sign in'}
           </h1>
+          <div className="auth-alternatives">
+            <GoogleSignIn onCredential={(credential, nonce) => sign.mutate({ path: 'google', data: { credential, nonce, guest_token: localStorage.getItem('sourcera.guest') } })} />
+            <button type="button" className="btn quiet" disabled={sign.isPending}
+              onClick={() => sign.mutate({ path: 'guest', data: { guest_token: localStorage.getItem('sourcera.guest') } })}>
+              Continue as guest
+            </button>
+            <small>Try it without an account. Create a profile later to keep your preferences.</small>
+          </div>
+          <div className="auth-divider"><span>or use email</span></div>
           <Tabs
             value={tab}
             onChange={(id) => {

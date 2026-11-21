@@ -322,3 +322,64 @@ def test_fixed_gmt_offsets_validate_and_drive_delivery_and_daily_dates(session, 
                        json=[{'time': '09:17', 'timezone': 'GMT+5:45', 'days_of_week': [0]}])
     assert saved.status_code == 200, saved.text
     assert saved.json()[0]['timezone'] == 'GMT+05:45'
+
+
+def test_guest_is_private_resumable_and_can_upgrade_without_losing_preferences(client, session):
+    def enter(data={}):
+        response = client.post('/api/v1/auth/guest', json=data)
+        assert response.status_code == 200
+        return response.json()['access_token']
+    first = enter()
+    headers = {'Authorization': 'Bearer ' + first}
+    original = client.get('/api/v1/auth/me', headers=headers).json()
+    assert original['is_guest'] and not original['is_demo']
+    other = enter()
+    assert client.get('/api/v1/auth/me', headers={'Authorization': 'Bearer ' + other}).json()['id'] != original['id']
+    client.patch('/api/v1/users/me/preferences', headers=headers, json={'duration_minutes': 3})
+    resumed = enter({'guest_token': first})
+    assert client.get('/api/v1/auth/me', headers={'Authorization': 'Bearer ' + resumed}).json()['id'] == original['id']
+    upgraded = client.post('/api/v1/auth/register', json={'email': 'upgrade@example.com', 'name': 'Listener', 'password': 'long-password', 'guest_token': first})
+    assert upgraded.status_code == 201, upgraded.text
+    personal = {'Authorization': 'Bearer ' + upgraded.json()['access_token']}
+    me = client.get('/api/v1/auth/me', headers=personal).json()
+    assert me['id'] == original['id'] and not me['is_guest']
+    assert client.get('/api/v1/users/me/preferences', headers=personal).json()['duration_minutes'] == 3
+    assert client.get('/api/v1/auth/me', headers={'Authorization': 'Bearer ' + enter({'guest_token': first})}).json()['id'] != original['id']
+
+
+def test_google_login_verified_identity_and_guest_upgrade(client, session, monkeypatch):
+    from app import google_auth
+    monkeypatch.setenv('GOOGLE_CLIENT_ID', 'test.apps.googleusercontent.com')
+    assert client.get('/api/v1/auth/providers').json()['google_client_id'] == 'test.apps.googleusercontent.com'
+    monkeypatch.setattr(google_auth, 'verify', lambda *args: {'sub': 'google-unique', 'email': 'hello@gmail.com', 'name': 'Google Listener'})
+    guest = client.post('/api/v1/auth/guest', json={}).json()['access_token']
+    before = client.get('/api/v1/auth/me', headers={'Authorization': 'Bearer '+guest}).json()
+    body = {'credential': 'x'*30, 'nonce': 'n'*32, 'guest_token': guest}
+    response = client.post('/api/v1/auth/google', json=body)
+    assert response.status_code == 200, response.text
+    user = client.get('/api/v1/auth/me', headers={'Authorization': 'Bearer '+response.json()['access_token']}).json()
+    assert user['id'] == before['id'] and not user['is_guest']
+    again = client.post('/api/v1/auth/google', json={**body, 'guest_token': None})
+    assert client.get('/api/v1/auth/me', headers={'Authorization': 'Bearer '+again.json()['access_token']}).json()['id'] == user['id']
+
+
+def test_google_validates_signature_audience_expiry_issuer_and_nonce(monkeypatch):
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from types import SimpleNamespace
+    from app import google_auth
+    monkeypatch.setenv('GOOGLE_CLIENT_ID', 'test-client')
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    monkeypatch.setattr(google_auth.keys, 'get_signing_key_from_jwt', lambda _: SimpleNamespace(key=private.public_key()))
+    from app.db import utcnow
+    from datetime import timedelta
+    claims = {'iss':'https://accounts.google.com','aud':'test-client','sub':'123','email':'test@gmail.com','email_verified':True,'nonce':'nonce','iat':utcnow(),'exp':utcnow()+timedelta(minutes=5)}
+    encode = lambda c, key=private: jwt.encode(c, key, algorithm='RS256')
+    assert google_auth.verify(encode(claims), 'nonce')['sub'] == '123'
+    for changes in [{'aud':'other'}, {'iss':'attacker'}, {'exp':utcnow()-timedelta(minutes=1)}, {'nonce':'other'}, {'email_verified':False}]:
+        with pytest.raises(Exception) as error:
+            google_auth.verify(encode({**claims, **changes}), 'nonce')
+        assert error.value.status_code == 401
+    with pytest.raises(Exception) as error:
+        google_auth.verify(encode(claims, rsa.generate_private_key(public_exponent=65537,key_size=2048)), 'nonce')
+    assert error.value.status_code == 401

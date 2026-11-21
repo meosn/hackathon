@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -17,7 +18,7 @@ from .accounts import (
     set_preferences,
     timezone_name,
 )
-from .auth import current_user, dummy_hash, hash_password, password_matches, token
+from .auth import current_user, dummy_hash, hash_password, password_matches, token, user_for_token
 from .config import settings
 from .db import get_db, utcnow
 from .timezones import GMT_OFFSETS, gmt_name, resolve_timezone
@@ -34,6 +35,7 @@ class Login(Input):
 
 
 class Register(Login):
+    guest_token: str | None = Field(default=None, max_length=4000)
     name: str = Field(min_length=1, max_length=90)
     password: str = Field(min_length=8, max_length=256)
 
@@ -50,13 +52,75 @@ def tokens(user):
     return {"access_token": token(user), "token_type": "bearer"}
 
 
+class Guest(Input):
+    guest_token: str | None = Field(default=None, max_length=4000)
+
+
+class GoogleLogin(Guest):
+    credential: str = Field(min_length=20, max_length=10000)
+    nonce: str = Field(min_length=16, max_length=128)
+
+
+def guest_user(db, credential):
+    user = user_for_token(db, credential) if credential else None
+    return user if user and user.is_guest else None
+
+
+def initialize_listener(db, user):
+    db.add(user)
+    db.flush()
+    preferences(db, user.id)
+    db.commit()
+    return tokens(user)
+
+
+@router.get("/auth/providers")
+def auth_providers():
+    from .google_auth import client_id
+    return {"google_client_id": client_id() or None}
+
+
+@router.post("/auth/guest", response_model=views.SessionToken)
+def guest(body: Guest, db=Depends(get_db)):
+    user = guest_user(db, body.guest_token)
+    if not user:
+        user = User(name="Guest", email=secrets.token_hex(20) + "@guest.invalid",
+                    password_hash=hash_password(secrets.token_urlsafe(48)), is_guest=True)
+    return initialize_listener(db, user)
+
+
+@router.post("/auth/google", response_model=views.SessionToken)
+def google_login(body: GoogleLogin, db=Depends(get_db)):
+    from .google_auth import verify
+    claims = verify(body.credential, body.nonce)
+    user = db.scalar(select(User).where(User.google_sub == claims["sub"]))
+    if not user:
+        email = claims["email"].lower()
+        user = db.scalar(select(User).where(User.email == email))
+        if user:
+            # Google is authoritative only for Gmail or verified Workspace addresses.
+            if user.google_sub or not (email.endswith("@gmail.com") or claims.get("hd")):
+                raise HTTPException(409, "An account with this email already exists. Please sign in with your password.")
+        else:
+            user = guest_user(db, body.guest_token) or User(password_hash=hash_password(secrets.token_urlsafe(48)))
+            user.email = email
+            user.name = str(claims.get("name") or email.split("@")[0])[:90]
+        user.google_sub = claims["sub"]
+        user.is_guest = False
+    try:
+        return initialize_listener(db, user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Please try signing in again")
+
+
 @router.post("/auth/register", response_model=views.SessionToken, status_code=201)
 def register(body: Register, db=Depends(get_db)):
-    user = User(
-        name=body.name,
-        email=str(body.email).lower(),
-        password_hash=hash_password(body.password),
-    )
+    user = guest_user(db, body.guest_token) or User()
+    user.name = body.name
+    user.email = str(body.email).lower()
+    user.password_hash = hash_password(body.password)
+    user.is_guest = False
     db.add(user)
     try:
         db.flush()
@@ -96,7 +160,7 @@ def demo(body: Demo, db=Depends(get_db)):
 
 
 def public(user):
-    return {k: getattr(user, k) for k in ("id", "email", "name", "is_admin", "is_demo", "is_premium")}
+    return {k: getattr(user, k) for k in ("id", "email", "name", "is_admin", "is_demo", "is_premium", "is_guest")}
 
 
 @router.get("/auth/me", response_model=views.Listener)
