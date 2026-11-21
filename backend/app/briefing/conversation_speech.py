@@ -5,11 +5,12 @@ import os
 
 import httpx
 from fastapi import HTTPException
+from . import eleven_keys
 
 
 def enabled():
     return os.getenv("REALTIME_SPEECH_PROVIDER", "openai") == "elevenlabs" and bool(
-        os.getenv("ELEVENLABS_API_KEY")
+        eleven_keys.keys()
     )
 
 
@@ -21,9 +22,8 @@ def session(voice_profile_id):
     if not voice_id:
         raise HTTPException(503, "This narrator has no configured ElevenLabs voice")
     try:
-        result = httpx.post(
+        result = eleven_keys.post(
             "https://api.elevenlabs.io/v1/single-use-token/tts_websocket",
-            headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
             timeout=httpx.Timeout(10, connect=4),
         )
         result.raise_for_status()

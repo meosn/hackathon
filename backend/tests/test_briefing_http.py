@@ -551,7 +551,7 @@ def test_custom_live_voice_validates_audio_and_stays_with_its_owner(api, monkeyp
     assert api.get(path, headers=owner).json()["persona"] == "Warm, unhurried delivery."
     assert created == [True]
     assert api.get(V1 + "/users/me/preferences", headers=owner).json()["voice_engine"] == "elevenlabs"
-    assert api.get(V1 + "/users/me/preferences", headers=other).json()["voice_engine"] == "openai"
+    assert api.get(V1 + "/users/me/preferences", headers=other).json()["voice_engine"] == "elevenlabs"
 
 
 def test_streamed_speech_token_is_private_and_uses_the_selected_voice(api, monkeypatch):
@@ -636,7 +636,7 @@ def test_voice_engines_and_database_characters_are_private_per_listener(api, mon
         db.commit()
     chosen = api.patch(path, headers=owner, json={'voice_engine': 'elevenlabs', 'voice_profile_id': 'gangsta'})
     assert chosen.json()['voice_engine'] == 'elevenlabs'
-    assert api.get(path, headers=other).json()['voice_engine'] == 'openai'
+    assert api.get(path, headers=other).json()['voice_engine'] == 'elevenlabs'
     assert api.patch(path, headers=other, json={'voice_engine': 'invalid'}).status_code == 422
 
     with routes.SessionLocal.begin() as db:

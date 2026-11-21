@@ -19,6 +19,7 @@ import httpx
 from sqlalchemy import select, text as sql_text
 from sqlalchemy.exc import IntegrityError
 
+from . import eleven_keys
 from .accounting import observe
 from .models import GeneratedAudio
 
@@ -126,7 +127,7 @@ def provider_config(voice, db=None):
             )
             or voice_id
         )
-    if not voice_id or not os.getenv("ELEVENLABS_API_KEY"):
+    if not voice_id or not eleven_keys.keys():
         raise ValueError("Configure a permitted ElevenLabs voice and API key")
     return kind, os.getenv("ELEVENLABS_MODEL") or "eleven_multilingual_v2", voice_id
 
@@ -155,12 +156,11 @@ def _segment_pcm(text, lang, voice, config):
         if not pcm:
             raise ValueError("Speech provider returned empty audio")
         return pcm
-    result = httpx.post(
+    result = eleven_keys.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice_id, safe='')}",
         params={"output_format": "mp3_44100_128"},
         timeout=httpx.Timeout(60, connect=5),
         json={"text": text, "model_id": model},
-        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
     )
     result.raise_for_status()
     pcm = convert_audio(result.content)
@@ -297,12 +297,11 @@ def render_aligned(db, parts, config, reference_id, pauses=None):
         joined = "\n\n".join(text for text, _ in chunk)
         start = monotonic()
         try:
-            response = httpx.post(
+            response = eleven_keys.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{quote(voice_id, safe='')}/with-timestamps",
                 params={"output_format": "mp3_44100_128"},
                 timeout=httpx.Timeout(150, connect=5),
                 json={"text": joined, "model_id": model},
-                headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
             )
             response.raise_for_status()
             result = response.json()
@@ -584,7 +583,7 @@ def transcribe(db, content, content_type, language, reference_id):
     try:
         if provider == "elevenlabs":
             url = "https://api.elevenlabs.io/v1/speech-to-text"
-            headers = {"xi-api-key": os.environ["ELEVENLABS_API_KEY"]}
+            headers = {}
             data = {
                 "model_id": model,
                 "tag_audio_events": "false",
@@ -597,7 +596,7 @@ def transcribe(db, content, content_type, language, reference_id):
             key = os.getenv("STT_API_KEY") or os.getenv("LLM_API_KEY")
             headers = {"Authorization": f"Bearer {key}"} if key else {}
             data = {"language": language, "model": model}
-        result = httpx.post(
+        result = (eleven_keys.post if provider == "elevenlabs" else httpx.post)(
             url,
             headers=headers,
             files={"file": (f"recording.{extensions[base_type]}", content, base_type)},

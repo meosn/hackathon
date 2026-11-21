@@ -67,6 +67,8 @@ ELEVENLABS_MODEL=eleven_multilingual_v2
 TTS_LOCAL_FALLBACK=0
 ```
 
+Additional ElevenLabs speech keys can be supplied as a comma-separated `ELEVENLABS_API_KEYS` value alongside the primary `ELEVENLABS_API_KEY`. Speech synthesis, transcription and streaming speech authorization rotate keys using a shared Redis counter (with an in-process fallback). Quota, authentication and rate-limit responses try the next key; exhausted keys cool down for five minutes and rate-limited keys for thirty seconds. Each request tries each eligible key at most once. Private voices fall back to another key when access is denied. Agent administration, agent sessions and voice cloning continue using the primary account because those resources belong to that account. Keys for the same ElevenLabs account share its allowance. Recreate backend services after changing the environment.
+
 Use a voice available to your ElevenLabs account. `ELEVENLABS_VOICE_MAP` can map the application styles `professional`, `energetic`, `casual`, `jarvis` and `cyberpunk` to different permitted voice IDs. Hosted synthesis consumes the account's API allowance. Apply configuration changes with:
 
 ```bash

@@ -10,7 +10,7 @@ from typing import Literal
 
 from app.accounts import ACTIVE_VOICES, VoiceProfile, preferences, require_voice_access
 from .contracts import Strict
-from . import granny, voice
+from . import eleven_keys, granny, voice
 
 PHRASES = {
     "en": "Hello! I'm your AI news host. This is how your briefing will sound.",
@@ -56,7 +56,7 @@ def render(db, user, slug, request):
             raise HTTPException(503, "OpenAI voice previews are unavailable.")
         config = ("openai", "gpt-4o-mini-tts", voice_id)
     else:
-        if not os.getenv("ELEVENLABS_API_KEY") or not voice_id:
+        if not eleven_keys.keys() or not voice_id:
             raise HTTPException(503, "ElevenLabs voice previews are unavailable.")
         config = (
             "elevenlabs",
