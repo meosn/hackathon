@@ -459,8 +459,6 @@ export function DailySession({
   const researchSources = research?.status === 'completed' ? research.sources || [] : []
   return (
     <section className="listening-hero" aria-label="News player">
-      <div className="studio-hero-copy">
-      <p className="studio-eyebrow"><span /> YOUR DAILY FREQUENCY</p>
       <div className="listening-date">
         {(health.data?.news_reference_time
           ? new Date(health.data.news_reference_time)
@@ -479,7 +477,7 @@ export function DailySession({
           : health.data?.news_reference_time
             ? 'Archive briefing.'
             : "Today's news."}
-      <em>In your rhythm.</em></h1>
+      </h1>
       <p className="listening-subtitle">
         {edition?.status === 'completed'
           ? (edition.period === 'week'
@@ -496,12 +494,6 @@ export function DailySession({
                 ? 'Creating your audio…'
                 : 'Your edition is queued for preparation…'}
       </p>
-      <p className="studio-hero-intro">A little room for the world. Listen to your edition, follow your curiosity, and make the news your own.</p>
-      <div className="studio-hero-notes"><span>Personal to you</span><span>Sources within reach</span></div>
-      </div>
-      <div className="studio-player-panel">
-      <div className="studio-player-label"><span>THE LIQUID BRIEFING</span><span className="studio-player-light">YOUR EDITION</span></div>
-      <div className="studio-player-orbits" aria-hidden="true"><i /><i /><i /></div>
       <audio
         ref={narration}
         src={url || undefined}
@@ -545,7 +537,6 @@ export function DailySession({
           <Play size={34} fill="currentColor" />
         )}
       </button>
-      <div className={'studio-soundwave' + (audible ? ' is-playing' : '')} aria-hidden="true">{Array.from({ length: 31 }, (_, i) => <i key={i} style={{ height: `${8 + Math.sin(i * .65) ** 2 * 28}px`, animationDelay: `${i * -.12}s` }} />)}</div>
       <p role="status" className="session-status">
         {phase ||
           (listening
@@ -624,7 +615,6 @@ export function DailySession({
           ? 'Microphone active'
           : 'Listen freely. Turn the mic on to join in.'}
       </span>
-      </div>
       {story && !hasAnswer && <div className="current-story-learning">
         <div><span>{story.title}</span><Link to={'/stories/' + story.story_id}>{coverageLabel(story.coverage_status, story.publisher_count)}</Link></div>
         <StoryReactions storyId={story.story_id} />

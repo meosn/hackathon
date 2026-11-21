@@ -263,8 +263,8 @@ function SettingsForm({
       <header className="preferences-heading">
         <div>
           <span className="preferences-eyebrow">A LITTLE MORE YOU</span>
-          <h1>{welcome ? 'Tune your briefing.' : 'A little more you.'}<br /><em>Your listening world.</em></h1>
-          <p>Fine-tune the stories, voices and little rituals that make this your edition.</p>
+          <h1>{welcome ? 'Tune your briefing' : 'Listening preferences'}</h1>
+          <p>Your news. Your voice. Your pace.</p>
         </div>
         <span className="preferences-heading-icon" aria-hidden="true">
           <SlidersHorizontal size={26} strokeWidth={1.3} />
