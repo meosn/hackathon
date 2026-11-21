@@ -28,7 +28,7 @@ def content_key(prefs, kind):
         kind=kind,
         period=os.getenv("DAILY_NEWS_PERIOD", "day") if kind == "day" else "week",
         edition=os.getenv("NEWS_EDITION_VERSION", ""),
-        recipe="personalized-v4",
+        recipe="personalized-v5",
     )
     return hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()[
         :16
@@ -140,6 +140,11 @@ def ensure_prepared(db, user_id, kind="day", now=None):
                 source.request.get("prepared_voice_key") == prefs["prepared_voice_key"]
             )
         )
+        copied_rows, resized = (
+            sized_voice_copy(db, item, source)
+            if not same_voice
+            else (service.segments_for(db, source.id), False)
+        )
         for row in db.scalars(
             select(BriefingItem).where(BriefingItem.briefing_id == source.id)
         ):
@@ -151,13 +156,19 @@ def ensure_prepared(db, user_id, kind="day", now=None):
                     position=row.position,
                 )
             )
-        for row in service.segments_for(db, source.id):
+        for row in copied_rows:
             values = service.segment_view(row)
             values.pop("id")
             if not same_voice:
                 values.update(start_seconds=0, end_seconds=0)
             db.add(BriefingSegment(briefing_id=item.id, **values))
-        item.duration_seconds = source.duration_seconds
+        item.duration_seconds = (
+            sum(len(row.text.split()) for row in copied_rows)
+            * 60
+            / item.request["narration_wpm"]
+            if resized
+            else source.duration_seconds
+        )
         item.request = {**item.request, "source_briefing_id": source.id}
         if same_voice:
             item.status, item.audio_id = "completed", source.audio_id
@@ -172,6 +183,62 @@ def ensure_prepared(db, user_id, kind="day", now=None):
         return item
     queue_record(db, "briefing", item.id)
     return item
+
+
+def sized_voice_copy(db, item, source):
+    """Reuse verified wording, adding or reducing sourced detail for a different pace."""
+    from . import service
+    from .duration import speaking_rate
+    from .contracts import Script
+
+    rows = service.segments_for(db, source.id)
+    words = sum(len(row.text.split()) for row in rows)
+    target = item.request["duration_minutes"] * speaking_rate(
+        db, item.language, item.voice_profile_id
+    )
+    if target * 0.85 <= words <= target * 1.15:
+        return rows, False
+    lineup = list(
+        db.scalars(
+            select(BriefingItem.story_id)
+            .where(BriefingItem.briefing_id == source.id)
+            .order_by(BriefingItem.position)
+        )
+    )
+    if not lineup:
+        return rows, False
+    previous = item.request
+    item.request = {
+        **previous,
+        "selected_story_ids": lineup,
+        "story_limit": len(lineup),
+    }
+    chosen = service.draft_candidates(db, item)
+    if not chosen:
+        item.request = previous
+        return rows, False
+    chosen = dict(
+        sorted(chosen.items(), key=lambda entry: lineup.index(entry[1][0]["id"]))
+    )
+    result = Script(
+        lines=[
+            {"story_id": story["id"], "claim_id": fact["id"], "text": fact["text"]}
+            for story, fact, _ in chosen.values()
+        ]
+    )
+    replacement, stories = service.script_rows(db, item, chosen, result)
+    new_words = sum(len(row.text.split()) for row in replacement)
+    if stories != lineup or abs(new_words - target) >= abs(words - target) * 0.9:
+        item.request = previous
+        return rows, False
+    item.request = {
+        **item.request,
+        "voice_detail_adjusted": True,
+        "selected_source_words": sum(
+            len(fact["text"].split()) for _, fact, _ in chosen.values()
+        ),
+    }
+    return replacement, True
 
 
 def ensure_daily(db, user_id, now=None):

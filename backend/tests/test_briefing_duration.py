@@ -1,4 +1,5 @@
 from collections import Counter
+from datetime import datetime, UTC, timedelta
 from datetime import date
 
 from app.accounts import preferences, set_preferences
@@ -8,6 +9,101 @@ from app.briefing.daily import daily_key, ensure_daily
 from app.briefing.duration import speaking_rate
 from app.briefing.models import Briefing, BriefingSegment, GeneratedAudio
 from test_listener_workflow import session, listener
+
+
+def test_rate_adapts_to_recent_distinct_recordings_instead_of_old_pacing(session):
+    user = listener(session, "recent-rate", "en", [])
+    for index, words in enumerate([100] * 8 + [160, 180, 170]):
+        audio = GeneratedAudio(
+            cache_key="recent-" + str(index),
+            object_key=str(index),
+            duration_seconds=60,
+            boundaries=[],
+            provider="elevenlabs",
+        )
+        session.add(audio)
+        session.flush()
+        item = Briefing(
+            user_id=user.id,
+            title="Rate",
+            status="completed",
+            language="en",
+            voice_profile_id="energetic",
+            request={},
+            duration_seconds=60,
+            audio_id=audio.id,
+            created_at=datetime.now(UTC) + timedelta(seconds=index),
+        )
+        session.add(item)
+        session.flush()
+        session.add(
+            BriefingSegment(
+                briefing_id=item.id,
+                position=0,
+                text="word " * words,
+                language="en",
+                claim_ids=[],
+                source_article_ids=[],
+                citations=[],
+                verification_status="editorial",
+            )
+        )
+    session.flush()
+    assert speaking_rate(session, "en", "energetic") == 170
+
+
+def test_voice_copy_adds_verified_detail_when_a_faster_voice_would_be_too_short(
+    session, monkeypatch
+):
+    from app.briefing import duration
+
+    user = listener(session, "fast-copy", "en", ["technology"])
+    set_preferences(session, user.id, {"duration_minutes": 1})
+    source = ensure_daily(session, user.id)
+    service.generate_script(session, source.id)
+    original = service.segments_for(session, source.id)
+    original_words = sum(len(s.text.split()) for s in original)
+    from app.news.models import Article, Fact, ClaimEvidence
+
+    line = next(row for row in original if row.claim_ids)
+    article = session.get(Article, line.source_article_ids[0])
+    for index in range(6):
+        text = f"Aurora reported project {index} opened a new regional research facility with additional engineering equipment and twenty permanent staff positions."
+        start = len(article.content) + 1
+        article.content += " " + text
+        fact = Fact(
+            story_id=line.story_id, text=text, language="en", status="supported"
+        )
+        session.add(fact)
+        session.flush()
+        session.add(
+            ClaimEvidence(
+                fact_id=fact.id,
+                article_id=article.id,
+                excerpt=text,
+                start=start,
+                end=start + len(text),
+            )
+        )
+    session.commit()
+    set_preferences(session, user.id, {"voice_profile_id": "jarvis"})
+    monkeypatch.setattr(duration, "speaking_rate", lambda *args: 210)
+    monkeypatch.setattr(service, "speaking_rate", lambda *args: 210)
+    monkeypatch.setattr(
+        service,
+        "model_output",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("A voice-only copy must not call the writer")
+        ),
+    )
+    changed = ensure_daily(session, user.id)
+    rows = service.segments_for(session, changed.id)
+    assert sum(len(s.text.split()) for s in rows) > original_words
+    assert changed.request["voice_detail_adjusted"] is True
+    assert service.verified_script(session, rows)
+    assert list(dict.fromkeys(s.story_id for s in rows if s.claim_ids)) == list(
+        dict.fromkeys(s.story_id for s in original if s.claim_ids)
+    )
 
 
 def test_daily_length_adds_balanced_detail_instead_of_capping_at_two_facts(

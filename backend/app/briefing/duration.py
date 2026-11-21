@@ -21,10 +21,14 @@ def speaking_rate(db, language, voice):
             Briefing.audio_id.is_not(None),
         )
         .order_by(Briefing.created_at.desc())
-        .limit(16)
+        .limit(64)
     ).all()
     # Shared daily copies must not outweigh different real recordings.
-    samples = {item.audio_id: item for item in editions}
+    samples = {}
+    for item in editions:
+        samples.setdefault(item.audio_id, item)
+        if len(samples) == 3:
+            break
     if not samples:
         return DEFAULT_WPM.get(language, 140)
     words = defaultdict(int)
