@@ -28,6 +28,15 @@ class Script(Strict):
     lines: list[Line] = Field(min_length=1, max_length=60)
 
 
+class DraftLine(Strict):
+    index: int = Field(ge=0, le=59)
+    text: str = Field(min_length=1, max_length=1500)
+
+
+class ScriptDraft(Strict):
+    lines: list[DraftLine] = Field(min_length=1, max_length=60)
+
+
 class Answer(Strict):
     lines: list[Line] = Field(default_factory=list, max_length=6)
 

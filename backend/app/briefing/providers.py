@@ -33,11 +33,13 @@ class RemoteProvider:
         self.reference_id = reference_id
         self.provider = provider
 
-    async def generate_structured(self, messages, schema):
+    async def generate_structured(self, messages, schema, *, model=None, timeout=None):
         local = self.provider == "ollama"
         default_url = "http://localhost:11434" if local else "https://api.openai.com/v1"
         base = os.getenv("LLM_BASE_URL") or default_url
-        model = os.getenv("LLM_MODEL") or ("llama3.2" if local else "gpt-4o-mini")
+        model = (
+            model or os.getenv("LLM_MODEL") or ("llama3.2" if local else "gpt-4o-mini")
+        )
         headers = {}
         if key := os.getenv("LLM_API_KEY"):
             headers["Authorization"] = f"Bearer {key}"
@@ -61,7 +63,7 @@ class RemoteProvider:
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(
-                    float(os.getenv("LLM_TIMEOUT_SECONDS", "180")), connect=5
+                    timeout or float(os.getenv("LLM_TIMEOUT_SECONDS", "180")), connect=5
                 )
             ) as client:
                 response = await client.post(
@@ -94,14 +96,16 @@ class RemoteProvider:
             )
 
 
-def model_output(db, reference_id, messages, schema):
+def model_output(db, reference_id, messages, schema, *, model=None, timeout=None):
     kind = os.getenv("LLM_PROVIDER", "mock")
     if kind == "mock":
         return asyncio.run(MockProvider().generate_structured(messages, schema))
     if kind not in {"ollama", "api"}:
         raise ValueError("Unknown LLM provider")
     return asyncio.run(
-        RemoteProvider(db, reference_id, kind).generate_structured(messages, schema)
+        RemoteProvider(db, reference_id, kind).generate_structured(
+            messages, schema, model=model, timeout=timeout
+        )
     )
 
 

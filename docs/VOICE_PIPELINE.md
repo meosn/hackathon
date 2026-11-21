@@ -39,6 +39,8 @@ ElevenLabs narration batches verified paragraphs through the timestamped speech 
 
 Hosted deployment uses API-based narration rewrites and separately verifies the resulting wording. `STT_PROVIDER=elevenlabs` enables Scribe transcription with `ELEVENLABS_STT_MODEL`. The existing `whisper` provider supports a compatible transcription API. Decoded recording duration can be priced with `STT_USD_PER_MINUTE`.
 
+The briefing writer exchanges short integer indices instead of repeating database IDs. The server restores each index's claim, story and citations and rejects missing, duplicate or invalid indices by recovering the approved source sentences. For narration, rewrites must be deterministically equivalent to those sentences; other wording is replaced with the approved original. This avoids serial model entailment calls in both the writer and the separate voice worker while retaining the source-byte and citation checks before and after synthesis. `BRIEFING_LLM_MODEL` can choose a faster writer independently of other models. Its request timeout defaults to 20 seconds, after which preparation recovers the already verified source wording rather than waiting three minutes.
+
 ## Generating an edition
 
 ```mermaid
@@ -70,7 +72,7 @@ Introductory and transitional lines come from a fixed English, German or Dutch v
 
 Audio uses signed-in API routes. MinIO stores the file, and the database stores its key, provider, SHA-256 cache key, duration and boundaries. Cache keys include ordered segment text, language, speaker style and the active voice/model configuration. Playback times are calculated from the actual PCM frame count, including the short gap between segments. The cache is shared for identical audio. Access to each edition and spoken conversation answer still requires its owner's token.
 
-Selecting a narrator prepares the matching voice versions of the daily and weekly editions in the background. It copies the approved script and story order into a listener-owned edition and commits a voice job in the same transaction. It skips the briefing writer, keeps both evidence checks around synthesis, and uses the same audio cache. Weekly edition creation continues to retrieve and write a new script.
+Selecting a narrator prepares the matching voice versions of the daily and weekly editions in the background. It copies the approved script and story order into a listener-owned edition and commits a voice job in the same transaction. Scripts can be reused as soon as writing completes, even while the original narration is still rendering. It skips the briefing writer, keeps both evidence checks around synthesis, and uses the same audio cache. A new content preference snapshot still retrieves and writes a new script.
 
 ## Provider configuration
 
@@ -79,6 +81,7 @@ Selecting a narrator prepares the matching voice versions of the daily and weekl
 | `LLM_PROVIDER` | `mock`, `api` or `ollama` |
 | `LLM_BASE_URL` | Chat API base including `/v1` for an OpenAI-compatible service, or Ollama server origin |
 | `LLM_MODEL`, `LLM_API_KEY` | Selected model and optional bearer credential. Defaults are `gpt-4o-mini` for API and `llama3.2` for Ollama |
+| `BRIEFING_LLM_MODEL`, `BRIEFING_LLM_TIMEOUT_SECONDS` | Optional dedicated briefing writer model and request timeout (default 20 seconds); does not change live voice or research models |
 | `TTS_PROVIDER` | `local` or `mock` for eSpeak NG, or `elevenlabs` |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` | Service credential and a voice the operator has permission to use |
 | `ELEVENLABS_VOICE_MAP` | Optional JSON object mapping Sourcera voice slugs to permitted external voice IDs |

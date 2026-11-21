@@ -72,7 +72,7 @@ def ensure_prepared(db, user_id, kind="day", now=None):
         select(Briefing)
         .where(
             Briefing.user_id == user_id,
-            Briefing.status == "completed",
+            Briefing.status.in_(["script_ready", "audio_generating", "completed"]),
             Briefing.request["prepared_content_key"].as_string() == content,
         )
         .order_by(Briefing.created_at.desc())
@@ -91,7 +91,9 @@ def ensure_prepared(db, user_id, kind="day", now=None):
             source = db.scalar(
                 select(Briefing).where(
                     Briefing.user_id == template.id,
-                    Briefing.status == "completed",
+                    Briefing.status.in_(
+                        ["script_ready", "audio_generating", "completed"]
+                    ),
                     Briefing.schedule_key == daily_key(template.id, tp, today, kind),
                 )
             )
@@ -119,7 +121,11 @@ def ensure_prepared(db, user_id, kind="day", now=None):
     item.title = service.TITLES[item.language][kind]
     if source:
         same_voice = (
-            source.request.get("prepared_voice_key") == prefs["prepared_voice_key"]
+            source.status == "completed"
+            and source.audio_id is not None
+            and (
+                source.request.get("prepared_voice_key") == prefs["prepared_voice_key"]
+            )
         )
         for row in db.scalars(
             select(BriefingItem).where(BriefingItem.briefing_id == source.id)

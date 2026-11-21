@@ -453,12 +453,15 @@ def test_rejected_remote_wording_is_replaced_and_usage_is_retained(
     user = listener(session, "reader", "en", ["technology"])
     monkeypatch.setenv("LLM_PROVIDER", "api")
     monkeypatch.setenv("LLM_MODEL", "contract-model")
+    monkeypatch.setenv("BRIEFING_LLM_MODEL", "dedicated-writer")
     monkeypatch.setenv("LLM_INPUT_USD_PER_M", "2")
     attempts = []
 
     def server(request):
         data = json.loads(request.content)
         lines = json.loads(data["messages"][-1]["content"])
+        assert data["model"] == "dedicated-writer"
+        assert all(set(line) == {"index", "text"} for line in lines)
         if not attempts:
             lines[0]["text"] = "This unsupported claim costs 400 million dollars."
         attempts.append(True)
@@ -503,6 +506,43 @@ def test_rejected_remote_wording_is_replaced_and_usage_is_retained(
     ).all()
     assert len(calls) == len(attempts) == 1
     assert sum(c.input_tokens for c in calls) == 1000
+    # A fresh voice worker still verifies citations, without paying for another
+    # model judgment of each sentence already restored to its approved source.
+    from app.briefing import providers
+
+    monkeypatch.setattr(
+        providers,
+        "model_output",
+        lambda *a, **kw: pytest.fail("Unexpected second model call"),
+    )
+    assert service.synthesize_briefing(session, item.id) == "completed"
+
+
+@pytest.mark.parametrize("status", ["script_ready", "audio_generating"])
+def test_voice_switch_reuses_script_while_original_audio_is_still_pending(
+    session, monkeypatch, status
+):
+    from app.briefing.daily import ensure_daily
+
+    user = listener(session, "pending-audio", "en", ["technology"])
+    source = ensure_daily(session, user.id)
+    service.generate_script(session, source.id)
+    source.status = status
+    session.commit()
+    set_preferences(session, user.id, {"voice_profile_id": "jarvis"})
+    changed = ensure_daily(session, user.id)
+    assert changed.status == "script_ready" and changed.audio_id is None
+    assert changed.request["source_briefing_id"] == source.id
+    assert [r.text for r in service.segments_for(session, changed.id)] == [
+        r.text for r in service.segments_for(session, source.id)
+    ]
+    monkeypatch.setattr(
+        service,
+        "model_output",
+        lambda *a, **kw: pytest.fail("Script was rewritten after a voice switch"),
+    )
+    assert service.synthesize_briefing(session, changed.id) == "completed"
+    assert source.status == status and source.audio_id is None
 
 
 @pytest.mark.parametrize("failure", ["missing", "duplicate", "unknown", "wrong_story"])
@@ -516,7 +556,7 @@ def test_remote_claim_mismatch_recovers_all_verified_source_sentences(
     expected = service.draft_candidates(session, item)
     calls = []
 
-    def remote(db, reference_id, messages, schema):
+    def remote(db, reference_id, messages, schema, **kwargs):
         lines = json.loads(messages[-1]["content"])
         calls.append(True)
         if failure == "missing":
@@ -524,11 +564,11 @@ def test_remote_claim_mismatch_recovers_all_verified_source_sentences(
         elif failure == "duplicate":
             lines.append(lines[0].copy())
         elif failure == "unknown":
-            lines[0]["claim_id"] = "unapproved-claim"
+            lines[0]["index"] = 59
             lines[0]["text"] = "Unapproved information."
         else:
             lines[0]["story_id"] = "unrelated-story"
-        return Script(lines=lines)
+        return schema(lines=lines)
 
     monkeypatch.setenv("LLM_PROVIDER", "api")
     monkeypatch.setattr(service, "model_output", remote)
