@@ -36,7 +36,7 @@ export function GoogleSignIn({ onCredential }: { onCredential: (credential: stri
     return () => { active = false }
   }, [config.data?.google_client_id])
   return <div className="google-access">
-    <div ref={container} />
+    <div ref={container} hidden={!config.data?.google_client_id} />
     {!config.data?.google_client_id && <>
       <button type="button" className="btn outline" disabled>Continue with Google</button>
       <small>{config.isPending ? 'Loading sign-in options…' : 'Google sign-in is not configured yet.'}</small>

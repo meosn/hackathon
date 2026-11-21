@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { queryClient } from '../../api/client'
+import type { Preferences } from '../../api/types'
 import { VoiceCollection, type LibraryVoice } from './VoiceCollection'
 vi.mock('./useVoicePreview',()=>({useVoicePreview:()=>({play:vi.fn(),stop:vi.fn(),id:'',error:''})}))
 let rows:LibraryVoice[]
@@ -18,12 +19,12 @@ beforeEach(()=>{
  })
 })
 afterEach(()=>{cleanup();queryClient.clear();vi.restoreAllMocks()})
-function show(mode:'home'|'settings') {render(<QueryClientProvider client={queryClient}><MemoryRouter><VoiceCollection mode={mode}/></MemoryRouter></QueryClientProvider>)}
-it('shows only favorites on home, including private voices',async()=>{
+function show(mode:'home'|'settings', engine='elevenlabs') {render(<QueryClientProvider client={queryClient}><MemoryRouter><VoiceCollection mode={mode} prefs={{voice_engine:engine} as Preferences}/></MemoryRouter></QueryClientProvider>)}
+it('shows all ElevenLabs characters on home, including private voices',async()=>{
  show('home')
  await screen.findByText('My own voice')
  expect(screen.getByText('The Anchor')).toBeInTheDocument()
- expect(screen.queryByText('Studio Assistant')).not.toBeInTheDocument()
+ expect(screen.getByText('Studio Assistant')).toBeInTheDocument()
  expect(screen.getByRole('link',{name:'Manage voices'})).toBeInTheDocument()
 })
 it('lists the private voice in settings and persists favorite changes',async()=>{
@@ -36,4 +37,13 @@ it('lists the private voice in settings and persists favorite changes',async()=>
  fireEvent.click(screen.getByRole('button',{name:'Delete My own voice'}))
  expect(screen.getByRole('group',{name:'Delete voice confirmation'})).toBeInTheDocument()
  expect(vi.mocked(fetch).mock.calls.some(([,opts])=>opts?.method==='DELETE')).toBe(false)
+})
+
+it('shows OpenAI voices without ElevenLabs characters or collection controls',async()=>{
+ show('settings','openai')
+ await screen.findByText('Marin')
+ expect(screen.getByText('Cedar')).toBeInTheDocument()
+ expect(screen.queryByText('My own voice')).not.toBeInTheDocument()
+ expect(screen.queryByText('The Anchor')).not.toBeInTheDocument()
+ expect(screen.queryByRole('button',{name:/Delete/})).not.toBeInTheDocument()
 })

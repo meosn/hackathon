@@ -105,7 +105,7 @@ def choose_voice(key: str, db=Depends(get_db), user=Depends(current_user)):
     if row.preset_slug:
         require_voice_access(user, row.preset_slug)
         user.custom_voice_active = False
-        set_preferences(db, user.id, {"voice_profile_id": row.preset_slug, **({"voice_engine": "elevenlabs"} if row.preset_slug == "energetic" else {})})
+        set_preferences(db, user.id, {"voice_profile_id": row.preset_slug, "voice_engine": "elevenlabs"})
     else:
         user.custom_voice_id, user.custom_voice_name, user.custom_voice_persona = row.provider_voice_id, row.name, row.persona
         user.custom_voice_active = True

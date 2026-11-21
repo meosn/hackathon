@@ -268,6 +268,8 @@ def set_preferences(db, user_id, changes):
         if owner:
             owner.custom_voice_active = False
     old = preferences(db, user_id)
+    if delta.get("voice_engine") == "openai" and delta.get("voice_profile_id", old["voice_profile_id"]) not in {"professional", "jarvis", "cyberpunk"}:
+        delta["voice_profile_id"] = "professional"
     if "voice_profile_id" in delta:
         require_voice_access(db.get(User, user_id), delta["voice_profile_id"])
     pref = db.scalar(select(UserPreference).where(UserPreference.user_id == user_id))

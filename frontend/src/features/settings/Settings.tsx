@@ -478,10 +478,10 @@ function SettingsForm({
                       setDefaultNarrator(false)
                     }}/>
                     <p className="preference-hint">
-                      Used for new editions and live replies. OpenAI uses the character’s delivery with an OpenAI voice.
+                      Used for new editions and live replies. Choose an OpenAI voice or an ElevenLabs character.
                     </p>
                   </section>
-                  <CustomVoiceSettings />
+                  {prefs.voice_engine === 'elevenlabs' && <CustomVoiceSettings />}
                   <section className="preference-block">
                     <div className="preference-label">
                       <h3>Briefing language</h3>
