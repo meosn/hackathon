@@ -204,13 +204,53 @@ def test_trump_pause_trimming_keeps_all_voiced_samples_and_updates_timestamps():
     )
     result, cues = trim_long_pauses(pcm, [[0, 1.35], [1.35, len(pcm) / (2 * RATE)]])
     assert len(result) / (2 * RATE) == pytest.approx(
-        len(pcm) / (2 * RATE) - 0.6, abs=0.02
+        len(pcm) / (2 * RATE) - 0.93, abs=0.04
     )
-    assert cues[1][0] == pytest.approx(0.75, abs=0.02)
+    assert cues[1][0] == pytest.approx(0.56, abs=0.02)
     assert cues[-1][1] == pytest.approx(len(result) / (2 * RATE), abs=0.001)
     values = array("h")
     values.frombytes(result)
     assert sum(v == 1500 for v in values) == round(0.4 * RATE) * 3
+
+
+def test_trump_cached_pacing_preserves_words_shared_transcripts_and_avoids_synthesis(session, monkeypatch):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+    from app.briefing import voice
+    from app.briefing.models import Briefing, BriefingSegment, GeneratedAudio
+
+    user = listener(session, "cached-pacing", "en", [])
+    parts = [("First story.", "en"), ("Second story.", "en")]
+    config = ("elevenlabs", "test-model", "test-voice")
+    recipe = [4, config, "energetic", parts]
+    key = hashlib.sha256(json.dumps(recipe, ensure_ascii=False).encode()).hexdigest()
+    voiced = array("h", [1500] * round(0.4 * RATE)).tobytes()
+    pcm = voiced + b"\0\0" * round(0.38 * RATE) + voiced
+    voice.put_object("speech/original.wav", voice.wav_bytes(pcm))
+    audio = GeneratedAudio(cache_key=key, object_key="speech/original.wav", provider="elevenlabs", duration_seconds=1.18, boundaries=[[0, .78], [.78, 1.18]])
+    session.add(audio)
+    session.flush()
+    for n in range(2):
+        edition = Briefing(user_id=user.id, title="Cached", language="en", voice_profile_id="energetic", request={}, status="completed", audio_id=audio.id, duration_seconds=1.18)
+        session.add(edition)
+        session.flush()
+        for index, (text, language) in enumerate(parts):
+            session.add(BriefingSegment(briefing_id=edition.id, position=index, text=text, language=language, verification_status="editorial", start_seconds=audio.boundaries[index][0], end_seconds=audio.boundaries[index][1]))
+    session.flush()
+    monkeypatch.setattr(voice, "render_aligned", lambda *a, **kw: pytest.fail("Must reuse existing voice"))
+    segments = [SimpleNamespace(text=t, language=l, story_id=str(n)) for n, (t, l) in enumerate(parts)]
+    changed = voice._render_audio(session, segments, "energetic", "cache-test", config)
+    assert changed.id == audio.id
+    assert changed.duration_seconds == pytest.approx(.96, abs=.02)
+    assert voice._render_audio(session, segments, "energetic", "cache-test", config).id == audio.id
+    for edition in session.scalars(select(Briefing).where(Briefing.audio_id == audio.id)):
+        assert edition.duration_seconds == audio.duration_seconds
+        rows = session.scalars(select(BriefingSegment).where(BriefingSegment.briefing_id == edition.id).order_by(BriefingSegment.position)).all()
+        assert [[s.start_seconds, s.end_seconds] for s in rows] == audio.boundaries
+    object_key = audio.object_key
+    voice.retime_trump_cache(session, audio)
+    assert audio.object_key == object_key
 
 
 def test_topic_migration_preserves_existing_custom_selections():

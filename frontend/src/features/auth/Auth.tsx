@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Cpu, ChartNoAxesCombined, Headphones } from 'lucide-react'
 import { api, setToken } from '../../api/client'
 import { Brand, Button, ErrorNote, Tabs } from '../../components/UI'
 const credentials = z.object({
@@ -13,8 +12,8 @@ const credentials = z.object({
   password: z.string().min(1),
 })
 type Credentials = z.infer<typeof credentials>
-export function Auth({ demoMode = true }: { demoMode?: boolean }) {
-  const [tab, setTab] = useState(demoMode ? 'demo' : 'login')
+export function Auth() {
+  const [tab, setTab] = useState('login')
   const {
     register,
     handleSubmit,
@@ -53,11 +52,7 @@ export function Auth({ demoMode = true }: { demoMode?: boolean }) {
         <div className="auth-body">
           <Brand />
           <h1>
-            {tab === 'demo'
-              ? 'Choose a listener'
-              : tab === 'register'
-                ? 'Create your profile'
-                : 'Sign in'}
+            {tab === 'register' ? 'Create your profile' : 'Sign in'}
           </h1>
           <Tabs
             value={tab}
@@ -66,41 +61,10 @@ export function Auth({ demoMode = true }: { demoMode?: boolean }) {
               sign.reset()
             }}
             options={[
-              ...(demoMode ? [{ id: 'demo', name: 'Demo profiles' }] : []),
               { id: 'login', name: 'Sign in' },
               { id: 'register', name: 'Register' },
             ]}
           />
-          {tab === 'demo' ? (
-            <>
-              <p className="muted">
-                Try a listener profile with its own interests, language and briefing.
-              </p>
-              {[
-                { id: 'tech', name: 'Technology enthusiast', icon: Cpu },
-                {
-                  id: 'finance',
-                  name: 'Financial analyst',
-                  icon: ChartNoAxesCombined,
-                },
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  className="profile-option"
-                  disabled={sign.isPending}
-                  onClick={() =>
-                    sign.mutate({ path: 'demo', data: { profile: p.id } })
-                  }
-                >
-                  <span className="profile-icon">
-                    <p.icon size={22} />
-                  </span>
-                  <strong>{p.name}</strong>
-                  <Headphones size={17} />
-                </button>
-              ))}
-            </>
-          ) : (
             <form onSubmit={handleSubmit(submit)} className="form-stack">
               {tab === 'register' && (
                 <label className="field">
@@ -133,7 +97,6 @@ export function Auth({ demoMode = true }: { demoMode?: boolean }) {
                 {tab === 'register' ? 'Create profile' : 'Sign in'}
               </Button>
             </form>
-          )}
           <ErrorNote error={sign.error} />
         </div>
       </section>

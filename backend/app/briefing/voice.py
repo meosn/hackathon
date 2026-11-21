@@ -369,11 +369,11 @@ def trim_long_pauses(pcm, boundaries):
             start = None
     if start is not None:
         runs.append((start, len(samples)))
-    keep = round(RATE * 0.35)
+    keep = round(RATE * 0.16)
     cuts = [
         (left + keep // 2, right - (keep - keep // 2))
         for left, right in runs
-        if right - left > RATE * 0.65
+        if right - left > RATE * 0.22
     ]
     if not cuts:
         return pcm, boundaries
@@ -391,10 +391,48 @@ def trim_long_pauses(pcm, boundaries):
     return bytes(output), [[shifted(start), shifted(end)] for start, end in boundaries]
 
 
+def retime_trump_cache(db, audio):
+    """Shorten an existing recording without another provider call or lost words."""
+    from .models import Briefing, BriefingSegment
+
+    editions = db.scalars(
+        select(Briefing).where(Briefing.audio_id == audio.id).order_by(Briefing.id).with_for_update()
+    ).all()
+    rows = []
+    for edition in editions:
+        if edition.voice_profile_id != "energetic":
+            raise ValueError("Only Trump recordings can be retimed")
+        segments = db.scalars(
+            select(BriefingSegment).where(BriefingSegment.briefing_id == edition.id)
+            .order_by(BriefingSegment.position)
+        ).all()
+        if len(segments) != len(audio.boundaries):
+            raise ValueError("Cached audio and transcript boundaries do not match")
+        rows.append((edition, segments))
+    with wave.open(io.BytesIO(read_object(audio.object_key)), "rb") as recording:
+        if (recording.getnchannels(), recording.getsampwidth(), recording.getframerate()) != (1, 2, RATE):
+            raise ValueError("Unsupported cached recording format")
+        original = recording.readframes(recording.getnframes())
+    pcm, cues = trim_long_pauses(original, audio.boundaries)
+    if pcm == original:
+        return audio
+    content = wav_bytes(pcm)
+    key = "speech/" + hashlib.sha256(content).hexdigest() + ".wav"
+    put_object(key, content)
+    audio.object_key, audio.boundaries = key, cues
+    audio.duration_seconds = len(pcm) / (2 * RATE)
+    for edition, segments in rows:
+        edition.duration_seconds = audio.duration_seconds
+        for segment, (start, end) in zip(segments, cues, strict=True):
+            segment.start_seconds, segment.end_seconds = start, end
+    db.flush()
+    return audio
+
+
 def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=None):
     parts = [(s.text, s.language) for s in segments]
     compact_pauses = voice == "energetic" and segment_pause is None
-    recipe = [4 if compact_pauses else 3, config, voice, parts]
+    recipe = [5 if compact_pauses else 3, config, voice, parts]
     if segment_pause is not None:
         recipe.append({"segment_pause": segment_pause})
     key = hashlib.sha256(json.dumps(recipe, ensure_ascii=False).encode()).hexdigest()
@@ -406,6 +444,21 @@ def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=No
     existing = db.scalar(select(GeneratedAudio).where(GeneratedAudio.cache_key == key))
     if existing:
         return existing
+    # Reuse the genuine cached voice after tightening its pauses. A pacing edit
+    # must not make listeners pay for identical words to be synthesized again.
+    if voice == "energetic" and (compact_pauses or segment_pause == 0.25):
+        legacy_recipe = (
+            [4, config, voice, parts]
+            if compact_pauses
+            else [3, config, voice, parts, {"segment_pause": 0.55}]
+        )
+        legacy_key = hashlib.sha256(json.dumps(legacy_recipe, ensure_ascii=False).encode()).hexdigest()
+        legacy = db.scalar(select(GeneratedAudio).where(GeneratedAudio.cache_key == legacy_key))
+        if legacy:
+            retime_trump_cache(db, legacy)
+            legacy.cache_key = key
+            db.flush()
+            return legacy
     if (
         config[0] == "elevenlabs"
         and segment_pause is None
@@ -414,9 +467,9 @@ def _render_audio(db, segments, voice, reference_id, config, *, segment_pause=No
     ):
         pauses = [
             (
-                (0.38 if compact_pauses else 0.7)
+                (0.18 if compact_pauses else 0.7)
                 if getattr(left, "story_id", None) != getattr(right, "story_id", None)
-                else (0.22 if compact_pauses else 0.32)
+                else (0.12 if compact_pauses else 0.32)
             )
             for left, right in zip(segments, segments[1:])
         ]

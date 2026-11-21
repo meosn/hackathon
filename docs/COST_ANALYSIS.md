@@ -1,5 +1,25 @@
 # Costs and volume projection
 
+## Hosted full archive snapshot — 21 November 2026
+
+The entire supplied Newstex archive was imported: 1,740 records, four exact duplicates removed and 1,736 articles analyzed across eight completed import jobs. A read-only ledger query restricted dataset observations to those import jobs and their articles/stories. This excludes live-only feed processing, synthetic fixtures and listener QA narration. Two later model reviews of archive-linked stories are included. These are observed usage counters with an estimated price, not vendor invoices.
+
+| Dataset observation | Calls | Input tokens | Output tokens | Time |
+|---|---:|---:|---:|---:|
+| Normalization | 8 | — | — | 10.475 s |
+| Local multilingual MiniLM embeddings | 1,736 | — | — | 430.526 s |
+| Analysis, including embeddings and model waits | 8 | — | — | 1,571.627 s |
+| GPT-4o mini | 573 | 557,391 | 47,045 | 988.830 s |
+| GPT-4.1 mini | 2 | 2,950 | 4 | 6.599 s |
+
+Using standard uncached input/output rates of $0.15/$0.60 per million for [GPT-4o mini](https://openai.com/index/api-prompt-caching/) and $0.40/$1.60 for [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), the token estimate is **$0.11302205**. Rates were checked on 21 November 2026. The active-stage compute assumption of $0.04/hour adds **$0.01757891**, counting normalization plus enclosing analysis time only; embedding and model waits are already inside analysis. The resulting archive-processing estimate is **$0.13060096**. Existing global ledger unit prices still describe GPT-4o mini, so the two GPT-4.1 mini calls are repriced explicitly here. Counters with zero returned tokens and any unreported billing cannot be reconstructed as invoices.
+
+At ten times the input volume, **17,400 records**, a linear projection is **$1.30600960 for dataset processing**, with the same deduplication ratio and number of listeners held fixed. This is the requested estimate, not a measured 10× load test. Ranking, script writing, TTS, voice conversation, idle VPS time, persistent storage and network costs are separate. At fixed listener demand the total is `10 × dataset-processing cost + listener-generation cost`; if listener demand also grows tenfold, both terms scale. Voice cost depends on generated characters and the account plan, so the mixed aggregate QA bill must not be presented as the cost of one archive run.
+
+The older fixture results below are retained as historical validation and must not be used as the full-dataset pitch estimate.
+
+## Historical local fixture run
+
 For the hosted API configuration, estimates use USD 0.15 per million input tokens and USD 0.60 per million output tokens for GPT-4o mini. ElevenLabs multilingual v2 uses an estimate of USD 80 per million characters, and Scribe v2 uses USD 0.20 per audio hour. These are published-price assumptions checked on 20 November 2026. Account allowances, discounts and invoices can change the amount charged. [OpenAI model pricing](https://developers.openai.com/api/docs/models/gpt-4o-mini), [ElevenLabs API pricing](https://elevenlabs.io/pricing/api).
 
 The figures below come from the fresh-volume Docker acceptance run on 20 November 2026. All inputs were synthetic. The default providers ran locally. The ledger records observed calls, token counters when reported, character counts and wall-clock stage time. No paid vendor was contacted in this run.

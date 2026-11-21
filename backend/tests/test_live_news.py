@@ -9,6 +9,30 @@ from app.briefing.ranking import recommendations, news_now
 from test_listener_workflow import session, listener
 
 
+def test_rss_refreshes_on_schedule_with_demo_mode_disabled(session, monkeypatch):
+    from app.config import settings
+    from app.jobs import discover_news, ProcessingJob
+    from sqlalchemy import select
+
+    monkeypatch.setattr(settings, "demo_mode", False)
+    monkeypatch.setenv("NEWS_SOURCES", "bbc-world,dw,dw-de,nos-nl,guardian-world,aljazeera")
+    monkeypatch.setenv("RSS_FEED_URLS", "")
+    monkeypatch.setenv("RSS_INTERVAL_MINUTES", "15")
+    now = datetime.now(UTC)
+    discover_news(session, now)
+    initial = session.scalars(select(IngestionJob).where(IngestionJob.kind == "source")).all()
+    assert len(initial) == 6
+    for job in initial:
+        job.status = "completed"
+    session.commit()
+    discover_news(session, now + timedelta(minutes=14))
+    assert len(session.scalars(select(IngestionJob).where(IngestionJob.kind == "source")).all()) == 6
+    discover_news(session, now + timedelta(minutes=16))
+    jobs = session.scalars(select(IngestionJob).where(IngestionJob.kind == "source")).all()
+    assert len(jobs) == 12
+    assert len(session.scalars(select(ProcessingJob).where(ProcessingJob.kind == "ingestion")).all()) == 12
+
+
 def test_feed_preparation_limits_age_count_and_future_items(monkeypatch):
     now = datetime.now(UTC)
     entries = "".join(

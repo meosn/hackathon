@@ -20,7 +20,7 @@ The setup wrapper creates the environment file and input directory automatically
 ./scripts/setup.sh
 ```
 
-Open [localhost:5173](http://localhost:5173) to enter the listening room. The demo starts with the **Technology enthusiast** profile. Use **Switch listener** to select **Financial analyst**, sign in or register. First startup applies database migrations, imports synthetic news and prepares the demo editions in the background. Play becomes available after the recording has been prepared and buffered.
+Open [localhost:5173](http://localhost:5173), register a personal account and choose your interests in Settings. Public demo profiles and automatic guest sign-in have been removed. `DEMO_MODE=false` is the default; the legacy demo API and synthetic seeding are available only to explicitly configured development/test environments. First startup applies database migrations. Configure live feeds or import an authorized dataset before preparing audio.
 
 | Service | Local address |
 |---|---|
@@ -30,7 +30,7 @@ Open [localhost:5173](http://localhost:5173) to enter the listening room. The de
 | RabbitMQ management | http://localhost:15672 |
 | MinIO console | http://localhost:9001 |
 
-The example environment uses local speech and deterministic AI adapters, so the demo can run without external accounts. Host ports and credentials are configurable in `.env`.
+The example environment uses local speech and deterministic AI adapters for local development. Host ports and credentials are configurable in `.env`.
 
 ## ElevenAgents voice conversations
 
@@ -76,7 +76,7 @@ Daily editions select the three highest-ranked eligible stories. Choose **More n
 
 The recording is downloaded before Play is enabled. Pressing Play uses the buffered audio. Selecting a voice previews it and saves the preference; narration is prepared in the background using the existing approved script where possible. Daily and weekly editions are queued on entry and after applying settings. Weekly covers are enabled after the recording is ready and buffered.
 
-Two demo preference templates use different interests and languages. Their prepared audio can be reused while each listener keeps private edition records and conversation history. A new preference set requires an initial preparation.
+Private prepared templates can reuse approved narration for matching preferences while each listener keeps separate edition records and conversation history. A new preference set requires an initial preparation. The production scheduler polls the configured RSS sources every 15 minutes independently of demo mode.
 
 ## News, evidence and the demo dataset
 
@@ -154,6 +154,10 @@ shared/contracts/      Exported OpenAPI contract
 scripts/               Setup, demo, validation and data cleanup
 docs/                  Architecture, decisions and implementation details
 ```
+
+## Challenge acceptance
+
+See [the criterion-by-criterion audit](docs/HACKATHON_READINESS.md) for implemented behavior, verified archive processing, costs and remaining acceptance requirements.
 
 ## Development and tests
 

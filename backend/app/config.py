@@ -27,7 +27,7 @@ class Settings:
     )
     redis_url = os.getenv("REDIS_URL", "redis://localhost/0")
     job_mode = os.getenv("JOB_MODE", "local")
-    demo_mode = enabled("DEMO_MODE", True)
+    demo_mode = enabled("DEMO_MODE", False)
     state_dir = Path(os.getenv("STATE_DIR", ".local"))
     cors_origins = os.getenv(
         "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"

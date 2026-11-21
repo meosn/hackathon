@@ -71,7 +71,7 @@ def render(db, user, slug, request):
         slug,
         "voice-preview/" + user.id,
         config,
-        segment_pause=0.55 if engine == "elevenlabs" else None,
+        segment_pause=(0.25 if slug == "energetic" else 0.55) if engine == "elevenlabs" else None,
     )
 
 

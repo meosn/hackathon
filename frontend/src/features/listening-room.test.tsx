@@ -76,21 +76,17 @@ describe('source traceability and timing', () => {
   })
 })
 describe('listener workflows', () => {
-  it('starts a seeded profile through the demo endpoint', async () => {
-    const fetcher = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(json({ access_token: 'demo-test' }))
+  it('offers personal sign-in without demo profiles or automatic guest access', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ access_token: 'personal-test' }))
     wrap(<Auth />)
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Technology enthusiast' }),
-    )
-    await waitFor(() =>
-      expect(sessionStorage.getItem('sourcera.session')).toBe('demo-test'),
-    )
-    expect(fetcher.mock.calls[0][0]).toBe('/api/v1/auth/demo')
-    expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({
-      profile: 'tech',
-    })
+    expect(screen.queryByRole('button', { name: 'Technology enthusiast' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Demo profiles')).not.toBeInTheDocument()
+    expect(fetcher).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'listener@example.test' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'personal-password' } })
+    fireEvent.submit(screen.getByLabelText('Email').closest('form')!)
+    await waitFor(() => expect(sessionStorage.getItem('sourcera.session')).toBe('personal-test'))
+    expect(fetcher.mock.calls[0][0]).toBe('/api/v1/auth/login')
   })
   it('sends filters and sort to the server', async () => {
     const fetcher = vi

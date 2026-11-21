@@ -86,6 +86,8 @@ def main():
     )
     forex.add_argument("--captured-at", required=True, type=datetime.fromisoformat)
     sub.add_parser("ingest-all")
+    pacing = sub.add_parser("retime-trump", help="Tighten cached Trump pauses without synthesis")
+    pacing.add_argument("--apply", action="store_true")
     grant = sub.add_parser("grant-admin")
     grant.add_argument("email")
     retry = sub.add_parser("retry")
@@ -119,6 +121,22 @@ def main():
             if not user or user.is_demo:
                 parser.error("An existing registered account is required")
             user.is_admin = True
+        elif args.name == "retime-trump":
+            from .briefing.models import Briefing, GeneratedAudio
+            from .briefing.voice import retime_trump_cache
+
+            audio_ids = select(Briefing.audio_id).where(
+                Briefing.voice_profile_id == "energetic", Briefing.audio_id.is_not(None)
+            )
+            clips = db.scalars(select(GeneratedAudio).where(GeneratedAudio.id.in_(audio_ids))).all()
+            seconds_saved = 0.0
+            for audio in clips:
+                before = audio.duration_seconds
+                if args.apply:
+                    retime_trump_cache(db, audio)
+                    seconds_saved += max(0, before - audio.duration_seconds)
+            db.commit()
+            print(json.dumps({"recordings": len(clips), "applied": args.apply, "seconds_saved": round(seconds_saved, 2)}))
         elif args.name == "costs":
             from .usage import costs
 
