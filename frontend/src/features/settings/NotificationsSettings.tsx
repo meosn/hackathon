@@ -16,9 +16,9 @@ export function NotificationsSettings() {
  const [active,setActive]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
  const [registration,setRegistration]=useState<ServiceWorkerRegistration|null>(null)
  const [attempt,setAttempt]=useState(0)
- const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)
+ const iphone=/iPhone/i.test(navigator.userAgent)
  const installed=window.matchMedia?.('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true
- const installRequired=ios&&!installed
+ const installRequired=iphone&&!installed
  const supported='Notification' in window&&'serviceWorker' in navigator&&'PushManager' in window
  useEffect(()=>{
   if(!supported||installRequired)return
@@ -65,7 +65,7 @@ export function NotificationsSettings() {
  return <section className="preference-block notification-settings">
   <div className="preference-label"><h3>News notifications</h3>{active?<Bell size={19}/>:<BellOff size={19}/>}</div>
   <p className="preference-hint">Get a notification when your scheduled edition is ready. Open it to listen.</p>
-  {installRequired?<div className="preference-hint"><strong>First, add Sourcera to your Home Screen.</strong><ol><li>Open Safari’s Share menu and choose “Add to Home Screen”.</li><li>Open Sourcera using that new icon and sign in.</li><li>Return here and enable notifications.</li></ol><p>An ordinary Safari tab on iPhone or iPad cannot receive these notifications.</p></div>
+  {installRequired?<div className="preference-hint"><strong>First, add Sourcera to your Home Screen.</strong><ol><li>Open Safari’s Share menu and choose “Add to Home Screen”.</li><li>Open Sourcera using that new icon and sign in.</li><li>Return here and enable notifications.</li></ol><p>An ordinary Safari tab on iPhone cannot receive these notifications.</p></div>
    :!supported?<p className="preference-hint">This browser does not support push notifications here. Try a supported browser in a regular window.</p>
    :<><button type="button" className={'btn '+(active?'outline':'primary')} disabled={toggle.isPending||!registration||!config.data?.available} onClick={change}>{toggle.isPending?'Updating…':active?'Turn off on this device':!registration?'Preparing notifications…':'Enable on this device'}</button>
     {active&&<button type="button" className="btn quiet" disabled={test.isPending} onClick={()=>test.mutate()}>Send test</button>}

@@ -41,3 +41,20 @@ it('subscribes synchronously inside the click, then saves the endpoint',async()=
  expect(Notification.requestPermission).not.toHaveBeenCalled()
  expect(vi.mocked(fetch).mock.calls.some(([path])=>String(path).endsWith('/subscriptions'))).toBe(true)
 })
+
+
+it.each([
+ ['iPhone','Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',true],
+ ['Android','Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36',false],
+ ['Mac','Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15',false],
+ ['iPad','Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)',false],
+])('shows the iPhone installation instructions only on iPhone: %s',async(_device,agent,showInstruction)=>{
+ setup()
+ vi.spyOn(navigator,'userAgent','get').mockReturnValue(agent as string)
+ show()
+ if(showInstruction)expect(screen.getByText('First, add Sourcera to your Home Screen.')).toBeInTheDocument()
+ else{
+  expect(screen.queryByText('First, add Sourcera to your Home Screen.')).not.toBeInTheDocument()
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Enable on this device'})).toBeEnabled())
+ }
+})
