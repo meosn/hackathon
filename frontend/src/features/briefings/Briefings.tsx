@@ -270,7 +270,7 @@ export function useBriefing(id: string) {
         (location.protocol === 'https:' ? 'wss:' : 'ws:') +
           '//' +
           location.host +
-          '/api/v1/ws/briefings/' +
+          import.meta.env.BASE_URL + 'api/v1/ws/briefings/' +
           id
       )
       ws.onopen = () => ws?.send(JSON.stringify({ token: getToken() }))

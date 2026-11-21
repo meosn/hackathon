@@ -29,7 +29,7 @@ export function AgentCatalog() {
       <ul className="agent-catalog-grid" aria-label="Upcoming character voices">
         {characters.map(({ name, portrait }) => (
           <li className="agent-catalog-card" key={portrait}>
-            <img src={`/agent-catalog/${portrait}.webp`} alt="" loading="lazy" />
+            <img src={`${import.meta.env.BASE_URL}agent-catalog/${portrait}.webp`} alt="" loading="lazy" />
             <div className="agent-catalog-card-label">
               <strong>{name}</strong>
               <Lock size={16} role="img" aria-label="Subscription required" />

@@ -71,3 +71,9 @@ The container frontend serves a production build through Nginx. The backend rema
 For an offline local-to-Compose migration, stop the old API and mount its dedicated data directory read-only into a one-off backend container. Set `PYTHONPATH=/app` for the script process and mount `scripts/` read-only at `/ops`. Run `/ops/migrate-local-state.py` with `--database` and `--audio`. The command migrates schema, copies records transactionally into an empty destination and uploads referenced audio to MinIO. It preserves account IDs and password hashes. Reuse the signing secret to preserve valid sessions. Start Compose and verify readiness before changing the host proxy.
 
 Run `./scripts/local-demo.sh` with Python 3.12+, npm and Node 20.19+/22.12+. Linux requires eSpeak NG and FFmpeg. The macOS Python dependency supplies offline eSpeak NG. The script uses the same API and frontend and stores local demo data under `.local/demo/`. Compose is used for multi-process validation.
+
+## Public QR address
+
+The listening room is served at `https://qr.me/PJUMDW`. Build with `npm run build -- --base=/PJUMDW/` in `frontend/`, then copy dist contents to `/opt/sourcera/qr-public/PJUMDW/`. Include `deploy/nginx/sourcera-qr.conf` in the `qr.me` HTTPS server and remove the old exact-match `/PJUMDW` redirect. Run `nginx -t` before reloading; preserve other QR site locations.
+
+Add `https://qr.me` to `CORS_ORIGINS` and the Google OAuth client's Authorized JavaScript origins if Google sign-in is enabled. The router, API, WebSockets, microphone worklet, manifest and notification worker support the prefix. A default frontend build still supports the original hostname's root path.

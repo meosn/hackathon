@@ -13,7 +13,7 @@ export function SpeakerAvatar({ id }: { id: string }) {
   return (
     <span className="speaker-avatar" aria-hidden="true">
       {portrait ? (
-        <img src={`/speakers/${portrait}`} alt="" width={256} height={256} />
+        <img src={`${import.meta.env.BASE_URL}speakers/${portrait}`} alt="" width={256} height={256} />
       ) : (
         <AudioLines size={22} strokeWidth={1.4} />
       )}

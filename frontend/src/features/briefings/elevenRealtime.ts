@@ -220,7 +220,7 @@ export class ElevenRealtime {
     try {
       await this.connect()
       if (!loadedWorklets.has(this.context)) {
-        await this.context.audioWorklet.addModule('/voice-input-worklet.js')
+        await this.context.audioWorklet.addModule(import.meta.env.BASE_URL + 'voice-input-worklet.js')
         loadedWorklets.add(this.context)
       }
       if (!valid()) return

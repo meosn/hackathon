@@ -36,7 +36,7 @@ export async function request(
     headers.set('Content-Type', 'application/json')
     body = JSON.stringify(data)
   }
-  const response = await fetch('/api/v1' + path, {
+  const response = await fetch(import.meta.env.BASE_URL + 'api/v1' + path, {
     method,
     body,
     headers,

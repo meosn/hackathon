@@ -25,7 +25,7 @@ export function NotificationsSettings() {
   let live=true
   setError('')
   void (async()=>{
-   await navigator.serviceWorker.register('/sw.js')
+   await navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js')
    const reg=await bounded(navigator.serviceWorker.ready,10000)
    if(!live)return
    setRegistration(reg)
