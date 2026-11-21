@@ -11,9 +11,14 @@ import { DailySession } from './DailySession'
 import './studio.css'
 import { VoiceEnginePicker } from '../voice/VoiceEnginePicker'
 import { VoiceCollection } from '../voice/VoiceCollection'
+import { HomeVoiceGate } from '../voice/HomeVoiceGate'
 import { usePreparedEditions } from './usePreparedEditions'
 
 export function StudioHome({ user }: { user: User }) {
+  return <HomeVoiceGate><StudioHomeContent user={user} /></HomeVoiceGate>
+}
+
+function StudioHomeContent({ user }: { user: User }) {
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [])
@@ -27,6 +32,7 @@ export function StudioHome({ user }: { user: User }) {
   const [playRequest, setPlayRequest] = useState(0)
   const prepared = usePreparedEditions()
   const engine = useMutation({
+    mutationKey: ['voice-preferences'],
     mutationFn: (voice_engine: string) => api<Preferences>('/users/me/preferences', 'PATCH', { voice_engine }),
     onSuccess: data => {
       queryClient.setQueryData(['/users/me/preferences'], data)
