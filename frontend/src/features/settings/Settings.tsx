@@ -44,6 +44,25 @@ type Engine = {
   description: string
   available: boolean
 }
+function ProcessingModelPicker({ engines, value, onChange }: {
+  engines: Engine[]
+  value: string
+  onChange: (value: string) => void
+}) {
+  return <section className="preference-block">
+    <h3>Information processing</h3>
+    <Dropdown label="Processing model" value={value} onChange={onChange}>
+      {engines.map(model => <option key={model.id} value={model.id} disabled={!model.available}>
+        {model.name}{!model.available ? ' — unavailable' : ''}
+      </option>)}
+    </Dropdown>
+    <p className="preference-hint">{engines.find(model => model.id === value)?.description}</p>
+    <p className="preference-hint">
+      Applied to new editions and text answers after you save. Voice synthesis and live voice conversations use your separate voice settings.
+    </p>
+  </section>
+}
+
 const sections = [
   { id: 'briefing', name: 'Your briefing', icon: SlidersHorizontal },
   { id: 'audio', name: 'Voice & language', icon: Headphones },
@@ -105,7 +124,6 @@ function SettingsForm({
   const [prefs, setPrefs] = useState(base)
   const [defaultNarrator, setDefaultNarrator] = useState(false)
   const prepared = usePreparedEditions()
-  const elevenAgents = prefs.voice_engine === 'elevenlabs'
   const [routine, setRoutine] = useState(() => routineFromSchedules(schedules))
   const [saved, setSaved] = useState(false)
   const [snapshot, setSnapshot] = useState({ prefs: base, routine })
@@ -350,6 +368,8 @@ function SettingsForm({
                       time.
                     </p>
                   </div>
+                  <ProcessingModelPicker engines={engines} value={prefs.discussion_model}
+                    onChange={value => patch('discussion_model', value)} />
                   <section className="preference-block">
                     <div className="preference-label">
                       <h3>Your interests</h3>
@@ -501,39 +521,8 @@ function SettingsForm({
                       ))}
                     </div>
                   </section>
-                  <details className="advanced-preferences">
-                    <summary>
-                      Fine-tune your assistant
-                      <ChevronDown size={15} />
-                    </summary>
-                    <div>
-                      <Dropdown
-                        label={
-                          elevenAgents
-                            ? 'Text assistant model'
-                            : 'Assistant model'
-                        }
-                        value={prefs.discussion_model}
-                        onChange={(v) => patch('discussion_model', v)}
-                      >
-                        {engines.map((m) => (
-                          <option
-                            key={m.id}
-                            value={m.id}
-                            disabled={!m.available}
-                          >
-                            {m.name}
-                          </option>
-                        ))}
-                      </Dropdown>
-                      <p className="preference-hint">
-                        {
-                          engines.find((m) => m.id === prefs.discussion_model)
-                            ?.description
-                        }
-                      </p>
-                    </div>
-                  </details>
+                  <ProcessingModelPicker engines={engines} value={prefs.discussion_model}
+                    onChange={value => patch('discussion_model', value)} />
                 </>
               )}
               {section === 'routine' && (
